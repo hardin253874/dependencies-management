@@ -1,0 +1,299 @@
+/* =============================================================
+   LIGHT PALETTE (default)
+   Per Plans/design/DESIGN_TOKENS.md
+   ============================================================= */
+:root {
+  /* ---------- COLOR — backgrounds & surfaces ---------- */
+  --color-bg-main:           #FAFAFA;
+  --color-bg-sidebar:        #F0F0F2;
+  --color-surface:           #FFFFFF;
+  --color-surface-hover:     #F5F5F7;
+  --color-surface-active:    #EBEBEF;
+  --color-surface-sunken:    #F0F0F2;
+  --color-modal-scrim:       rgba(0, 0, 0, 0.32);
+
+  /* ---------- COLOR — borders ---------- */
+  --color-border:            #E5E5EA;
+  --color-border-strong:     #D1D1D6;
+  --color-divider:           #E5E5EA;
+
+  /* ---------- COLOR — text ---------- */
+  --color-text-primary:      #1D1D1F;
+  --color-text-secondary:    #6E6E73;
+  --color-text-tertiary:     #8E8E93;
+  --color-text-disabled:     #C7C7CC;
+  --color-text-on-accent:    #FFFFFF;
+  --color-text-link:         #007AFF;
+  --color-text-link-hover:   #0062CC;
+
+  /* ---------- COLOR — accent ---------- */
+  --color-accent:            #007AFF;
+  --color-accent-hover:      #0062CC;
+  --color-accent-active:     #0051A8;
+  --color-accent-subtle-bg:  #E5F1FF;
+
+  /* ---------- COLOR — status ---------- */
+  --color-status-red:        #FF3B30;
+  --color-status-red-bg:     #FFE5E3;
+  --color-status-red-text:   #B7261E;
+
+  --color-status-amber:      #FF9500;
+  --color-status-amber-bg:   #FFF1DB;
+  --color-status-amber-text: #8A4B00;
+
+  --color-status-green:      #34C759;
+  --color-status-green-bg:   #E0F8E5;
+  --color-status-green-text: #1A6B2D;
+
+  --color-status-gray:       #8E8E93;
+  --color-status-gray-bg:    #EEEEEF;
+  --color-status-gray-text:  #4A4A4F;
+
+  /* ---------- COLOR — focus ---------- */
+  --color-focus-ring:        #007AFF;
+  --color-focus-ring-offset: var(--color-bg-main);
+
+  /* ---------- TYPOGRAPHY ---------- */
+  --font-family-system:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Text",
+    "Helvetica Neue", Arial, sans-serif;
+  --font-family-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  --text-xs:    0.6875rem;
+  --text-sm:    0.75rem;
+  --text-base:  0.875rem;
+  --text-md:    1rem;
+  --text-lg:    1.125rem;
+  --text-xl:    1.25rem;
+  --text-2xl:   1.5rem;
+  --text-3xl:   1.875rem;
+
+  --font-weight-regular:  400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     700;
+
+  --line-height-tight:  1.2;
+  --line-height-snug:   1.35;
+  --line-height-normal: 1.5;
+  --line-height-loose:  1.65;
+
+  --tracking-tight:  -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.02em;
+
+  /* ---------- SPACING (4px base) ---------- */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-7:  32px;
+  --space-8:  40px;
+  --space-9:  48px;
+  --space-10: 64px;
+  --space-11: 96px;
+  --space-12: 128px;
+
+  /* ---------- BORDER RADII ---------- */
+  --radius-none:  0;
+  --radius-sm:    4px;
+  --radius-md:    6px;
+  --radius-lg:    8px;
+  --radius-pill:  9999px;
+
+  /* ---------- BORDER WIDTHS ---------- */
+  --border-width-thin:   1px;
+  --border-width-medium: 2px;
+
+  /* ---------- Z-INDEX ---------- */
+  --z-base:        0;
+  --z-sticky:      10;
+  --z-banner:      20;
+  --z-dropdown:    50;
+  --z-toast:       100;
+  --z-modal-scrim: 999;
+  --z-modal:       1000;
+  --z-tooltip:     1100;
+
+  /* ---------- TRANSITION TIMINGS ---------- */
+  --duration-instant: 0ms;
+  --duration-fast:    120ms;
+  --duration-base:    200ms;
+  --duration-slow:    300ms;
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ---------- FOCUS RING ---------- */
+  --focus-ring:
+    0 0 0 2px var(--color-focus-ring-offset),
+    0 0 0 4px var(--color-focus-ring);
+
+  /* ---------- LAYOUT TOKENS ---------- */
+  --layout-header-height:          48px;
+  --layout-status-bar-height:      32px;
+  --layout-status-bar-height-tall: 40px;
+  --layout-left-default:           280px;
+  --layout-left-min:               200px;
+  --layout-left-max:               400px;
+  --layout-left-collapsed:         56px;
+  --layout-middle-default:         380px;
+  --layout-middle-min:             280px;
+  --layout-middle-max:             600px;
+  --layout-right-min:              480px;
+  --layout-row-height-compact:     32px;
+  --layout-row-height-base:        40px;
+  --layout-row-height-dep:         48px;
+}
+
+/* =============================================================
+   DARK PALETTE (scaffolded; toggle disabled in v1)
+   ============================================================= */
+:root[data-theme="dark"] {
+  --color-bg-main:           #1C1C1E;
+  --color-bg-sidebar:        #18181A;
+  --color-surface:           #2C2C2E;
+  --color-surface-hover:     #3A3A3C;
+  --color-surface-active:    #48484A;
+  --color-surface-sunken:    #18181A;
+  --color-modal-scrim:       rgba(0, 0, 0, 0.56);
+
+  --color-border:            #3A3A3C;
+  --color-border-strong:     #48484A;
+  --color-divider:           #3A3A3C;
+
+  --color-text-primary:      #F2F2F7;
+  --color-text-secondary:    #C7C7CC;
+  --color-text-tertiary:     #98989D;
+  --color-text-disabled:     #636366;
+  --color-text-on-accent:    #FFFFFF;
+  --color-text-link:         #0A84FF;
+  --color-text-link-hover:   #5AC8FA;
+
+  --color-accent:            #0A84FF;
+  --color-accent-hover:      #5AC8FA;
+  --color-accent-active:     #007AFF;
+  --color-accent-subtle-bg:  #002952;
+
+  --color-status-red:        #FF453A;
+  --color-status-red-bg:     #3A1010;
+  --color-status-red-text:   #FF6961;
+
+  --color-status-amber:      #FF9F0A;
+  --color-status-amber-bg:   #3A2410;
+  --color-status-amber-text: #FFD08A;
+
+  --color-status-green:      #30D158;
+  --color-status-green-bg:   #102A14;
+  --color-status-green-text: #6EE38B;
+
+  --color-status-gray:       #8E8E93;
+  --color-status-gray-bg:    #2C2C2E;
+  --color-status-gray-text:  #C7C7CC;
+
+  --color-focus-ring:        #0A84FF;
+  --color-focus-ring-offset: var(--color-bg-main);
+}
+
+/* =============================================================
+   REDUCED-MOTION OVERRIDES
+   ============================================================= */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast:    0ms;
+    --duration-base:    0ms;
+    --duration-slow:    0ms;
+  }
+}
+
+/* =============================================================
+   RESET / BASE
+   ============================================================= */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-family-system);
+  font-size: var(--text-base);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+  background: var(--color-bg-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: var(--color-text-link);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+  color: var(--color-text-link-hover);
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  top: -1000px;
+  left: var(--space-3);
+  z-index: var(--z-tooltip);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.skip-link:focus {
+  top: var(--space-3);
+}
