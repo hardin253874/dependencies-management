@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-05-23T13:09:54.808Z",
+  "source": "endoflife.date",
+  "ttlHours": 168,
+  "data": {
+    "slug": "eslint",
+    "cycles": [
+      {
+        "cycle": "10",
+        "releaseDate": "2026-02-06",
+        "eol": false,
+        "eoesProvider": "Tidelift",
+        "latest": "10.4.0",
+        "latestReleaseDate": "2026-05-15",
+        "lts": false,
+        "support": true,
+        "extendedSupport": true
+      },
+      {
+        "cycle": "9",
+        "releaseDate": "2024-04-05",
+        "eol": "2026-08-06",
+        "eoesProvider": "Tidelift",
+        "latest": "9.39.4",
+        "latestReleaseDate": "2026-03-06",
+        "lts": false,
+        "support": true,
+        "extendedSupport": true
+      },
+      {
+        "cycle": "8",
+        "releaseDate": "2021-10-09",
+        "eol": "2024-10-05",
+        "eoesProvider": "HeroDevs",
+        "latest": "8.57.1",
+        "latestReleaseDate": "2024-09-16",
+        "lts": false,
+        "support": "2024-04-05",
+        "extendedSupport": true
+      },
+      {
+        "cycle": "7",
+        "releaseDate": "2020-05-08",
+        "eol": "2022-04-09",
+        "latest": "7.32.0",
+        "latestReleaseDate": "2021-07-30",
+        "lts": false,
+        "support": "2021-10-09",
+        "extendedSupport": false
+      },
+      {
+        "cycle": "6",
+        "releaseDate": "2019-06-21",
+        "eol": "2020-11-08",
+        "latest": "6.8.0",
+        "latestReleaseDate": "2019-12-20",
+        "lts": false,
+        "support": "2020-05-08",
+        "extendedSupport": false
+      },
+      {
+        "cycle": "5",
+        "releaseDate": "2018-06-22",
+        "eol": "2019-12-21",
+        "latest": "5.16.0",
+        "latestReleaseDate": "2019-03-30",
+        "lts": false,
+        "support": "2019-06-21",
+        "extendedSupport": false
+      },
+      {
+        "cycle": "4",
+        "releaseDate": "2017-06-11",
+        "eol": "2018-12-22",
+        "latest": "4.19.1",
+        "latestReleaseDate": "2018-03-22",
+        "lts": false,
+        "support": "2018-06-22",
+        "extendedSupport": false
+      },
+      {
+        "cycle": "3",
+        "releaseDate": "2016-07-01",
+        "eol": "2017-12-11",
+        "latest": "3.19.0",
+        "latestReleaseDate": "2017-03-31",
+        "lts": false,
+        "support": "2017-06-11",
+        "extendedSupport": false
+      },
+      {
+        "cycle": "2",
+        "releaseDate": "2016-02-12",
+        "eol": "2017-01-01",
+        "latest": "2.13.1",
+        "latestReleaseDate": "2016-06-20",
+        "lts": false,
+        "support": "2016-07-01",
+        "extendedSupport": false
+      },
+      {
+        "cycle": "1",
+        "releaseDate": "2015-07-31",
+        "eol": "2016-08-12",
+        "latest": "1.10.3",
+        "latestReleaseDate": "2015-12-01",
+        "lts": false,
+        "support": "2016-02-12",
+        "extendedSupport": false
+      }
+    ],
+    "fetchedAt": "2026-05-23T13:09:54.807Z"
+  }
+}
