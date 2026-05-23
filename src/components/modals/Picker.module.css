@@ -1,0 +1,124 @@
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.labelText {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.input {
+  height: 32px;
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  border: var(--border-width-thin) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-family: var(--font-family-mono);
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+}
+
+.autocomplete {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-1) 0;
+  background: var(--color-surface);
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.acItem {
+  padding: var(--space-1) var(--space-3);
+  font-family: var(--font-family-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.acItem:hover,
+.acItemActive {
+  background: var(--color-surface-hover);
+}
+
+.tree {
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--color-surface);
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 28px;
+}
+
+.treeChevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.treeChevron:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.treeName {
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+  padding: 0 var(--space-2);
+  font-family: var(--font-family-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.treeName:hover {
+  color: var(--color-accent);
+}
+
+.statusOk {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-status-green-text);
+}
+
+.statusError {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-status-red-text);
+}
+
+.statusInfo {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}

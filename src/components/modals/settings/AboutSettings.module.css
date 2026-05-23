@@ -1,0 +1,46 @@
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.appName {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-medium);
+}
+
+.version {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.value {
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+}
+
+.tag {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}

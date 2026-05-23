@@ -1,0 +1,51 @@
+.divider {
+  position: relative;
+  background: var(--color-divider);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.divider:focus-visible {
+  outline: none;
+  background: var(--color-accent);
+}
+
+.vertical {
+  width: 1px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.vertical::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  right: -3px;
+}
+
+.horizontal {
+  width: 100%;
+  height: 1px;
+  cursor: row-resize;
+}
+
+.horizontal::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -3px;
+  bottom: -3px;
+}
+
+.dragging {
+  background: var(--color-accent);
+}
+
+.disabled {
+  cursor: default;
+}
+.disabled::before {
+  display: none;
+}

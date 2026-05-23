@@ -1,0 +1,32 @@
+.fresh {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.stale {
+  margin: 0;
+  color: var(--color-status-amber-text);
+  font-size: var(--text-sm);
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
+.amberDot {
+  color: var(--color-status-amber);
+}
+
+.regenerateLink {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--color-status-amber-text);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
+.regenerateLink:hover {
+  color: var(--color-status-amber);
+}

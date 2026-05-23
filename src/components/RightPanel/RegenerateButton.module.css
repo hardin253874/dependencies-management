@@ -1,0 +1,48 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 32px;
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  border: var(--border-width-thin) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--color-surface-hover);
+}
+
+.btn[disabled] {
+  color: var(--color-text-secondary);
+  cursor: progress;
+}
+
+.glyph {
+  font-size: var(--text-md);
+  color: var(--color-text-secondary);
+}
+
+.busy .glyph {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busy .glyph {
+    animation: none;
+  }
+}
+
+.text {
+  white-space: nowrap;
+}

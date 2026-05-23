@@ -1,0 +1,127 @@
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-right: var(--space-4);
+  font-size: var(--text-base);
+}
+
+.select {
+  height: 32px;
+  padding: 0 var(--space-2);
+  background: var(--color-surface);
+  border: var(--border-width-thin) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+  width: 280px;
+  max-width: 100%;
+}
+
+.keyHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.keySet {
+  font-size: var(--text-sm);
+  color: var(--color-status-green-text);
+}
+
+.keyMissing {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+.keyRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.keyInput {
+  flex: 1;
+  height: 32px;
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  border: var(--border-width-thin) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-family: var(--font-family-mono);
+  font-size: var(--text-base);
+}
+
+.eye {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: var(--border-width-thin) solid var(--color-border-strong);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.testOk {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-status-green-text);
+}
+
+.testErr {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-status-red-text);
+}
+
+.divider {
+  border: 0;
+  border-top: var(--border-width-thin) solid var(--color-border);
+  margin: var(--space-3) 0;
+}
+
+.note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.note code {
+  font-family: var(--font-family-mono);
+  background: var(--color-surface-active);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+}

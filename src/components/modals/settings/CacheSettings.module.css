@@ -1,0 +1,79 @@
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.lead {
+  margin: 0;
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-normal);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.label {
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+}
+
+.daysInput {
+  width: 64px;
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width-thin) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-mono);
+  font-size: var(--text-base);
+  text-align: right;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.daysInput:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.daysSuffix {
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.previewMessage {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-status-amber-bg);
+  color: var(--color-status-amber-text);
+  border-radius: var(--radius-md);
+}
+
+.successMessage {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-status-green-bg);
+  color: var(--color-status-green-text);
+  border-radius: var(--radius-md);
+}
+
+.errorMessage {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-status-red-bg);
+  color: var(--color-status-red-text);
+  border-radius: var(--radius-md);
+}

@@ -1,0 +1,36 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.message {
+  margin: 0;
+  color: var(--color-text-primary);
+  line-height: var(--line-height-normal);
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+.checkboxRow code {
+  font-family: var(--font-family-mono);
+  background: var(--color-surface-sunken);
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-status-red-bg);
+  color: var(--color-status-red-text);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}

@@ -1,0 +1,146 @@
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.lead {
+  margin: 0;
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-normal);
+}
+
+.statusInfo {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.row {
+  border-bottom: var(--border-width-thin) solid var(--color-border);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.summaryButton {
+  display: grid;
+  grid-template-columns: max-content 1fr max-content;
+  gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: none;
+  font: inherit;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.summaryButton:hover {
+  background: var(--color-surface-hover);
+}
+
+.summaryButton:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+.chevron {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.projectName {
+  font-weight: var(--font-weight-medium);
+}
+
+.usd {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.errorBadge {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-status-red-bg);
+  color: var(--color-status-red-text);
+}
+
+.detail {
+  padding: var(--space-2) var(--space-4) var(--space-3) var(--space-9);
+  background: var(--color-bg-main);
+}
+
+.errorMessage {
+  margin: 0;
+  color: var(--color-status-red-text);
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+}
+
+.providerList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.providerRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+}
+
+.providerName {
+  text-transform: capitalize;
+}
+
+.providerCost {
+  font-variant-numeric: tabular-nums;
+}
+
+.grandTotal {
+  margin: 0;
+  align-self: flex-end;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-md);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.footnote {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  border-top: var(--border-width-thin) solid var(--color-border);
+  padding-top: var(--space-2);
+}

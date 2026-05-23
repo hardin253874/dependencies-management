@@ -1,0 +1,39 @@
+.cluster {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  line-height: 1;
+  font-weight: var(--font-weight-medium);
+}
+
+.red {
+  background: var(--color-status-red-bg);
+  color: var(--color-status-red-text);
+}
+
+.amber {
+  background: var(--color-status-amber-bg);
+  color: var(--color-status-amber-text);
+}
+
+.green {
+  background: var(--color-status-green-bg);
+  color: var(--color-status-green-text);
+}
+
+.gray {
+  background: var(--color-status-gray-bg);
+  color: var(--color-status-gray-text);
+}

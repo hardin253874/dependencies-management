@@ -1,0 +1,34 @@
+.middle {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-main);
+  border-right: var(--border-width-thin) solid var(--color-border);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.middle > * {
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.middle > :last-child {
+  flex: 1;
+  min-height: 0;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: var(--space-7);
+  color: var(--color-text-secondary);
+  text-align: center;
+  font-size: var(--text-base);
+}
+
+.voltaWrap {
+  padding: var(--space-3) var(--space-4) 0;
+}

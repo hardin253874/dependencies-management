@@ -1,0 +1,90 @@
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.label {
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.helpText {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.divider {
+  border: 0;
+  border-top: var(--border-width-thin) solid var(--color-border);
+  margin: 0;
+}
+
+.totalValue {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.breakdown {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.breakdownRow {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-1) 0;
+  border-bottom: var(--border-width-thin) solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+}
+
+.kind {
+  text-transform: capitalize;
+}
+
+.kindBytes {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.statusInfo {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.statusOk {
+  margin: 0;
+  color: var(--color-status-green-text);
+  font-size: var(--text-sm);
+}
+
+.statusError {
+  margin: 0;
+  color: var(--color-status-red-text);
+  font-size: var(--text-sm);
+}

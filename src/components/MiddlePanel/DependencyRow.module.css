@@ -1,0 +1,82 @@
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+  min-height: var(--layout-row-height-dep);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-align: left;
+  position: relative;
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.row:hover {
+  background: var(--color-surface-hover);
+}
+
+.active {
+  background: var(--color-surface-hover);
+  border-color: var(--color-accent);
+}
+
+.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: var(--border-width-medium);
+  background: var(--color-accent);
+  border-radius: 1px;
+}
+
+.name {
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badgeSlot {
+  /* Reserve right-side space so the row doesn't jump as badges arrive
+     during Phase 2 scans (UI_DESIGN.md §13.9). */
+  min-width: 72px;
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.versions {
+  grid-column: 1 / -1;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.declared {
+  color: var(--color-text-secondary);
+}
+
+.arrow {
+  color: var(--color-text-tertiary);
+}
+
+.installed {
+  color: var(--color-text-primary);
+}
+
+.staleHint {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-system);
+}
