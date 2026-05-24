@@ -134,7 +134,7 @@ Everything is JSON, atomic-written (temp-then-rename), wrapped in a versioned en
 | `OPENAI_API_KEY` | — | Required when `_config.json.llm.provider === 'openai'` |
 | `LOG_LEVEL` | `info` | `trace` / `debug` / `info` / `warn` / `error` / `fatal` |
 | `MOCK_LLM` | `false` | When `true`, LLM calls are replied to from `test-fixtures/llm/` |
-| `TOKEN_BUDGET_FILE_REVIEW_IN` | 30000 | See [`Plans/FUNCTIONAL_SPEC.md`](Plans/FUNCTIONAL_SPEC.md) §11.3 |
+| `TOKEN_BUDGET_FILE_REVIEW_IN` | 30000 | |
 | `TOKEN_BUDGET_FILE_REVIEW_OUT` | 4000 | |
 | `TOKEN_BUDGET_UPDATE_REPORT_IN` | 10000 | |
 | `TOKEN_BUDGET_UPDATE_REPORT_OUT` | 6000 | |
