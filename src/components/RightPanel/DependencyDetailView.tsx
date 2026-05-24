@@ -250,7 +250,12 @@ interface BodyProps {
   slug: string;
   depName: string;
   envelope: FileEnvelope<DepDetail>;
-  onNavigate: (route: { kind: 'B'; depName: string; version: string } | { kind: 'C'; depName: string }) => void;
+  onNavigate: (
+    route:
+      | { kind: 'A'; depName: string }
+      | { kind: 'B'; depName: string; version: string }
+      | { kind: 'C'; depName: string }
+  ) => void;
   onRegenerate: () => void;
   regenerating: boolean;
   onRescanAllDeps: () => void;
@@ -426,7 +431,12 @@ function DependencyDetailBody({
         ) : (
           <ul role="list" className={styles.cveList} data-testid="related-deps-list">
             {relatedDeps.map((rel) => (
-              <RelatedDepRow key={rel.name} rel={rel} viewedName={depName} />
+              <RelatedDepRow
+                key={rel.name}
+                rel={rel}
+                viewedName={depName}
+                onNavigate={onNavigate}
+              />
             ))}
           </ul>
         )}
@@ -599,20 +609,49 @@ const EMPTY_HEALTH: RelatedDep['health'] = {
 
 function RelatedDepRow({
   rel,
-  viewedName
+  viewedName,
+  onNavigate
 }: {
   rel: RelatedDep;
   viewedName: string;
+  /**
+   * Navigation callback. Clicking the dep name routes to that dep's own
+   * view [A]. We pass the parent's callback (not a fresh one) so the route
+   * goes through the AppContext dispatcher just like every other navigation.
+   */
+  onNavigate: (
+    route:
+      | { kind: 'A'; depName: string }
+      | { kind: 'B'; depName: string; version: string }
+      | { kind: 'C'; depName: string }
+  ) => void;
 }): JSX.Element {
   const health = rel.health ?? EMPTY_HEALTH;
   const reasons = Array.isArray(rel.reasons) ? rel.reasons : [];
+  // If the related dep IS the currently-viewed dep (degenerate edge case —
+  // self-relations shouldn't exist but the renderer must not crash), skip
+  // the link and render plain text so the user doesn't click and get a
+  // no-op route change.
+  const isSelf = rel.name === viewedName;
   return (
     <li
       role="listitem"
       className={styles.cveCard}
       data-testid={`related-dep-${rel.name}`}
     >
-      <span className={styles.cveId}>{rel.name}</span>
+      {isSelf ? (
+        <span className={styles.cveId}>{rel.name}</span>
+      ) : (
+        <button
+          type="button"
+          className={styles.relatedDepLink}
+          onClick={() => onNavigate({ kind: 'A', depName: rel.name })}
+          data-testid={`related-dep-link-${rel.name}`}
+          title={`Open ${rel.name}'s detail view`}
+        >
+          {rel.name}
+        </button>
+      )}
       {rel.installedVersion !== null && (
         <span className={styles.muted}>
           {' '}· installed <code>{rel.installedVersion}</code>

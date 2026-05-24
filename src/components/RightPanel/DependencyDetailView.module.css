@@ -217,6 +217,32 @@
   color: var(--color-text-primary);
 }
 
+/**
+ * Clickable dep name in the "Related deps in this project" list. Styled as
+ * an inline link (button element for keyboard accessibility) — same mono
+ * font + size as .cveId so the visual rhythm of the row is preserved, but
+ * with link color + underline-on-hover affordance.
+ */
+.relatedDepLink {
+  grid-row: 1;
+  font-family: var(--font-family-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-link);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  font-family: var(--font-family-mono);
+}
+
+.relatedDepLink:hover,
+.relatedDepLink:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
 .cveSummary {
   grid-column: 1 / -1;
   margin: var(--space-1) 0 0;
