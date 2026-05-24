@@ -17,7 +17,6 @@ Designed for senior developers driving long-term dependency hygiene on legacy fr
 - **No telemetry, no analytics, no phone-home.** Your code stays on your machine.
 - **API keys** are stored in a local `.env` file with `chmod 600` on Unix (best-effort on Windows). They never appear in any GET response.
 
-See [`Plans/FUNCTIONAL_SPEC.md`](Plans/FUNCTIONAL_SPEC.md) §3 for the full set of architectural invariants.
 
 ## Prerequisites
 
