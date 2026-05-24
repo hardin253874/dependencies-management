@@ -122,7 +122,7 @@ Everything is JSON, atomic-written (temp-then-rename), wrapped in a versioned en
 | [D-Deep] | Deep Update Report | "Deep Analyze" button in [D] |
 | [E] | File-Level AI Review | Click a file inside [C] |
 
-See [`Plans/FUNCTIONAL_SPEC.md`](Plans/FUNCTIONAL_SPEC.md) §7.6 for what each view shows and §11 for the LLM prompt details.
+
 
 ## Configuration
 
@@ -194,7 +194,7 @@ tests/
 └── e2e/                # Playwright UI smoke
 
 scripts/setup.mjs       # Interactive .env + _config.json bootstrap
-Plans/FUNCTIONAL_SPEC.md  # Authoritative design doc
+
 ```
 
 ### `MOCK_LLM` for iteration without API spend
@@ -223,7 +223,7 @@ The full suite runs in ~7 seconds; tests are deterministic and run against per-t
 | Phase 2 scan hangs | Open `library/_logs/server.log` — phase-boundary logs (`phase2 registry done`, `phase2 OSV done`, `phase2 envelope writes done`, `phase2 flush done`, `phase2 complete`) tell you exactly which stage. A per-job watchdog also emits a warn line every 30 s with `runningForMs`. |
 | Volta-pinned `node` / `npm` / `yarn` shows "version unknown" in some view | Make sure `project.volta` is populated in your target's `package.json`. The agent synthesises Volta toolchain entries client-side AND on the BE via `findProjectDep` (§10.4.1). |
 
-For deeper architectural questions, the **single source of truth** is [`Plans/FUNCTIONAL_SPEC.md`](Plans/FUNCTIONAL_SPEC.md) — kept in lockstep with `main`. The top-of-file changelog tracks every behavioural change.
+
 
 ## License
 
