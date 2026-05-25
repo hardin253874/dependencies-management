@@ -31,7 +31,7 @@ Designed for senior developers driving long-term dependency hygiene on legacy fr
 
 ```bash
 # 1. Clone the agent
-git clone <agent-repo-url> dependencies-management
+git clone https://github.com/hardin253874/dependencies-management.git
 cd dependencies-management
 
 # 2. Install dependencies
