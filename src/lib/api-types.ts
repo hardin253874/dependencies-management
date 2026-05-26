@@ -604,6 +604,90 @@ export interface RelatedUpgradeEnqueueResponse {
 }
 
 // ============================================================================
+// CVE impact analysis (v0.6) — view [A] "Analyze Usage" feature
+// ============================================================================
+
+/**
+ * Per-CVE verdict on whether THIS project's code actually reaches the
+ * vulnerable code path. Driven by the LLM analysis; the deterministic
+ * skeleton populates it with `inconclusive` + low confidence as a fallback.
+ */
+export type CveImpactVerdict = 'not-affected' | 'likely-affected' | 'inconclusive';
+
+export interface CveImpactRow {
+  /** The CVE ID being assessed (echoes the input). */
+  cveId: string;
+  /** CVE severity from the OSV record (echoes the input). */
+  severity: CveSeverity;
+  /** Human-readable CVE summary from OSV (echoes the input). */
+  summary: string;
+  /** LLM's verdict for this CVE against this project's usage. */
+  verdict: CveImpactVerdict;
+  /** LLM's self-reported confidence. Conservative: 'low' when uncertain. */
+  confidence: 'high' | 'medium' | 'low';
+  /** 1–3 sentence explanation — must cite the API surface / call pattern. */
+  reasoning: string;
+  /**
+   * Relative file paths the LLM cited as evidence (drawn from the context
+   * windows passed in). Empty for `not-affected` verdicts that have no
+   * positive citations.
+   */
+  citedFiles: string[];
+}
+
+export interface CveImpactDetail {
+  /** Dep name + installed version this analysis is for. */
+  depName: string;
+  installedVersion: string;
+  /** Per-CVE rows, in the same order the LLM received them. */
+  rows: CveImpactRow[];
+  /** LLM's cross-CVE summary — 1 paragraph covering overall impact + caveats. */
+  globalNotes: string;
+  /**
+   * Inputs the analysis was based on, so the report has provenance:
+   * - `filesAnalyzed`: count of source files whose context made it into the prompt.
+   * - `cveCount`: count of CVEs analyzed.
+   * - `contextTokensUsed`: approximate input-token budget consumed by code context.
+   * - `contextTruncated`: true when the 30k-token cap dropped some files.
+   */
+  inputs: {
+    filesAnalyzed: number;
+    cveCount: number;
+    contextTokensUsed: number;
+    contextTruncated: boolean;
+  };
+  /** Cost tracking — absent on `deterministic-partial` envelopes. */
+  cost?: AiCostFields;
+}
+
+export interface CveImpactEnqueueResponse {
+  jobId: string;
+  alreadyRunning: boolean;
+}
+
+/**
+ * Cost estimate for the "Analyze Usage" confirmation modal. Same shape
+ * idea as DeepReportEstimateResponse but tuned to this feature's inputs
+ * (CVE count + file count drive the estimate, not transitive package count).
+ */
+export interface CveImpactEstimateResponse {
+  /** Number of CVEs that will be analyzed (== `currentVersionCves.length`). */
+  cveCount: number;
+  /** Number of source files in `usage/<dep>.json` that import this dep. */
+  filesInUsage: number;
+  /** Whether the usage cache exists yet; FE warns when false (cascade will run a scan first). */
+  usageCacheExists: boolean;
+  /** Heuristic input-token estimate based on cveCount × filesInUsage × avgContextSize. */
+  estimatedInputTokens: number;
+  /** Output cap from budget. */
+  estimatedOutputTokens: number;
+  /** Conservative pricing × estimated tokens. */
+  estimatedCostUsd: number;
+  provider: LlmProvider;
+  model: string;
+}
+
+// ============================================================================
 // Library "Open in file explorer" — Stage 4 (best-effort per OS).
 // The BE may not implement this in v1; the FE falls back to a friendly message
 // derived from this shape.

@@ -79,6 +79,27 @@ export function depFilePath(slug: string, name: string): string {
   return path.join(depsDir(slug), `${pkgFileSlug(name)}.json`);
 }
 
+/**
+ * CVE impact analysis cache (view [A] "Analyze Usage" feature, v0.6).
+ *
+ *   library/<slug>/cve-impact/<name>/<version>.json
+ *
+ * One envelope per (viewed-dep, installed-version). Distinct from view [D]'s
+ * `reports/` because the question is different: not "what happens when I
+ * upgrade?" but "does my code reach this CVE's vulnerable surface today?"
+ */
+export function cveImpactDir(slug: string): string {
+  return path.join(projectDir(slug), 'cve-impact');
+}
+
+export function cveImpactDirForPackage(slug: string, name: string): string {
+  return path.join(cveImpactDir(slug), pkgFileSlug(name));
+}
+
+export function cveImpactFilePath(slug: string, name: string, version: string): string {
+  return path.join(cveImpactDirForPackage(slug, name), `${version}.json`);
+}
+
 export function versionsDir(slug: string): string {
   return path.join(projectDir(slug), 'versions');
 }
