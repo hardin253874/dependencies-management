@@ -34,6 +34,9 @@ import type {
   LibrarySizeResponse,
   LogsClearResponse,
   OpenInExplorerResponse,
+  CveImpactDetail,
+  CveImpactEnqueueResponse,
+  CveImpactEstimateResponse,
   ProjectDetail,
   ProjectSummary,
   RefreshResponse,
@@ -227,6 +230,64 @@ export class ApiClient {
     return this.request(
       'POST',
       `/api/projects/${encodeURIComponent(slug)}/deps/${encodeURIComponent(name)}/refresh`,
+      undefined,
+      options
+    );
+  }
+
+  /**
+   * Cache-first read for view [A]'s "CVE impact analysis" section. Returns
+   * the most-recently-persisted envelope for `(name, installedVersion)` or
+   * 404 NOT_CACHED so the FE renders the "Analyze Usage" CTA.
+   */
+  getCveImpact(
+    slug: string,
+    name: string,
+    options?: ApiRequestOptions
+  ): Promise<FileEnvelope<CveImpactDetail>> {
+    return this.request(
+      'GET',
+      `/api/projects/${encodeURIComponent(slug)}/deps/${encodeURIComponent(name)}/cve-impact`,
+      undefined,
+      options
+    );
+  }
+
+  /**
+   * Pre-flight cost estimate for the "Analyze Usage" confirmation modal.
+   * Returns cveCount + filesInUsage + estimated tokens + USD cost using the
+   * active LLM model. When `usageCacheExists === false`, the FE warns the
+   * user that the cascade will run a usage scan first.
+   */
+  getCveImpactCostEstimate(
+    slug: string,
+    name: string,
+    options?: ApiRequestOptions
+  ): Promise<CveImpactEstimateResponse> {
+    return this.request(
+      'GET',
+      `/api/projects/${encodeURIComponent(slug)}/deps/${encodeURIComponent(name)}/cve-impact/cost-estimate`,
+      undefined,
+      options
+    );
+  }
+
+  /**
+   * Trigger the CVE impact analysis job. Cascades through:
+   *   1. Usage scan if the usage cache is missing.
+   *   2. Import + use-site context extraction.
+   *   3. One batched LLM call.
+   * Persists `library/<slug>/cve-impact/<name>/<version>.json`. Caller
+   * `awaitJob`s for completion, then GETs to render.
+   */
+  refreshCveImpact(
+    slug: string,
+    name: string,
+    options?: ApiRequestOptions
+  ): Promise<CveImpactEnqueueResponse> {
+    return this.request(
+      'POST',
+      `/api/projects/${encodeURIComponent(slug)}/deps/${encodeURIComponent(name)}/cve-impact/refresh`,
       undefined,
       options
     );
