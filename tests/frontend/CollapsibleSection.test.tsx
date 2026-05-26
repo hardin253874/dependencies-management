@@ -12,23 +12,34 @@ import userEvent from '@testing-library/user-event';
 import { CollapsibleSection } from '@/components/RightPanel/CollapsibleSection';
 
 describe('CollapsibleSection', () => {
-  it('defaults to expanded; clicking the header toggles', async () => {
+  it('defaults to COLLAPSED; clicking the header toggles open/closed', async () => {
+    // Project convention (v0.6.x): right-panel sections start collapsed so the
+    // user sees the layout at a glance and chooses what to expand.
     render(
       <CollapsibleSection title="Demo" testId="collapse">
         <p>body-content</p>
       </CollapsibleSection>
     );
-    // Body visible initially.
+    // Body hidden initially.
+    expect(screen.queryByText('body-content')).toBeNull();
+    // Click header → body appears.
+    await userEvent.click(screen.getByTestId('collapse'));
     expect(screen.getByText('body-content')).toBeInTheDocument();
-    // Click header → body disappears.
+    // Click again → body disappears.
     await userEvent.click(screen.getByTestId('collapse'));
     expect(screen.queryByText('body-content')).toBeNull();
-    // Click again → body reappears.
-    await userEvent.click(screen.getByTestId('collapse'));
+  });
+
+  it('honours defaultExpanded={true} (override for sections that should start open)', () => {
+    render(
+      <CollapsibleSection title="Demo" defaultExpanded testId="collapse">
+        <p>body-content</p>
+      </CollapsibleSection>
+    );
     expect(screen.getByText('body-content')).toBeInTheDocument();
   });
 
-  it('honours defaultExpanded={false}', () => {
+  it('honours defaultExpanded={false} (explicit, matches new default)', () => {
     render(
       <CollapsibleSection title="Demo" defaultExpanded={false} testId="collapse">
         <p>body-content</p>
@@ -40,8 +51,10 @@ describe('CollapsibleSection', () => {
   it('clicks inside headerAction do NOT toggle the section', async () => {
     const onAction = vi.fn();
     render(
+      // defaultExpanded={true} so the pre-condition "body visible" holds.
       <CollapsibleSection
         title="Demo"
+        defaultExpanded
         testId="collapse"
         headerAction={
           <button type="button" data-testid="action-btn" onClick={onAction}>
@@ -80,8 +93,9 @@ describe('CollapsibleSection', () => {
   });
 
   it('is keyboard accessible via Enter and Space', async () => {
+    // Start expanded so we can verify Enter→collapse + Space→expand sequence.
     render(
-      <CollapsibleSection title="Demo" testId="collapse">
+      <CollapsibleSection title="Demo" defaultExpanded testId="collapse">
         <p>body-content</p>
       </CollapsibleSection>
     );

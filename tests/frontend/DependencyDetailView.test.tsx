@@ -124,6 +124,8 @@ describe('DependencyDetailView (View [A])', () => {
       expect(screen.getByTestId('deprecation-banner')).toBeInTheDocument()
     );
     expect(screen.getByText('Current vulnerabilities')).toBeInTheDocument();
+    // v0.6.x: sections start collapsed — expand to inspect the body.
+    await userEvent.click(screen.getByTestId('current-vulns-collapse'));
     expect(screen.getByTestId('cve-clean')).toBeInTheDocument();
   });
 
@@ -199,7 +201,10 @@ describe('DependencyDetailView (View [A])', () => {
     await waitFor(() => expect(screen.getByText('Available versions')).toBeInTheDocument());
     expect(screen.getByTestId('cve-unavailable-banner')).toBeInTheDocument();
 
-    // Expand the major bucket then click the version link.
+    // v0.6.x: right-panel sections start collapsed. Expand the
+    // "Available versions" section first, then expand the major bucket,
+    // then click the version link.
+    await userEvent.click(screen.getByTestId('available-versions-collapse'));
     await userEvent.click(screen.getByTestId('major-toggle-19'));
     await userEvent.click(screen.getByTestId('version-link-19.0.0'));
 
