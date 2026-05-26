@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { getApiClient } from '@/lib/client/api-client';
 import type {
   AvailableVersion,
+  CveImpactDetail,
+  CveImpactRow,
   CveRecord,
   DepDetail,
   FileEnvelope,
@@ -18,6 +20,7 @@ import { CollapsibleSection } from './CollapsibleSection';
 import { EmptyStateCTA } from './EmptyStateCTA';
 import { RegenerateButton } from './RegenerateButton';
 import { Button } from '../modals/Button';
+import { CveImpactConfirmModal } from '../modals/CveImpactConfirmModal';
 import styles from './DependencyDetailView.module.css';
 
 interface Props {
@@ -94,6 +97,16 @@ export function DependencyDetailView({ slug, depName }: Props): JSX.Element {
   // button can show its own "Re-scanning…" label while the (longer-running)
   // Phase 2 + per-dep refresh chain runs.
   const [rescanningAll, setRescanningAll] = useState(false);
+
+  // CVE impact analysis (v0.6): cache-first GET + cascade-refresh trigger.
+  // Modal-gated: clicking "Analyze Usage" opens the confirm modal first so
+  // the user sees the cost estimate before committing to the LLM call.
+  const cveImpactFetch = useDetailFetch<FileEnvelope<CveImpactDetail>>({
+    fetcher: (signal) => getApiClient().getCveImpact(slug, depName, { signal }),
+    deps: [slug, depName]
+  });
+  const [cveImpactPrompt, setCveImpactPrompt] = useState(false);
+  const [analyzingCveImpact, setAnalyzingCveImpact] = useState(false);
 
   const onRegenerate = async () => {
     // Cancel any prior in-flight job-wait before starting a new one.
@@ -179,6 +192,56 @@ export function DependencyDetailView({ slug, depName }: Props): JSX.Element {
     }
   };
 
+  /**
+   * Open the cost-estimate modal. Continuing the modal kicks off
+   * `onConfirmAnalyzeCveImpact` (below). This indirection exists so the
+   * user always sees the estimated cost before committing to the LLM call —
+   * unlike Deep Analyze, we don't honor a "don't ask again" toggle for
+   * CVE impact because the cost varies widely with CVE count + usage spread.
+   */
+  const onAnalyzeCveImpactClick = (): void => {
+    setCveImpactPrompt(true);
+  };
+
+  /**
+   * Modal "Continue" → trigger the cascade job (usage scan if missing →
+   * context extraction → LLM call), await completion, reload the cache.
+   * Surfaces non-abort errors via toast.
+   */
+  const onConfirmAnalyzeCveImpact = async (): Promise<void> => {
+    setCveImpactPrompt(false);
+    jobWaitAbortRef.current?.abort();
+    const controller = new AbortController();
+    jobWaitAbortRef.current = controller;
+
+    setAnalyzingCveImpact(true);
+    cveImpactFetch.setRegenerating(true);
+    try {
+      const { jobId } = await getApiClient().refreshCveImpact(slug, depName);
+      await getApiClient().awaitJob(jobId, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      cveImpactFetch.reload();
+      pushToast({
+        severity: 'success',
+        title: 'CVE impact analysis ready',
+        body: `Analyzed ${depName}'s installed-version CVEs against your code.`
+      });
+    } catch (err) {
+      if (controller.signal.aborted || (err as Error).name === 'AbortError') return;
+      const message =
+        err instanceof Error ? err.message : 'CVE impact analysis failed; please try again.';
+      pushToast({
+        severity: 'error',
+        title: `Couldn't analyze CVE impact`,
+        body: message
+      });
+    } finally {
+      if (jobWaitAbortRef.current === controller) jobWaitAbortRef.current = null;
+      setAnalyzingCveImpact(false);
+      cveImpactFetch.setRegenerating(false);
+    }
+  };
+
   if (fetch.status === 'loading' && !fetch.data) {
     return (
       <div className={styles.loading} role="status">
@@ -232,19 +295,33 @@ export function DependencyDetailView({ slug, depName }: Props): JSX.Element {
   }
 
   return (
-    <DependencyDetailBody
-      slug={slug}
-      depName={depName}
-      envelope={fetch.data}
-      onNavigate={navigate}
-      onRegenerate={onRegenerate}
-      regenerating={fetch.regenerating}
-      onRescanAllDeps={onRescanAllDeps}
-      rescanningAll={rescanningAll}
-      installedVersion={installedVersion}
-    />
+    <>
+      <DependencyDetailBody
+        slug={slug}
+        depName={depName}
+        envelope={fetch.data}
+        onNavigate={navigate}
+        onRegenerate={onRegenerate}
+        regenerating={fetch.regenerating}
+        onRescanAllDeps={onRescanAllDeps}
+        rescanningAll={rescanningAll}
+        installedVersion={installedVersion}
+        cveImpactFetch={cveImpactFetch}
+        onAnalyzeCveImpact={onAnalyzeCveImpactClick}
+        analyzingCveImpact={analyzingCveImpact}
+      />
+      <CveImpactConfirmModal
+        open={cveImpactPrompt}
+        slug={slug}
+        depName={depName}
+        onCancel={() => setCveImpactPrompt(false)}
+        onContinue={onConfirmAnalyzeCveImpact}
+      />
+    </>
   );
 }
+
+type CveImpactFetchState = ReturnType<typeof useDetailFetch<FileEnvelope<CveImpactDetail>>>;
 
 interface BodyProps {
   slug: string;
@@ -262,6 +339,12 @@ interface BodyProps {
   rescanningAll: boolean;
   /** Installed version (resolved via findInstalledVersion); drives "since installed only". */
   installedVersion: string | null;
+  /** Cache-first GET state for the CVE impact analysis envelope. */
+  cveImpactFetch: CveImpactFetchState;
+  /** Open the cost-estimate modal (deferred — confirm modal runs the cascade). */
+  onAnalyzeCveImpact: () => void;
+  /** True while the cascade job is in flight. */
+  analyzingCveImpact: boolean;
 }
 
 function DependencyDetailBody({
@@ -272,7 +355,10 @@ function DependencyDetailBody({
   regenerating,
   onRescanAllDeps,
   rescanningAll,
-  installedVersion
+  installedVersion,
+  cveImpactFetch,
+  onAnalyzeCveImpact,
+  analyzingCveImpact
 }: BodyProps): JSX.Element {
   const detail = envelope.data;
   const stale = isStale(envelope.generatedAt, envelope.ttlHours);
@@ -376,13 +462,32 @@ function DependencyDetailBody({
         )}
       </dl>
 
-      <section className={styles.section} aria-label="Current vulnerabilities">
-        <h3 className={styles.sectionTitle}>
-          Current vulnerabilities
-          {detail.currentVersionCves !== null && (
-            <span className={styles.sectionCount}> ({detail.currentVersionCves.length})</span>
-          )}
-        </h3>
+      <CollapsibleSection
+        ariaLabel="Current vulnerabilities"
+        title="Current vulnerabilities"
+        count={detail.currentVersionCves?.length ?? null}
+        sectionClassName={styles.section}
+        headerClassName={styles.sectionHeader}
+        titleClassName={styles.sectionTitle}
+        countClassName={styles.sectionCount}
+        testId="current-vulns-collapse"
+        headerAction={
+          detail.currentVersionCves !== null && detail.currentVersionCves.length > 0 ? (
+            <Button
+              onClick={onAnalyzeCveImpact}
+              disabled={analyzingCveImpact || regenerating}
+              title="Cross-analyze these CVEs against your project's actual usage of this dep to verdict each one as not-affected / likely-affected / inconclusive."
+              data-testid="analyze-cve-impact-button"
+            >
+              {analyzingCveImpact
+                ? 'Analyzing…'
+                : cveImpactFetch.status === 'cached'
+                  ? 'Re-analyze Usage'
+                  : 'Analyze Usage'}
+            </Button>
+          ) : undefined
+        }
+      >
         {detail.currentVersionCves === null ? (
           <p className={styles.muted}>Data unavailable.</p>
         ) : detail.currentVersionCves.length === 0 ? (
@@ -402,7 +507,22 @@ function DependencyDetailBody({
             ))}
           </ul>
         )}
-      </section>
+      </CollapsibleSection>
+
+      {/*
+        CVE impact analysis report — separate collapsible section so the user
+        can hide the (sometimes long) AI reasoning without losing the CVE list
+        above. Only rendered when there ARE CVEs to analyze; the report
+        component itself handles the cache-missing case (returns null) so this
+        section may render its header with no body when the user hasn't clicked
+        Analyze Usage yet.
+      */}
+      {detail.currentVersionCves !== null && detail.currentVersionCves.length > 0 && (
+        <CveImpactReportSection
+          fetch={cveImpactFetch}
+          analyzing={analyzingCveImpact}
+        />
+      )}
 
       <CollapsibleSection
         ariaLabel="Related dependencies"
@@ -709,6 +829,174 @@ function RelatedDepRow({
           </li>
         ))}
       </ul>
+    </li>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* CVE impact analysis report (v0.6)                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Section-level wrapper for the CVE impact report. Renders a CollapsibleSection
+ * with the verdict count as the header chip; body content delegates to
+ * `CveImpactReport` (which handles its own empty / loading / error / cached
+ * states). Defined as a separate component (rather than inlining the
+ * CollapsibleSection at the call site) so the count + body share the same
+ * cache-fetch state without prop drilling.
+ */
+function CveImpactReportSection({
+  fetch,
+  analyzing
+}: {
+  fetch: CveImpactFetchState;
+  analyzing: boolean;
+}): JSX.Element {
+  const detail = fetch.data?.data ?? null;
+  // Count in the header chip reflects the number of verdict rows when the
+  // cache exists; null otherwise so the header reads simply "CVE impact
+  // analysis" without a misleading "(0)".
+  const count = detail !== null ? detail.rows.length : null;
+  return (
+    <CollapsibleSection
+      ariaLabel="CVE impact analysis"
+      title="CVE impact analysis"
+      count={count}
+      sectionClassName={styles.section}
+      headerClassName={styles.sectionHeader}
+      titleClassName={styles.sectionTitle}
+      countClassName={styles.sectionCount}
+      testId="cve-impact-collapse"
+    >
+      <CveImpactReport fetch={fetch} analyzing={analyzing} />
+    </CollapsibleSection>
+  );
+}
+
+function CveImpactReport({
+  fetch,
+  analyzing
+}: {
+  fetch: CveImpactFetchState;
+  analyzing: boolean;
+}): JSX.Element | null {
+  const envelope = fetch.data;
+  const detail = envelope?.data ?? null;
+
+  if (analyzing) {
+    return (
+      <p className={styles.muted} role="status" aria-live="polite" data-testid="cve-impact-analyzing">
+        Analyzing CVE impact on your code — running deterministic context extraction + LLM call.
+        This usually takes 10–30 seconds.
+      </p>
+    );
+  }
+  if (fetch.status === 'loading' && detail === null) {
+    return (
+      <p className={styles.muted} role="status">
+        Loading cached CVE impact analysis…
+      </p>
+    );
+  }
+  if (fetch.status === 'missing') {
+    // No cache yet — point the user at the button in the section above.
+    // (Before v0.6.x this returned null because the report rendered inside
+    //  the vulnerabilities section; now it's its own collapsible section
+    //  and needs a body or the section looks empty.)
+    return (
+      <p className={styles.muted} data-testid="cve-impact-empty">
+        No analysis yet. Click <strong>Analyze Usage</strong> above to cross-analyze
+        the listed CVEs against your project&apos;s code.
+      </p>
+    );
+  }
+  if (fetch.status === 'error') {
+    return (
+      <p className={styles.muted} role="alert">
+        Failed to load cached CVE impact analysis. Click Analyze Usage to retry.
+      </p>
+    );
+  }
+  if (detail === null || envelope === null) return null;
+
+  const isDeterministicOnly = envelope.source === 'deterministic-partial';
+  return (
+    <div
+      className={styles.cveImpactReport}
+      data-testid="cve-impact-report"
+    >
+      {isDeterministicOnly && (
+        <p className={styles.muted} role="status">
+          ⚠ LLM analysis unavailable — showing CVE list with no verdicts. Click Re-analyze Usage to retry.
+        </p>
+      )}
+      {detail.globalNotes !== '' && (
+        <p
+          className={styles.cveImpactGlobalNotes}
+          data-testid="cve-impact-global-notes"
+        >
+          {detail.globalNotes}
+        </p>
+      )}
+      <ul role="list" className={styles.cveImpactRows}>
+        {detail.rows.map((row) => (
+          <CveImpactRowView key={row.cveId} row={row} />
+        ))}
+      </ul>
+      <p className={styles.muted}>
+        Generated {envelope.generatedAt.slice(0, 19).replace('T', ' ')} UTC · source: {envelope.source}
+        {detail.inputs.contextTruncated && ' · context truncated (large project)'}
+        {' · '}
+        {detail.inputs.filesAnalyzed} file{detail.inputs.filesAnalyzed === 1 ? '' : 's'} analyzed
+      </p>
+    </div>
+  );
+}
+
+function CveImpactRowView({ row }: { row: CveImpactRow }): JSX.Element {
+  const verdictClass =
+    row.verdict === 'not-affected'
+      ? styles.verdictNotAffected
+      : row.verdict === 'likely-affected'
+        ? styles.verdictLikelyAffected
+        : styles.verdictInconclusive;
+  const verdictLabel =
+    row.verdict === 'not-affected'
+      ? '✓ Not affected'
+      : row.verdict === 'likely-affected'
+        ? '⚠ Likely affected'
+        : '? Inconclusive';
+  return (
+    <li
+      role="listitem"
+      className={styles.cveImpactRow}
+      data-testid={`cve-impact-row-${row.cveId}`}
+    >
+      <div className={styles.cveImpactRowHeader}>
+        <span className={`${styles.severity} ${severityClass(row.severity)}`}>{row.severity}</span>
+        <span className={styles.cveId}>{row.cveId}</span>
+        <span
+          className={`${styles.verdictPill} ${verdictClass}`}
+          data-testid={`cve-impact-verdict-${row.cveId}`}
+        >
+          {verdictLabel}
+        </span>
+        <span className={styles.confidence}>({row.confidence})</span>
+      </div>
+      {row.reasoning !== '' && (
+        <p className={styles.cveImpactReasoning}>{row.reasoning}</p>
+      )}
+      {row.citedFiles.length > 0 && (
+        <p className={styles.cveImpactCitedFiles}>
+          Cited:{' '}
+          {row.citedFiles.map((f, i) => (
+            <span key={f}>
+              <code>{f}</code>
+              {i < row.citedFiles.length - 1 ? ', ' : ''}
+            </span>
+          ))}
+        </p>
+      )}
     </li>
   );
 }

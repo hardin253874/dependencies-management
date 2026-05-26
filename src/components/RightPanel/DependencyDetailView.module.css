@@ -331,3 +331,103 @@
   border-radius: var(--radius-pill);
   font-size: var(--text-xs);
 }
+
+/* -------- CVE impact analysis report (v0.6) -------- */
+
+.cveImpactReport {
+  /*
+   * v0.6.x: the report moved out of the "Current vulnerabilities" section
+   * into its own CollapsibleSection. The original top-border + padding-top
+   * was a separator between the CVE list and the report when they were
+   * adjacent inside one section; that separator is now redundant because
+   * the new section's own header provides visual separation.
+   */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cveImpactGlobalNotes {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border-left: 3px solid var(--color-accent, var(--color-text-link));
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  line-height: var(--line-height-normal);
+}
+
+.cveImpactRows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cveImpactRow {
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cveImpactRowHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.verdictPill {
+  height: 20px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  display: inline-flex;
+  align-items: center;
+}
+
+.verdictNotAffected {
+  background: var(--color-status-green-bg);
+  color: var(--color-status-green-text);
+}
+
+.verdictLikelyAffected {
+  background: var(--color-status-red-bg);
+  color: var(--color-status-red-text);
+}
+
+.verdictInconclusive {
+  background: var(--color-status-gray-bg);
+  color: var(--color-status-gray-text);
+}
+
+.confidence {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.cveImpactReasoning {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  line-height: var(--line-height-normal);
+}
+
+.cveImpactCitedFiles {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.cveImpactCitedFiles code {
+  font-family: var(--font-family-mono);
+}

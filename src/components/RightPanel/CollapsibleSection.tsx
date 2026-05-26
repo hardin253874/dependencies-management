@@ -28,7 +28,12 @@ interface Props {
   count?: number | null;
   /** Optional right-side action (button, toggle, etc.). Pointer events stop here. */
   headerAction?: ReactNode;
-  /** Default expanded; defaults to `true`. */
+  /**
+   * Initial expanded state. **Defaults to `false` (collapsed)** — the
+   * project convention is that right-panel sections start collapsed so the
+   * user sees the section structure at a glance and chooses what to expand.
+   * Pass `true` explicitly for any section that should default expanded.
+   */
   defaultExpanded?: boolean;
   /** ARIA label for the wrapping <section>. Defaults to `title`. */
   ariaLabel?: string;
@@ -51,7 +56,7 @@ export function CollapsibleSection({
   title,
   count,
   headerAction,
-  defaultExpanded = true,
+  defaultExpanded = false,
   ariaLabel,
   testId,
   sectionClassName,
