@@ -46,10 +46,12 @@ describe('LlmSettings — model selector', () => {
       backend: { config: DEFAULT_CONFIG }
     });
     const select = (await screen.findByTestId('model-select')) as HTMLSelectElement;
-    expect(select.value).toBe('claude-opus-4-7');
+    // The select mounts with the catalog default and adopts the configured
+    // model once /api/config resolves — wait for that, don't assert on mount.
+    await waitFor(() => expect(select.value).toBe('claude-opus-4-7'));
     const options = Array.from(select.options).map((o) => o.value);
     expect(options).toContain('claude-opus-4-7');
-    expect(options).toContain('claude-sonnet-4-5');
+    expect(options).toContain('claude-sonnet-5');
     // OpenAI options are NOT visible when provider is anthropic.
     expect(options).not.toContain('gpt-5');
   });
@@ -73,11 +75,11 @@ describe('LlmSettings — model selector', () => {
       }
     });
     const select = (await screen.findByTestId('model-select')) as HTMLSelectElement;
-    await userEvent.selectOptions(select, 'claude-sonnet-4-5');
+    await userEvent.selectOptions(select, 'claude-sonnet-5');
 
     await waitFor(() => expect(patches).toHaveLength(1));
     expect(patches[0]).toEqual({
-      llm: { provider: 'anthropic', model: 'claude-sonnet-4-5' }
+      llm: { provider: 'anthropic', model: 'claude-sonnet-5' }
     });
   });
 

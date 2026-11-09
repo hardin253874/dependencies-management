@@ -5,12 +5,8 @@ import type { LlmProvider } from '@/lib/api-types';
 import { ApiError, getApiClient } from '@/lib/client/api-client';
 import { Button } from '../modals/Button';
 import { useAppContext } from '../AppContext';
+import { MODEL_OPTIONS as MODELS, defaultModel } from '@/lib/llm/models';
 import styles from './Card.module.css';
-
-const MODELS: Record<LlmProvider, string[]> = {
-  anthropic: ['claude-opus-4-7', 'claude-sonnet-4-5', 'claude-haiku-4'],
-  openai: ['gpt-5.5', 'gpt-5', 'gpt-4o']
-};
 
 interface Props {
   onContinue: () => void;
@@ -19,7 +15,7 @@ interface Props {
 export function LlmSetupStep({ onContinue }: Props): JSX.Element {
   const { refreshConfig } = useAppContext();
   const [provider, setProvider] = useState<LlmProvider>('anthropic');
-  const [model, setModel] = useState<string>(MODELS.anthropic[0]!);
+  const [model, setModel] = useState<string>(defaultModel('anthropic'));
   const [apiKey, setApiKey] = useState('');
   const [reveal, setReveal] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
@@ -84,7 +80,7 @@ export function LlmSetupStep({ onContinue }: Props): JSX.Element {
             checked={provider === 'anthropic'}
             onChange={() => {
               setProvider('anthropic');
-              setModel(MODELS.anthropic[0]!);
+              setModel(defaultModel('anthropic'));
             }}
             data-testid="onboarding-provider-anthropic"
           />
@@ -97,7 +93,7 @@ export function LlmSetupStep({ onContinue }: Props): JSX.Element {
             checked={provider === 'openai'}
             onChange={() => {
               setProvider('openai');
-              setModel(MODELS.openai[0]!);
+              setModel(defaultModel('openai'));
             }}
             data-testid="onboarding-provider-openai"
           />

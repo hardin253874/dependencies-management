@@ -105,6 +105,7 @@ export class OpenAIAdapter implements LLMClient {
     let model = req.model;
     let inputTokens = 0;
     let outputTokens = 0;
+    let finishReason: string | null = null;
 
     try {
       const resp = await this.sdk.chat.completions.create(params);
@@ -117,7 +118,9 @@ export class OpenAIAdapter implements LLMClient {
             req.onPhase?.({ phase: 'streaming', message: 'Generating analysis…' });
           }
           if (typeof chunk.model === 'string' && chunk.model !== '') model = chunk.model;
-          const delta = chunk.choices[0]?.delta;
+          const choice = chunk.choices[0];
+          if (typeof choice?.finish_reason === 'string') finishReason = choice.finish_reason;
+          const delta = choice?.delta;
           if (delta?.tool_calls !== undefined) {
             for (const tc of delta.tool_calls) {
               if (typeof tc.function?.arguments === 'string') {
@@ -133,6 +136,7 @@ export class OpenAIAdapter implements LLMClient {
       } else {
         const completion = resp;
         if (typeof completion.model === 'string') model = completion.model;
+        finishReason = completion.choices[0]?.finish_reason ?? null;
         const toolCall = completion.choices[0]?.message.tool_calls?.[0];
         if (toolCall === undefined) {
           throw new LLMError('LLM_TOOL_USE_MISSING', 'OpenAI response did not include a tool_call.');
@@ -150,6 +154,14 @@ export class OpenAIAdapter implements LLMClient {
 
     req.onPhase?.({ phase: 'finalizing', message: 'Finalizing structured output…' });
 
+    // Same rationale as the Anthropic adapter: a `length` finish means the
+    // tool_call JSON was cut off, so never hand partial output downstream.
+    if (finishReason === 'length') {
+      throw new LLMError(
+        'LLM_TRUNCATED',
+        `OpenAI response truncated at max_tokens (${req.maxOutputTokens}); structured output incomplete.`
+      );
+    }
     if (argumentsJson === '') {
       throw new LLMError('LLM_TOOL_USE_MISSING', 'OpenAI tool_call arguments were empty.');
     }

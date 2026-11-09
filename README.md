@@ -31,7 +31,7 @@ Designed for senior developers driving long-term dependency hygiene on legacy fr
 
 ```bash
 # 1. Clone the agent
-git clone https://github.com/hardin253874/dependencies-management.git
+git clone <agent-repo-url> dependencies-management
 cd dependencies-management
 
 # 2. Install dependencies
@@ -123,7 +123,6 @@ Everything is JSON, atomic-written (temp-then-rename), wrapped in a versioned en
 | [E] | File-Level AI Review | Click a file inside [C] |
 
 
-
 ## Configuration
 
 ### `.env` (credentials + tunables)
@@ -148,7 +147,7 @@ Everything is JSON, atomic-written (temp-then-rename), wrapped in a versioned en
 ```jsonc
 {
   "schemaVersion": 1,
-  "llm": { "provider": "anthropic", "model": "claude-opus-4-7" },
+  "llm": { "provider": "anthropic", "model": "claude-opus-5" },
   "ui": {
     "sidebarCollapsed": false,
     "theme": "light",
@@ -222,7 +221,6 @@ The full suite runs in ~7 seconds; tests are deterministic and run against per-t
 | `_logs/server.log` not updating | Run `tail -f library/_logs/server.log` to confirm — the v0.5 logger appends synchronously per line. If still empty, check `LOG_LEVEL` and the `withRequestLog` wrapping for the affected route. |
 | Phase 2 scan hangs | Open `library/_logs/server.log` — phase-boundary logs (`phase2 registry done`, `phase2 OSV done`, `phase2 envelope writes done`, `phase2 flush done`, `phase2 complete`) tell you exactly which stage. A per-job watchdog also emits a warn line every 30 s with `runningForMs`. |
 | Volta-pinned `node` / `npm` / `yarn` shows "version unknown" in some view | Make sure `project.volta` is populated in your target's `package.json`. The agent synthesises Volta toolchain entries client-side AND on the BE via `findProjectDep` (§10.4.1). |
-
 
 
 ## License

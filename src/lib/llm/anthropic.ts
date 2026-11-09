@@ -113,6 +113,16 @@ export class AnthropicAdapter implements LLMClient {
 
     req.onPhase?.({ phase: 'finalizing', message: 'Finalizing structured output…' });
 
+    // A response cut off by `max_tokens` carries a truncated (or absent)
+    // tool_use input — required fields silently go missing. Fail loudly so the
+    // service takes its deterministic-partial path instead of caching junk.
+    if (response.stop_reason === 'max_tokens') {
+      throw new LLMError(
+        'LLM_TRUNCATED',
+        `Anthropic response truncated at max_tokens (${req.maxOutputTokens}); structured output incomplete.`
+      );
+    }
+
     const tool = response.content.find((c) => c.type === 'tool_use');
     if (tool === undefined) {
       throw new LLMError('LLM_TOOL_USE_MISSING', 'Anthropic response did not include a tool_use block.');

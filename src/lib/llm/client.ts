@@ -119,6 +119,8 @@ export type LlmErrorCode =
   | 'LLM_INVALID_RESPONSE'
   | 'LLM_TOOL_USE_MISSING'
   | 'LLM_TOOL_USE_INVALID'
+  /** Provider hit max output tokens; structured output is incomplete. */
+  | 'LLM_TRUNCATED'
   | 'LLM_CANCELLED'
   | 'LLM_UNSUPPORTED_PROVIDER'
   | 'MOCK_LLM_NO_FIXTURE';

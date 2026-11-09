@@ -125,6 +125,52 @@ describe('runDeepUpdateReport — happy path (MOCK_LLM)', () => {
   });
 });
 
+describe('runDeepUpdateReport — LLM output missing required strings', () => {
+  it('coerces absent summary/narrative to empty strings instead of persisting undefined', async () => {
+    const mock = new MockLLMClient({ provider: 'anthropic' });
+    const key = computeCacheKey({
+      systemPrompt: SHARED_SYSTEM_PROMPT,
+      userPrompt: renderDeepUpdateReportPrompt(PROMPT_INPUT),
+      tool: DEEP_UPDATE_REPORT_TOOL_SCHEMA,
+      model: 'mock-model'
+    });
+    // Real-world shape observed 2026-09-24: claude-opus-4-7 returned a tool_use
+    // with every field EXCEPT summary + narrative. Providers don't validate
+    // `required[]`, so the service must not trust the cast.
+    mock.set(key, {
+      output: {
+        riskLevel: 'high',
+        estimatedEffort: 'large',
+        criticalBlockers: [],
+        suggestedUpgradeOrder: []
+      },
+      inputTokens: 100,
+      outputTokens: 50
+    });
+
+    const run = await runDeepUpdateReport(mock, {
+      promptInput: PROMPT_INPUT,
+      model: 'mock-model',
+      fromVersion: '17.0.2',
+      toVersion: '19.0.0',
+      lockfileStateHashShort: 'abc12',
+      resolverBlock: RESOLVER_BLOCK,
+      coUpgradeDeps: [],
+      lockfileSummary: LOCKFILE_SUMMARY,
+      transitiveDelta: TRANSITIVE_DELTA,
+      cveDelta: CVE_DELTA
+    });
+
+    expect(run.source).toBe('anthropic:mock-model');
+    expect(run.detail.summary).toBe('');
+    expect(run.detail.narrative).toBe('');
+    // JSON round-trip must keep the keys so renderers never see `undefined`.
+    const roundTripped = JSON.parse(JSON.stringify(run.detail)) as Record<string, unknown>;
+    expect(Object.keys(roundTripped)).toContain('summary');
+    expect(Object.keys(roundTripped)).toContain('narrative');
+  });
+});
+
 describe('runDeepUpdateReport — LLM-down fallback (§11.9)', () => {
   it('persists deterministic-partial when the LLM throws (no fixture)', async () => {
     const mock = new MockLLMClient({ provider: 'anthropic' });

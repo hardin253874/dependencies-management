@@ -166,6 +166,13 @@ export function DeepUpdateReportView({
   const envelope = fetch.data;
   const detail = envelope.data;
   const stale = isStale(envelope.generatedAt, envelope.ttlHours);
+  // Defensive: `summary` / `narrative` are LLM-supplied strings. A cache
+  // written before the service coerced missing LLM fields (v0.5.x) can lack
+  // them entirely, and JSON drops `undefined` keys — so treat absent as ''.
+  // Without this the whole app shell crashed on boot with
+  // "Cannot read properties of undefined (reading 'split')".
+  const summary = typeof detail.summary === 'string' ? detail.summary : '';
+  const narrative = typeof detail.narrative === 'string' ? detail.narrative : '';
   const peerDepsOnTarget = detail.lockfileSummary?.peerDepsOnTarget ?? [];
   const totalPackages = detail.lockfileSummary?.totalPackages ?? 0;
 
@@ -182,7 +189,7 @@ export function DeepUpdateReportView({
 
       <section className={styles.section} aria-label="Summary">
         <h3 className={styles.sectionTitle}>Summary</h3>
-        <p className={styles.summaryBody}>{detail.summary}</p>
+        <p className={styles.summaryBody}>{summary}</p>
       </section>
 
       <div className={styles.riskRow}>
@@ -276,7 +283,7 @@ export function DeepUpdateReportView({
         data-testid="ai-narrative-section"
       >
         <h3 className={styles.sectionTitle}>Narrative</h3>
-        <Narrative narrative={detail.narrative} />
+        <Narrative narrative={narrative} />
       </section>
 
       {detail.suggestedUpgradeOrder.length > 0 && (

@@ -26,8 +26,16 @@ const ANTHROPIC_PRICING: Record<string, Pricing> = {
   // Claude 3 family
   'claude-3-opus-latest': { inputPerMillion: 15.0, outputPerMillion: 75.0 },
   'claude-3-opus-20240229': { inputPerMillion: 15.0, outputPerMillion: 75.0 },
-  // Opus 4 family (placeholder pricing — refine when public pricing lands)
-  'claude-opus-4-7': { inputPerMillion: 15.0, outputPerMillion: 75.0 }
+  // Claude 4.x / 5 families — first-party API rates, snapshot 2026-09-24.
+  'claude-fable-5-1': { inputPerMillion: 10.0, outputPerMillion: 50.0 },
+  'claude-fable-5': { inputPerMillion: 10.0, outputPerMillion: 50.0 },
+  'claude-opus-5': { inputPerMillion: 5.0, outputPerMillion: 25.0 },
+  'claude-opus-4-8': { inputPerMillion: 5.0, outputPerMillion: 25.0 },
+  'claude-opus-4-7': { inputPerMillion: 5.0, outputPerMillion: 25.0 },
+  'claude-opus-4-6': { inputPerMillion: 5.0, outputPerMillion: 25.0 },
+  'claude-sonnet-5': { inputPerMillion: 2.0, outputPerMillion: 10.0 },
+  'claude-sonnet-4-6': { inputPerMillion: 3.0, outputPerMillion: 15.0 },
+  'claude-haiku-4-5': { inputPerMillion: 1.0, outputPerMillion: 5.0 }
 };
 
 const OPENAI_PRICING: Record<string, Pricing> = {

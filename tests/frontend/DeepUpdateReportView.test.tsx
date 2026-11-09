@@ -275,6 +275,38 @@ describe('DeepUpdateReportView (View [D-Deep])', () => {
     );
   });
 
+  it('does not crash when a stale cache lacks summary + narrative (pre-coercion build)', async () => {
+    withRoute();
+    // Simulate an envelope written by a build that persisted the raw LLM
+    // output: JSON dropped the undefined keys, so they are absent entirely.
+    const { summary: _s, narrative: _n, ...withoutAiText } = fullDeepReport;
+    void _s;
+    void _n;
+    renderWithProviders(<DetailPanel />, {
+      backend: {
+        projects: [
+          {
+            slug: 'p',
+            name: 'my-app',
+            path: '/p',
+            packageManager: 'npm',
+            depCount: 1,
+            lastScanAt: null,
+            pathExists: true
+          }
+        ],
+        projectDetails: { p: projectDetail('p') },
+        deepReports: {
+          'p::react::18.2.0::19.0.0': envelope(withoutAiText as DeepUpdateReportDetail)
+        }
+      }
+    });
+
+    await waitFor(() => expect(screen.getByTestId('ai-narrative-section')).toBeInTheDocument());
+    expect(screen.getByText('No narrative provided.')).toBeInTheDocument();
+    expect(screen.queryByTestId('narrative-body')).not.toBeInTheDocument();
+  });
+
   it('narrative paragraph count adapts to risk level (low: 1, high: many)', async () => {
     for (const variant of [
       { risk: 'low' as const, narrative: 'Single paragraph for low risk.', expected: '1' },

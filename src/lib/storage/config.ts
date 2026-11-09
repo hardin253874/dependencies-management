@@ -26,7 +26,7 @@ export interface AppConfig {
 
 export const DEFAULT_CONFIG: AppConfig = {
   schemaVersion: 1,
-  llm: { provider: 'anthropic', model: 'claude-opus-4-7' },
+  llm: { provider: 'anthropic', model: 'claude-opus-5' },
   ui: { sidebarCollapsed: false, theme: 'light', showDeepAnalyzeWarning: true },
   features: { resolverCheckEnabled: true }
 };

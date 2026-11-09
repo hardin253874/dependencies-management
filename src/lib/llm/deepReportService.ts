@@ -172,9 +172,9 @@ export async function runDeepUpdateReport(
       fromVersion: input.fromVersion,
       toVersion: input.toVersion,
       lockfileStateHashShort: input.lockfileStateHashShort,
-      summary: llmResult.output.summary,
+      summary: normalizeText(llmResult.output.summary),
       riskLevel: normalizeRiskLevel(llmResult.output.riskLevel),
-      narrative: llmResult.output.narrative,
+      narrative: normalizeText(llmResult.output.narrative),
       estimatedEffort: normalizeEffort(llmResult.output.estimatedEffort),
       lockfileSummary: input.lockfileSummary,
       transitiveDelta: input.transitiveDelta,
@@ -201,6 +201,16 @@ export async function runDeepUpdateReport(
     cveDelta: input.cveDelta
   });
   return { cacheKey, detail: skeleton, source: 'deterministic-partial', llmError };
+}
+
+/**
+ * Providers hand back `tool.input` uncast and unvalidated, so a model that
+ * omits a `required` string still reaches us. Coerce to '' rather than
+ * persisting `undefined` (which JSON drops, crashing every renderer that
+ * calls `.split` on the field).
+ */
+function normalizeText(value: unknown): string {
+  return typeof value === 'string' ? value : '';
 }
 
 function normalizeRiskLevel(value: unknown): DeepRiskLevel {

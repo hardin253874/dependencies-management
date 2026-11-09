@@ -5,26 +5,8 @@ import type { LlmProvider } from '@/lib/api-types';
 import { ApiError, getApiClient } from '@/lib/client/api-client';
 import { Button } from '../Button';
 import { useAppContext } from '../../AppContext';
+import { MODEL_OPTIONS, defaultModel } from '@/lib/llm/models';
 import styles from './LlmSettings.module.css';
-
-/**
- * Available model lists per provider. Order = recency, most capable first.
- * The first entry is treated as the default when a provider is selected.
- *
- * Note: provider-published "active" model lists may evolve. v1.x will move
- * this to a BE endpoint (`GET /api/llm/models?provider=...`). For Stage 3 we
- * ship a static list covering the current generations.
- */
-const MODEL_OPTIONS: Record<LlmProvider, string[]> = {
-  anthropic: [
-    'claude-opus-4-7',
-    'claude-opus-4-1',
-    'claude-sonnet-4-5',
-    'claude-sonnet-4-1',
-    'claude-haiku-4-1'
-  ],
-  openai: ['gpt-5.5', 'gpt-5', 'gpt-5-mini', 'gpt-4o', 'gpt-4o-mini']
-};
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 type TestState = { status: 'idle' | 'testing' | 'ok' | 'error'; message?: string };
@@ -33,7 +15,7 @@ export function LlmSettings(): JSX.Element {
   const { config, refreshConfig } = useAppContext();
   const [provider, setProvider] = useState<LlmProvider>(config?.llm.provider ?? 'anthropic');
   const [model, setModel] = useState<string>(
-    config?.llm.model ?? MODEL_OPTIONS.anthropic[0]!
+    config?.llm.model ?? defaultModel('anthropic')
   );
   const [apiKey, setApiKey] = useState('');
   const [reveal, setReveal] = useState(false);
@@ -54,10 +36,10 @@ export function LlmSettings(): JSX.Element {
 
   const onProviderChange = async (next: LlmProvider) => {
     setProvider(next);
-    const defaultModel = MODEL_OPTIONS[next][0]!;
-    setModel(defaultModel);
+    const nextModel = defaultModel(next);
+    setModel(nextModel);
     try {
-      await getApiClient().patchConfig({ llm: { provider: next, model: defaultModel } });
+      await getApiClient().patchConfig({ llm: { provider: next, model: nextModel } });
       await refreshConfig();
     } catch (err) {
       setSaveState('error');

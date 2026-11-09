@@ -44,7 +44,9 @@ next-env.d.ts.bak
 .vscode/
 .idea/
 
-# claude
+# claude (CLAUDE.md is intentionally tracked)
 .claude
 .claude/
-Claude.md
+
+# local agent tool state
+.omc/

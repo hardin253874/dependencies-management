@@ -34,7 +34,7 @@ const TOKEN_BUDGET_DEFAULTS = {
 
 const DEFAULT_CONFIG = {
   schemaVersion: 1,
-  llm: { provider: 'anthropic', model: 'claude-opus-4-7' },
+  llm: { provider: 'anthropic', model: 'claude-opus-5' },
   ui: { sidebarCollapsed: false, theme: 'light', showDeepAnalyzeWarning: true },
   features: { resolverCheckEnabled: true }
 };

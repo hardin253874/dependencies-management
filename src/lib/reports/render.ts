@@ -262,16 +262,19 @@ export function renderDeepUpdateReportMd(
   lines.push(`**Generated:** ${meta.generatedAt}`);
   lines.push(`**Source:** ${meta.source}`);
   lines.push('');
-  if (detail.summary !== '') {
+  // Older caches may lack the LLM string fields entirely (see DeepUpdateReportView).
+  const summary = typeof detail.summary === 'string' ? detail.summary : '';
+  const narrative = typeof detail.narrative === 'string' ? detail.narrative : '';
+  if (summary !== '') {
     lines.push('## Summary');
     lines.push('');
-    lines.push(detail.summary);
+    lines.push(summary);
     lines.push('');
   }
-  if (detail.narrative !== '') {
+  if (narrative !== '') {
     lines.push('## Narrative');
     lines.push('');
-    lines.push(detail.narrative);
+    lines.push(narrative);
     lines.push('');
   }
 
@@ -583,13 +586,16 @@ export function renderDeepUpdateReportHtml(
   parts.push(`<strong>Source:</strong> ${esc(meta.source)}`);
   parts.push('</div>');
 
-  if (detail.summary !== '') {
+  // Older caches may lack the LLM string fields entirely (see DeepUpdateReportView).
+  const summary = typeof detail.summary === 'string' ? detail.summary : '';
+  const narrative = typeof detail.narrative === 'string' ? detail.narrative : '';
+  if (summary !== '') {
     parts.push('<section><h2>Summary</h2>');
-    parts.push(`<p>${esc(detail.summary)}</p></section>`);
+    parts.push(`<p>${esc(summary)}</p></section>`);
   }
-  if (detail.narrative !== '') {
+  if (narrative !== '') {
     parts.push('<section><h2>Narrative</h2>');
-    for (const para of detail.narrative.split(/\n\n+/)) {
+    for (const para of narrative.split(/\n\n+/)) {
       parts.push(`<p>${esc(para)}</p>`);
     }
     parts.push('</section>');
