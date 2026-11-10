@@ -98,3 +98,29 @@ describe('parseArgs', () => {
     expect(() => parseArgs(['run', '--label', 'a1', '--label', 'b1'])).toThrow(/more than once/);
   });
 });
+
+describe('parseArgs — AI predictors (v2 Stage 4a.14 / 4a.15)', () => {
+  it('accepts --predictor v2-agent with its options (defaults: sonnet 5.5, medium, update, playbooks off)', () => {
+    expect(parseArgs(['run', '--label', 'a1', '--predictor', 'v2-agent', '--mock-script', 's.json'])).toMatchObject({
+      predictor: 'v2-agent',
+      ai: { model: 'claude-sonnet-5-5', effort: 'medium', budget: 'update', playbooks: 'off', mockScript: 's.json', mock: false }
+    });
+    expect(
+      parseArgs(['run', '--label', 'a1', '--predictor', 'v2-agent', '--mock-script', 's.json', '--model', 'claude-haiku-5-5', '--effort', 'high', '--budget', 'deep', '--playbooks', 'on'])
+    ).toMatchObject({ ai: { model: 'claude-haiku-5-5', effort: 'high', budget: 'deep', playbooks: 'on' } });
+  });
+
+  it('accepts --predictor v1-ai with --mock-llm', () => {
+    expect(parseArgs(['run', '--label', 'a1', '--predictor', 'v1-ai', '--mock-llm'])).toMatchObject({ predictor: 'v1-ai', ai: { mock: true } });
+  });
+
+  it('refuses AI predictors without a mock in 4a, bad option values, and AI flags on deterministic predictors', () => {
+    expect(() => parseArgs(['run', '--label', 'a1', '--predictor', 'v2-agent'])).toThrow(/needs --mock-script/);
+    expect(() => parseArgs(['run', '--label', 'a1', '--predictor', 'v1-ai'])).toThrow(/needs --mock-llm/);
+    expect(() => parseArgs(['run', '--label', 'a1', '--predictor', 'v2-agent', '--mock-script', 's', '--effort', 'turbo'])).toThrow(/unknown --effort/);
+    expect(() => parseArgs(['run', '--label', 'a1', '--predictor', 'v2-agent', '--mock-script', 's', '--budget', 'huge'])).toThrow(/unknown --budget/);
+    expect(() => parseArgs(['run', '--label', 'a1', '--predictor', 'v2-agent', '--mock-script', 's', '--model', 'BAD MODEL'])).toThrow(/invalid --model/);
+    expect(() => parseArgs(['run', '--label', 'a1', '--model', 'claude-sonnet-5-5'])).toThrow(/only applies to --predictor/);
+    expect(() => parseArgs(['run', '--label', 'a1', '--predictor', 'v1-ai', '--mock-llm', '--mock-script', 's'])).toThrow(/only applies to --predictor v2-agent/);
+  });
+});

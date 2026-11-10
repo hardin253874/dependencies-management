@@ -109,13 +109,35 @@ export interface TruthSet {
 // Prediction
 // ---------------------------------------------------------------------------
 
-export type PredictorId = 'v1-code-scan' | 'v2-graph';
+export type PredictorId = 'v1-code-scan' | 'v2-graph' | 'v2-agent' | 'v1-ai';
+
+/** v2 Stage 4a.14/4a.15: what the AI predictors spent on one phase (summed over its runs). */
+export interface PhaseAgentInfo {
+  /** Worst status over the phase's runs (`submitted` only when every run submitted). */
+  status: string;
+  /** Agent loop runs (v2-agent, one per projectDir) or v1 requests (v1-ai, one per eligible package). */
+  runs: number;
+  toolCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  costUsd: number;
+  /** Reported filesToModify paths that are not graph files (reported, not scored). */
+  hallucinatedPaths: number;
+  durationMs: number;
+}
 
 export interface CasePrediction {
   filesScanned: number;
   durationMs: number;
   /** phase id → predicted repo-relative POSIX paths (sorted, unique). */
   byPhase: Map<string, string[]>;
+  /** Sum of the case's API cost (AI predictors; absent = 0). */
+  costUsd?: number;
+  /** AI predictors: per-phase run facts. */
+  agentByPhase?: Map<string, PhaseAgentInfo>;
+  /** Phases the predictor did not predict (excluded from aggregates), with the reason. */
+  skippedPhases?: Map<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +169,11 @@ export interface PhaseResult {
   addedCount: number;
   droppedCounts: Partial<Record<DropReason, number>>;
   outOfScope: string[];
+  /** v2 Stage 4a: `skipped` phases (e.g. v1-ai with no eligible package) are excluded from aggregates. */
+  status?: 'skipped';
+  reason?: string;
+  /** v2 Stage 4a: AI predictor run facts for this phase. */
+  agent?: PhaseAgentInfo;
 }
 
 export interface FindingGroupScore {

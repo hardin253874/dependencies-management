@@ -41,6 +41,10 @@ export interface FakeBackend {
   deepReports?: Record<string, FileEnvelope<DeepUpdateReportDetail>>;
   /** Keyed by `<slug>::<name>::<from>::<to>` (Stage 4 first-Deep cost prompt). */
   deepEstimates?: Record<string, DeepReportEstimateResponse>;
+  /** v2 Stage 4a: [D] cost-estimate responses, keyed `slug::name::from::to`. */
+  reportEstimates?: Record<string, DeepReportEstimateResponse>;
+  /** v2 Stage 4a: `GET /api/jobs/:id` answers (default: state `done`). */
+  jobRecords?: Record<string, { state: 'queued' | 'running' | 'done' | 'error' | 'cancelled'; error?: { code: string; message: string } }>;
   /** Per-slug cost summary (Stage 4 Settings → Cost). */
   costSummaries?: Record<string, CostSummaryResponse>;
   /** Library size response for `GET /api/library/size`. */
@@ -90,6 +94,8 @@ export function makeFakeFetcher(backend: Partial<FakeBackend> = {}): typeof fetc
     fileReviews: backend.fileReviews ?? {},
     deepReports: backend.deepReports ?? {},
     deepEstimates: backend.deepEstimates ?? {},
+    reportEstimates: backend.reportEstimates ?? {},
+    jobRecords: backend.jobRecords ?? {},
     costSummaries: backend.costSummaries ?? {},
     librarySize: backend.librarySize,
     openInExplorer: backend.openInExplorer,
@@ -212,6 +218,23 @@ export function makeFakeFetcher(backend: Partial<FakeBackend> = {}): typeof fetc
         return respond(404, { error: { code: 'NOT_CACHED', message: 'No usage cache' } });
       }
       return respond(200, env);
+    }
+    // v2 Stage 4a — View [D] cost estimate (must match before the bare report URL).
+    const reportEstimateMatch = url.match(
+      /^\/api\/projects\/([^/]+)\/reports\/(.+?)\/([^/]+?)\/([^/]+?)\/cost-estimate$/
+    );
+    if (reportEstimateMatch && method === 'GET') {
+      const key = [1, 2, 3, 4].map((i) => decodeURIComponent(reportEstimateMatch[i]!)).join('::');
+      const est = data.reportEstimates![key];
+      if (!est) return respond(404, { error: { code: 'NOT_CACHED', message: 'No estimate' } });
+      return respond(200, est);
+    }
+    // v2 Stage 4a — job status polled by `awaitJob`.
+    const jobGetMatch = url.match(/^\/api\/jobs\/([^/?]+)$/);
+    if (jobGetMatch && method === 'GET') {
+      const jobId = decodeURIComponent(jobGetMatch[1]!);
+      const rec = data.jobRecords![jobId] ?? { state: 'done' as const };
+      return respond(200, { jobId, slug: null, kind: 'refresh:report', state: rec.state, error: rec.error ?? null, progress: null, createdAt: '2026-01-01T00:00:00.000Z' });
     }
     // Stage 3 — View [D] update report endpoints.
     const reportsMatch = url.match(

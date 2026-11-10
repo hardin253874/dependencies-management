@@ -21,6 +21,8 @@ import { EmptyStateCTA } from './EmptyStateCTA';
 import { RegenerateButton } from './RegenerateButton';
 import { Button } from '../modals/Button';
 import { DeepAnalyzeConfirmModal } from '../modals/DeepAnalyzeConfirmModal';
+import { AgentRunConfirmModal } from '../modals/AgentRunConfirmModal';
+import { ExplorationTrace } from './ExplorationTrace';
 import {
   RelatedUpgradeTable,
   type RelatedUpgradeTableClassNames
@@ -85,6 +87,8 @@ export function UpdateReportView({ slug, depName, fromVersion, toVersion }: Prop
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<'md' | 'html' | null>(null);
   const [deepPrompt, setDeepPrompt] = useState(false);
+  // v2 Stage 4a.13: every Generate / Regenerate goes through the cost confirm modal first.
+  const [runPrompt, setRunPrompt] = useState(false);
   // Which sub-step of the cascade is currently running. Drives the
   // step-progress indicator under the "Generating…" message.
   const [cascadeStep, setCascadeStep] = useState<CascadeStep>('idle');
@@ -198,6 +202,24 @@ export function UpdateReportView({ slug, depName, fromVersion, toVersion }: Prop
     }
   };
 
+  const requestRegenerate = () => setRunPrompt(true);
+
+  const confirmModal = (
+    <AgentRunConfirmModal
+      open={runPrompt}
+      view="update-report"
+      slug={slug}
+      depName={depName}
+      fromVersion={fromVersion}
+      toVersion={toVersion}
+      onCancel={() => setRunPrompt(false)}
+      onContinue={() => {
+        setRunPrompt(false);
+        void onRegenerate();
+      }}
+    />
+  );
+
   const onDeepAnalyze = () => {
     // Stage 4: show first-Deep-Analyze cost prompt the first time per project
     // (per `_config.json.ui.showDeepAnalyzeWarning`). If the user has previously
@@ -257,13 +279,16 @@ export function UpdateReportView({ slug, depName, fromVersion, toVersion }: Prop
       );
     }
     return (
-      <EmptyStateCTA
-        title="No analysis yet."
-        description={`Generate an update report for ${depName} v${fromVersion} → v${toVersion}. Will also analyze related-deps impact and their usage.`}
-        actionLabel="Generate report"
-        onAction={onRegenerate}
-        busy={fetch.regenerating}
-      />
+      <>
+        <EmptyStateCTA
+          title="No analysis yet."
+          description={`Generate an update report for ${depName} v${fromVersion} → v${toVersion}. Will also analyze related-deps impact and their usage.`}
+          actionLabel="Generate report"
+          onAction={requestRegenerate}
+          busy={fetch.regenerating}
+        />
+        {confirmModal}
+      </>
     );
   }
 
@@ -274,7 +299,8 @@ export function UpdateReportView({ slug, depName, fromVersion, toVersion }: Prop
         <p className={styles.errorBody}>
           {fetch.error ?? 'Please retry, or regenerate to refetch.'}
         </p>
-        <RegenerateButton onClick={onRegenerate} busy={fetch.regenerating} />
+        <RegenerateButton onClick={requestRegenerate} busy={fetch.regenerating} />
+        {confirmModal}
       </div>
     );
   }
@@ -290,9 +316,9 @@ export function UpdateReportView({ slug, depName, fromVersion, toVersion }: Prop
         <CacheFreshnessLine
           status={stale ? 'stale' : 'fresh'}
           generatedAtIso={envelope.generatedAt}
-          onRegenerate={onRegenerate}
+          onRegenerate={requestRegenerate}
         />
-        <RegenerateButton onClick={onRegenerate} busy={fetch.regenerating} />
+        <RegenerateButton onClick={requestRegenerate} busy={fetch.regenerating} />
       </div>
 
       {aiUnavailable && (
@@ -301,7 +327,7 @@ export function UpdateReportView({ slug, depName, fromVersion, toVersion }: Prop
           <button
             type="button"
             className={styles.bannerAction}
-            onClick={onRegenerate}
+            onClick={requestRegenerate}
             data-testid="ai-unavailable-retry"
           >
             Retry
@@ -327,7 +353,7 @@ export function UpdateReportView({ slug, depName, fromVersion, toVersion }: Prop
 
       <section className={styles.section} aria-label="Resolver check">
         <h3 className={styles.sectionTitle}>Resolver check</h3>
-        <ResolverCheckBlockView block={detail.resolverCheck} onOpenSettings={() => openSettings('behavior')} onRegenerate={onRegenerate} />
+        <ResolverCheckBlockView block={detail.resolverCheck} onOpenSettings={() => openSettings('behavior')} onRegenerate={requestRegenerate} />
       </section>
 
       <section className={styles.section} aria-label="Co-upgrade dependencies">
@@ -406,6 +432,8 @@ export function UpdateReportView({ slug, depName, fromVersion, toVersion }: Prop
         </section>
       )}
 
+      <ExplorationTrace run={detail.agentRun} />
+
       <RelatedUpgradeImpactSection relatedUpgradeFetch={relatedUpgradeFetch} />
 
       <RelatedDepsUsageSection
@@ -450,6 +478,8 @@ export function UpdateReportView({ slug, depName, fromVersion, toVersion }: Prop
           {downloading === 'html' ? 'Downloading…' : 'Download HTML'}
         </Button>
       </div>
+
+      {confirmModal}
 
       <DeepAnalyzeConfirmModal
         open={deepPrompt}

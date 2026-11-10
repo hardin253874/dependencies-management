@@ -12,8 +12,11 @@
  *      - otherwise        → run `runResolverCheck` in TempSandbox
  *  6. Optionally load the cached usage payload for affectedFiles input (lazy:
  *     missing cache means the prompt sees an empty list, not a regen).
- *  7. Call `runUpdateReport` (mocked when MOCK_LLM=true).
- *  8. Persist envelope to `library/<slug>/reports/<name>/<from>__<to>.json`.
+ *  7. `llm.reportEngine` = `agent` (default, v2 Stage 4a.12): refresh the code
+ *     graph and run the bounded agent loop (`runAgentUpdateReportJob`); `v1`:
+ *     call `runUpdateReport` (both mocked when MOCK_LLM=true).
+ *  8. Persist envelope to `library/<slug>/reports/<name>/<from>__<to>.json`
+ *     (agent: plus the run record under `library/<slug>/runs/`).
  *
  * Returns `JobEnqueueResponse` with a 202 (or 200 when dedupe hits).
  */
@@ -33,14 +36,17 @@ import { runResolverCheck } from '@/lib/scanners/resolver';
 import { computeCoUpgradeCandidates } from '@/lib/llm/coUpgrade';
 import { runUpdateReport } from '@/lib/llm/reportService';
 import { getLlmClient, withLlmLimit } from '@/lib/llm/factory';
-import { readConfig } from '@/lib/storage/config';
+import { readConfig, reportEngineOf } from '@/lib/storage/config';
+import { persistRunRecord, runAgentUpdateReportJob } from '@/lib/agent/reportJobs';
+import type { AgentRunRecord } from '@/lib/agent/runStore';
 import { loadEnv } from '@/lib/config';
 import { findProjectDep } from '@/lib/projects/lookup';
 import type {
   ResolverCheckBlock,
   UpdateReportDetail,
   UsageDetail,
-  JobEnqueueResponse
+  JobEnqueueResponse,
+  WritableDataSource
 } from '@/lib/api-types';
 import type {
   AffectedFile,
@@ -131,54 +137,70 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; from: string
 
       report({ current: 2, total: 3, label: 'Calling LLM', phase: 'ai' });
 
-      // ---------------------------------------------------------------------
-      // LLM call (mocked or real).
-      // ---------------------------------------------------------------------
-      const client = await getLlmClient();
-      const env = loadEnv();
-      const run = await withLlmLimit(client.provider, () =>
-        runUpdateReport(client, {
-          model: config.llm.model,
-          maxOutputTokens: env.budgets.updateReport.output,
-          maxInputTokens: env.budgets.updateReport.input,
-          resolverBlock: resolverBlock.block,
+      const promptInput = {
+        dep: {
+          name,
           fromVersion: from,
           toVersion: to,
-          candidateSources: coUpgrade.sources,
-          promptInput: {
-            dep: {
-              name,
-              fromVersion: from,
-              toVersion: to,
-              releaseNotesBetween: null
+          releaseNotesBetween: null
+        },
+        resolverCheck: resolverBlock.llmInput,
+        candidateCoUpgrades: coUpgrade.candidates,
+        affectedFiles
+      };
+      const reportFile = reportFilePath(slug, name, from, to);
+
+      // ---------------------------------------------------------------------
+      // v2 Stage 4a.12: the agent loop over the code graph (default engine),
+      // or the v1 single-shot call when `llm.reportEngine` is `v1`.
+      // ---------------------------------------------------------------------
+      let run: { source: WritableDataSource; detail: UpdateReportDetail };
+      let agentRecord: AgentRunRecord | null = null;
+      if (reportEngineOf(config.llm.reportEngine) === 'agent') {
+        const agentRun = await runAgentUpdateReportJob(
+          { slug, projectRoot: project.path, config, report, signal },
+          { promptInput, resolverBlock: resolverBlock.block, fromVersion: from, toVersion: to, candidateSources: coUpgrade.sources }
+        );
+        run = agentRun;
+        agentRecord = agentRun.record;
+      } else {
+        const client = await getLlmClient();
+        const env = loadEnv();
+        run = await withLlmLimit(client.provider, () =>
+          runUpdateReport(client, {
+            model: config.llm.model,
+            maxOutputTokens: env.budgets.updateReport.output,
+            maxInputTokens: env.budgets.updateReport.input,
+            resolverBlock: resolverBlock.block,
+            fromVersion: from,
+            toVersion: to,
+            candidateSources: coUpgrade.sources,
+            promptInput,
+            onPhase: (phaseEvent) => {
+              report({
+                current: 2,
+                total: 3,
+                label: phaseEvent.message,
+                phase: 'ai',
+                attempt: phaseEvent.attempt,
+                maxAttempts: phaseEvent.maxAttempts
+              });
             },
-            resolverCheck: resolverBlock.llmInput,
-            candidateCoUpgrades: coUpgrade.candidates,
-            affectedFiles
-          },
-          onPhase: (phaseEvent) => {
-            report({
-              current: 2,
-              total: 3,
-              label: phaseEvent.message,
-              phase: 'ai',
-              attempt: phaseEvent.attempt,
-              maxAttempts: phaseEvent.maxAttempts
-            });
-          },
-          signal
-        })
-      );
+            signal
+          })
+        );
+      }
 
       // ---------------------------------------------------------------------
       // Persist.
       // ---------------------------------------------------------------------
-      await writeEnvelope<UpdateReportDetail>(reportFilePath(slug, name, from, to), {
+      await writeEnvelope<UpdateReportDetail>(reportFile, {
         source: run.source,
         // TTL: AI reports default to no-auto-expire (manual regenerate).
         ttlHours: null,
         data: run.detail
       });
+      if (agentRecord !== null) await persistRunRecord(slug, agentRecord, reportFile);
 
       report({ current: 3, total: 3, label: 'Done', phase: 'ai' });
 

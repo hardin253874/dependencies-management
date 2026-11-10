@@ -14,7 +14,7 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 A locally-run AI-augmented agent that scans, analyses, and reviews dependencies of legacy JS/TS projects. Next.js 16.4 App Router + React 19.3 (Route Handlers, not Server Actions; Turbopack for dev and build since v2 Stage 2). Server binds 127.0.0.1 only. Six right-panel views per dep ([A]–[E] + [D-Deep]). Cache-first design: every view reads its persisted envelope first; LLM calls happen only on explicit user action. The agent is **read-only against target projects** — all writes go to `library/`.
 
-Test baseline (2026-11-10, after v2 Stage 3c): 925 passed / 5 skipped across 137 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
+Test baseline (2026-11-10, after v2 Stage 4a): 1090 passed / 5 skipped across 154 files (~12 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
 
 ## Commands
 
@@ -37,7 +37,7 @@ Vitest 5 `test.projects` (vitest.config.ts): `backend` = `tests/backend/**` → 
 2. **Phase 2** (`scanners/phase2.ts`, background job) fetches registry packuments + OSV CVEs + endoflife.date and writes per-dep envelopes; the StatusBar shows progress via SSE.
 3. **Right-panel views** read cached envelopes via GET routes. User clicks POST a refresh → route enqueues a job on `lib/jobs/queue.ts` → a service runs → envelope written → FE `awaitJob` polls, then reloads.
 4. **[C] Usage** is answered from the code graph: refresh routes call `refreshProjectGraph` (build or incremental rescan of `library/<slug>/graph.db`) and map it to the unchanged `UsageDetail` with `usageFromGraph` (`src/lib/graph/`). v1 `scanners/code.ts` `scanCode` stays only so the eval's v1 baseline keeps measuring v1.
-5. **AI views** live in `lib/llm/*Service.ts` (report, relatedUpgrade, fileReview, deepReport, cveImpact). Each builds a deterministic skeleton from scanners (`code.ts` import graph, `resolver.ts` npm dry-run, `deepScan.ts`, `importSiteContext.ts`) and merges the LLM tool-call output on top. `llm/factory.ts` picks Anthropic / mock (OpenAI removed in v2; the factory is the seam for Microsoft Foundry). Each service passes an explicit `effort` from `llm/effort.ts`; the adapter (`llm/anthropic.ts`, SDK 1.x) uses `tool_choice: auto` + `strict` tools, prompt caching on tools + system, and maps `stop_reason: refusal` → `LLM_REFUSAL`.
+5. **AI views** live in `lib/llm/*Service.ts` (report, relatedUpgrade, fileReview, deepReport, cveImpact). Since v2 Stage 4a, [D] and [D-Deep] default to the **agent engine** (`agentReportService.ts` / `agentDeepReportService.ts`, see "Agent loop" below); `_config.json` `llm.reportEngine: 'v1'` keeps the v1 single-shot services reachable. Each builds a deterministic skeleton from scanners (`code.ts` import graph, `resolver.ts` npm dry-run, `deepScan.ts`, `importSiteContext.ts`) and merges the LLM tool-call output on top. `llm/factory.ts` picks Anthropic / mock (OpenAI removed in v2; the factory is the seam for Microsoft Foundry). Each service passes an explicit `effort` from `llm/effort.ts`; the adapter (`llm/anthropic.ts`, SDK 1.x) uses `tool_choice: auto` + `strict` tools, prompt caching on tools + system, and maps `stop_reason: refusal` → `LLM_REFUSAL`.
 6. `lib/api-types.ts` is the FE↔BE contract; `lib/client/api-client.ts` is the only FE caller; `lib/reports/render.ts` produces MD/HTML downloads.
 
 ---
@@ -55,6 +55,21 @@ Design contract: `Plans/V2_CODE_GRAPH_DESIGN.md` + `Plans/V2_STAGE3_SPEC.md`; mo
 - **Close readers before deleting.** On Windows an open SQLite handle makes `fs.rm(library/<slug>)` fail with EBUSY/EPERM. Anything that removes or replaces the project dir must run inside `withProjectGraphLock(slug, …)` and call `closeGraphReaders(slug)` first (see the project DELETE route).
 - **Rebuild triggers.** `mode: 'auto'` does a full build when `meta.builder` (`GRAPH_BUILDER_ID` in `core/graph/build.ts`: builder version + pinned `@babel/parser`/`@babel/traverse`/`oxc-resolver`) changes. **Bump `GRAPH_BUILDER_VERSION` whenever parse/resolve/reach output changes for the same input**; a test ties the pins to `package.json`. Schema changes bump `SCHEMA_VERSION` (drop + recreate). Unreadable dirs/configs land in `BuildGraphResult.diagnostics` and `meta.diagnostics` (logged at warn by `refreshProjectGraph`).
 - **Perf budgets** are gated: `$env:GRAPH_PERF='1'; npx vitest run tests/backend/graph/perf.test.ts`.
+
+---
+
+## Agent loop (v2 Stage 4a) — `src/core/agent` + `src/lib/agent` + `src/lib/llm/agent*.ts`
+
+Design contract: `Plans/V2_STAGE4_SPEC.md` §2–§3 + `Plans/V2_AI_OVER_GRAPH.md`; module map, tool table and budget semantics in `src/core/agent/README.md`. The rules that bite:
+
+- **Own loop, not the Agent SDK** (proposed D24 = D8's fallback): `runAgent` in `core/agent/loop.ts` on `@anthropic-ai/sdk` 1.x via the `AgentModel` seam (`lib/llm/agentAnthropic.ts`: `messages.stream` → `finalMessage`, `tool_choice: auto`, `strict` tools, explicit effort, no `thinking` param, cache breakpoints on last tool + system + rolling last user block, history never mutated so thinking blocks pass back byte-identical).
+- **Tools are MCP-first and read-only.** One list: `createReadToolRegistry()` (`core/agent/tools`). The registry throws on any `capability !== 'read'`. Tools take `workspaceRoot` from `ToolContext`, read through `pathGuard` (graph file set + `package.json`, `.env*` refused before any fs call, realpath containment). Add a tool → add it to `CALLS` in `tests/backend/agent/invariant.readonly-tools.test.ts` (the test fails otherwise).
+- **Budgets are hard and checked BEFORE each request** (projection in `loop.ts`; a normal turn needs room for a same-size final turn). Never add a code path that sends a request without going through `runAgent`'s projection (4c adds the spend gate there via `SpendGate`).
+- **Run records**: `library/<slug>/runs/<runId>.json` (`lib/agent/runStore.ts`, envelope, `trigger` only `'user'`), written by the refresh routes next to the report envelope (`resultRef`). The report carries `agentRun` (runId, status, cost, trace calls) for the trace viewer. `library/<slug>/memory/` is reserved (L4), never created.
+- **Agent graph handle**: the job opens its own `openGraphReader` for the run and closes it in `finally` (`lib/agent/reportJobs.ts`); the shared reader cache must not be held across awaits.
+- **Scripted mock**: `MOCK_LLM=true` → `ScriptedAgentModel` from `test-fixtures/agent/<scenario>.json` (`MOCK_AGENT_SCENARIO` or the view id), keyed by scenario, not prompt hash. Tests pin models/intel with `setAgentModelOverride` / `setAgentIntelOverride` (globalThis, reset to `null` in `afterEach`); never let a test reach the npm registry.
+- **Eval-importable**: files the eval imports (`agentReportService`, `agentRun`, `runStore`, `storage/config`, the prompts) use relative imports — vite-node has no `@/` alias.
+- **Confirm before every run**: `AgentRunConfirmModal` (GET `…/reports|deep-reports/…/cost-estimate`: expected + `maxUsd`) gates every [D] / [D-Deep] Generate/Regenerate.
 
 ---
 
@@ -98,7 +113,7 @@ function getMyThing(): MyThing {
 
 If you `grep "^const [A-Z_]*\s*=\s*new (Map|Set)\(" src/lib/` and find a non-readonly hit in `src/lib/`, that's a flag. Same for `^let \w+` at module top level (read-only `let env = …` after first call is OK; mutable singletons are not).
 
-Currently-pinned singletons: `JobQueue`, CSRF token, logger state, project locks, orphan cache, graph readers (`__DEP_AGENT_GRAPH_READERS__`, `lib/graph/readerCache.ts`), LLM client cache + its config signature (`__DEP_AGENT_LLM_SIGNATURE__`, `llm/factory.ts`), LLM concurrency limiters (`__DEP_AGENT_LLM_LIMITS__`), canonical-writer STATES.
+Currently-pinned singletons: `JobQueue`, CSRF token, logger state, project locks, orphan cache, graph readers (`__DEP_AGENT_GRAPH_READERS__`, `lib/graph/readerCache.ts`), LLM client cache + its config signature (`__DEP_AGENT_LLM_SIGNATURE__`, `llm/factory.ts`), LLM concurrency limiters (`__DEP_AGENT_LLM_LIMITS__`), canonical-writer STATES, and the test-only agent overrides (`__DEP_AGENT_AGENT_MODEL_OVERRIDE__` in `lib/agent/factory.ts`, `__DEP_AGENT_AGENT_INTEL_OVERRIDE__` in `lib/agent/intel.ts`).
 
 Guards: `tests/backend/invariant.singletons.test.ts` (in `npm test`) fails on any top-level `let`/`var` or `const X = new Map|Set|…` in `src/lib/**` (minus `src/lib/client/`) and `src/core/**` (no allowlist entries allowed there) that is not in its allowlist with a reason. `tests/e2e/invariant.cross-route-singleton.spec.ts` checks at runtime that the CSRF token from `/api/csrf` is accepted by `PATCH /api/config`. Measured on Next 16.4: only webpack dev splits modules per route; Turbopack dev and production builds share one instance. So the rule still holds (`--webpack` is one flag away), but the e2e spec can only catch a regression under `next dev --webpack`. The static guard catches it with any bundler.
 
@@ -252,7 +267,7 @@ These are the bugs that have actually shipped in this repo. Each one is here bec
 ```bash
 npm run typecheck   # tsc --noEmit — must be clean
 npm run lint        # ESLint — must be clean
-npm test            # Full Vitest suite — must match current baseline (925 pass / 5 skipped)
+npm test            # Full Vitest suite — must match current baseline (1090 pass / 5 skipped)
 ```
 
 ### When you change a route

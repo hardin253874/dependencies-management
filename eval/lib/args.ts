@@ -12,7 +12,26 @@ export class UsageError extends Error {
 }
 
 export const LABEL_RE = /^[a-z0-9][a-z0-9-]{0,40}$/;
-export const PREDICTORS: readonly PredictorId[] = ['v1-code-scan', 'v2-graph'];
+export const PREDICTORS: readonly PredictorId[] = ['v1-code-scan', 'v2-graph', 'v2-agent', 'v1-ai'];
+export const AI_PREDICTORS: readonly PredictorId[] = ['v2-agent', 'v1-ai'];
+export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type EvalEffort = (typeof EFFORTS)[number];
+export const BUDGET_KINDS = ['update', 'deep'] as const;
+export const PLAYBOOK_MODES = ['off', 'on'] as const;
+/** Stage 4c measures Sonnet 5.5 (Q9); also the default so mock runs price like the real round. */
+export const DEFAULT_AI_MODEL = 'claude-sonnet-5-5';
+
+/** Options of the AI predictors (Stage 4a.14 / 4a.15). Real API runs arrive in 4c (`--real`). */
+export interface AiRunOptions {
+  model: string;
+  effort: EvalEffort;
+  budget: (typeof BUDGET_KINDS)[number];
+  playbooks: (typeof PLAYBOOK_MODES)[number];
+  /** v2-agent: scripted model file (AgentScriptFile JSON or a { "<caseId>/<phaseId>": turns } map). */
+  mockScript?: string;
+  /** v1-ai: answer from MOCK_LLM fixtures (test-fixtures/llm/). */
+  mock: boolean;
+}
 export const GRAPH_PACKAGE_SOURCES: readonly GraphPackageSource[] = ['declared', 'phase'];
 
 export interface CorpusPaths {
@@ -39,6 +58,8 @@ export type ParsedCommand =
       cacheDir?: string;
       offline: boolean;
       predictor: PredictorId;
+      /** Set for v2-agent / v1-ai. */
+      ai?: AiRunOptions;
     } & CorpusPaths)
   | ({
       command: 'graph';
@@ -60,8 +81,12 @@ Commands:
   truth           --case <id> [--phase <id>] [--cache-dir <dir>] [--offline]
                   Prepare the pinned clone; print the truth set and package.json diff.
   run             --label <label> [--cases id,id] [--cache-dir <dir>] [--offline]
-                  [--predictor v1-code-scan|v2-graph]
+                  [--predictor v1-code-scan|v2-graph|v2-agent|v1-ai]
+                  [--model <id>] [--effort low|medium|high|xhigh|max]
+                  [--budget update|deep] [--playbooks off|on]
+                  [--mock-script <file>] (v2-agent) · [--mock-llm] (v1-ai)
                   Score every case; write eval/results/<date>-<label>.json.
+                  AI predictors need a mock in Stage 4a; real API runs come with --real (4c).
   graph           --label <label> [--cases id,id] [--packages declared|phase]
                   [--cache-dir <dir>] [--offline] [--refresh-truth]
                   Graph "files that use package X" vs TypeScript truth + unresolved %;
@@ -78,7 +103,7 @@ Exit codes: 0 ok · 1 usage/validation error · 2 results written with case erro
 const VALUE_FLAGS: Record<string, readonly string[]> = {
   validate: ['corpus', 'local'],
   truth: ['case', 'phase', 'cache-dir', 'corpus', 'local'],
-  run: ['label', 'cases', 'cache-dir', 'predictor', 'corpus', 'local'],
+  run: ['label', 'cases', 'cache-dir', 'predictor', 'corpus', 'local', 'model', 'effort', 'budget', 'playbooks', 'mock-script'],
   graph: ['label', 'cases', 'cache-dir', 'packages', 'corpus', 'local'],
   'score-findings': ['corpus', 'local'],
   compare: []
@@ -86,7 +111,7 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
 const BOOL_FLAGS: Record<string, readonly string[]> = {
   validate: [],
   truth: ['offline'],
-  run: ['offline'],
+  run: ['offline', 'mock-llm'],
   graph: ['offline', 'refresh-truth'],
   'score-findings': [],
   compare: []
@@ -176,6 +201,43 @@ function noPositionals(raw: RawArgs, command: string): void {
   }
 }
 
+function oneOf<T extends string>(raw: RawArgs, name: string, allowed: readonly T[], fallback: T): T {
+  const v = str(raw, name) ?? fallback;
+  if (!(allowed as readonly string[]).includes(v)) throw new UsageError(`unknown --${name} "${v}" (known: ${allowed.join(', ')})`);
+  return v as T;
+}
+
+const AI_ONLY_FLAGS = ['model', 'effort', 'budget', 'playbooks', 'mock-script', 'mock-llm'];
+
+/** AI predictor options; rejects AI-only flags on the deterministic predictors. */
+function aiOptions(raw: RawArgs, predictor: PredictorId): AiRunOptions | undefined {
+  if (!AI_PREDICTORS.includes(predictor)) {
+    const stray = AI_ONLY_FLAGS.find((f) => raw.flags.has(f));
+    if (stray !== undefined) throw new UsageError(`--${stray} only applies to --predictor ${AI_PREDICTORS.join(' / ')}`);
+    return undefined;
+  }
+  const model = str(raw, 'model') ?? DEFAULT_AI_MODEL;
+  if (!/^[a-z0-9][a-z0-9.-]{1,63}$/.test(model)) throw new UsageError(`invalid --model "${model}"`);
+  const out: AiRunOptions = {
+    model,
+    effort: oneOf(raw, 'effort', EFFORTS, 'medium'),
+    budget: oneOf(raw, 'budget', BUDGET_KINDS, 'update'),
+    playbooks: oneOf(raw, 'playbooks', PLAYBOOK_MODES, 'off'),
+    mock: raw.flags.get('mock-llm') === true
+  };
+  const mockScript = str(raw, 'mock-script');
+  if (mockScript !== undefined) out.mockScript = mockScript;
+  if (predictor === 'v2-agent' && out.mockScript === undefined) {
+    throw new UsageError('--predictor v2-agent needs --mock-script <file> in Stage 4a (real API runs come with --real in 4c)');
+  }
+  if (predictor === 'v1-ai' && !out.mock) {
+    throw new UsageError('--predictor v1-ai needs --mock-llm in Stage 4a (real API runs come with --real in 4c)');
+  }
+  if (predictor === 'v1-ai' && out.mockScript !== undefined) throw new UsageError('--mock-script only applies to --predictor v2-agent');
+  if (predictor === 'v2-agent' && out.mock) throw new UsageError('--mock-llm only applies to --predictor v1-ai (v2-agent uses --mock-script)');
+  return out;
+}
+
 export function parseArgs(argv: string[]): ParsedCommand {
   const rest = argv.filter((a) => a !== '--');
   const command = rest[0];
@@ -221,6 +283,8 @@ export function parseArgs(argv: string[]): ParsedCommand {
       if (cases !== undefined) out.cases = cases;
       const cacheDir = str(raw, 'cache-dir');
       if (cacheDir !== undefined) out.cacheDir = cacheDir;
+      const ai = aiOptions(raw, predictor as PredictorId);
+      if (ai !== undefined) out.ai = ai;
       return out;
     }
     case 'graph': {

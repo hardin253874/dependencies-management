@@ -4,6 +4,9 @@
  * Runs the deep scan pipeline (L2 transitive + CVE delta), pre-computes the
  * peer-dep satisfaction array, then calls the LLM (or mock) for the L3 narrative.
  * On LLM failure, persists a deterministic-partial envelope per spec §11.9.
+ * v2 Stage 4a.12: with `llm.reportEngine: 'agent'` (default) the narrative
+ * comes from the bounded agent loop over the code graph and a run record is
+ * written next to the envelope; `'v1'` keeps the single-shot call.
  *
  * Spec §7.6 + §11.6 + §11.9 + §11.11.
  */
@@ -21,7 +24,9 @@ import { runDeepScan } from '@/lib/scanners/deepScan';
 import { runDeepUpdateReport } from '@/lib/llm/deepReportService';
 import { computeCoUpgradeCandidates } from '@/lib/llm/coUpgrade';
 import { getLlmClient, withLlmLimit } from '@/lib/llm/factory';
-import { readConfig } from '@/lib/storage/config';
+import { readConfig, reportEngineOf } from '@/lib/storage/config';
+import { persistRunRecord, runAgentDeepReportJob } from '@/lib/agent/reportJobs';
+import type { AgentRunRecord } from '@/lib/agent/runStore';
 import { loadEnv } from '@/lib/config';
 import { parseLockfile, detectLockfile } from '@/lib/scanners/lockfile';
 import { findProjectDep } from '@/lib/projects/lookup';
@@ -30,7 +35,8 @@ import type {
   CoUpgradeDep,
   DeepUpdateReportDetail,
   JobEnqueueResponse,
-  ResolverCheckBlock
+  ResolverCheckBlock,
+  WritableDataSource
 } from '@/lib/api-types';
 
 export const POST = withCsrf<RouteCtx<{ slug: string; name: string; from: string; to: string }>>(async (req, ctx) => {
@@ -148,57 +154,68 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; from: string
       report({ current: 2, total: 4, label: 'Calling LLM', phase: 'ai' });
 
       // ---------------------------------------------------------------------
-      // 4. L3: AI narrative.
+      // 4. L3: AI narrative — the agent loop over the code graph (v2 Stage
+      //    4a.12, default) or the v1 single-shot call (`llm.reportEngine: v1`).
       // ---------------------------------------------------------------------
-      const client = await getLlmClient();
-      const env = loadEnv();
-      const run = await withLlmLimit(client.provider, () =>
-        runDeepUpdateReport(client, {
-          model: config.llm.model,
-          maxInputTokens: env.budgets.deepReport.input,
-          maxOutputTokens: env.budgets.deepReport.output,
-          fromVersion: from,
-          toVersion: to,
-          lockfileStateHashShort: lockfile.lockfileStateHash.slice(0, 5),
-          resolverBlock,
-          coUpgradeDeps,
+      const hashShort = lockfile.lockfileStateHash.slice(0, 5);
+      const deepInput = {
+        fromVersion: from,
+        toVersion: to,
+        lockfileStateHashShort: hashShort,
+        resolverBlock,
+        coUpgradeDeps,
+        lockfileSummary: deepScan.lockfileSummary,
+        transitiveDelta: deepScan.transitiveDelta,
+        cveDelta: deepScan.cveDelta,
+        promptInput: {
+          dep: { name, fromVersion: from, toVersion: to },
           lockfileSummary: deepScan.lockfileSummary,
           transitiveDelta: deepScan.transitiveDelta,
           cveDelta: deepScan.cveDelta,
-          promptInput: {
-            dep: { name, fromVersion: from, toVersion: to },
-            lockfileSummary: deepScan.lockfileSummary,
-            transitiveDelta: deepScan.transitiveDelta,
-            cveDelta: deepScan.cveDelta,
-            resolverCheckSummary: null,
-            coUpgradeNames: coUpgrade.candidates.map((c) => c.name)
-          },
-          onPhase: (phaseEvent) => {
-            report({
-              current: 3,
-              total: 4,
-              label: phaseEvent.message,
-              phase: 'ai',
-              attempt: phaseEvent.attempt,
-              maxAttempts: phaseEvent.maxAttempts
-            });
-          },
-          signal
-        })
-      );
+          resolverCheckSummary: null,
+          coUpgradeNames: coUpgrade.candidates.map((c) => c.name)
+        }
+      };
+      let run: { source: WritableDataSource; detail: DeepUpdateReportDetail };
+      let agentRecord: AgentRunRecord | null = null;
+      if (reportEngineOf(config.llm.reportEngine) === 'agent') {
+        const agentRun = await runAgentDeepReportJob({ slug, projectRoot: project.path, config, report, signal }, deepInput);
+        run = agentRun;
+        agentRecord = agentRun.record;
+      } else {
+        const client = await getLlmClient();
+        const env = loadEnv();
+        run = await withLlmLimit(client.provider, () =>
+          runDeepUpdateReport(client, {
+            ...deepInput,
+            model: config.llm.model,
+            maxInputTokens: env.budgets.deepReport.input,
+            maxOutputTokens: env.budgets.deepReport.output,
+            onPhase: (phaseEvent) => {
+              report({
+                current: 3,
+                total: 4,
+                label: phaseEvent.message,
+                phase: 'ai',
+                attempt: phaseEvent.attempt,
+                maxAttempts: phaseEvent.maxAttempts
+              });
+            },
+            signal
+          })
+        );
+      }
 
       // ---------------------------------------------------------------------
-      // 5. Persist envelope with lockfile-state hash suffix.
+      // 5. Persist envelope with lockfile-state hash suffix (+ agent run record).
       // ---------------------------------------------------------------------
-      const hashShort = lockfile.lockfileStateHash.slice(0, 5);
-      await writeEnvelope<DeepUpdateReportDetail>(
-        deepReportFilePath(slug, name, from, to, hashShort),
-        {
-          source: run.source,
-          ttlHours: null, // Deep reports never auto-expire; only on lockfile change.
-          data: run.detail
-        }
-      );
+      const reportFile = deepReportFilePath(slug, name, from, to, hashShort);
+      await writeEnvelope<DeepUpdateReportDetail>(reportFile, {
+        source: run.source,
+        ttlHours: null, // Deep reports never auto-expire; only on lockfile change.
+        data: run.detail
+      });
+      if (agentRecord !== null) await persistRunRecord(slug, agentRecord, reportFile);
 
       report({ current: 4, total: 4, label: 'Done', phase: 'ai' });
 

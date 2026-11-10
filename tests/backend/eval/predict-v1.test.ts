@@ -89,16 +89,24 @@ describe('no-LLM guard', () => {
     return out;
   }
 
-  it('no file under eval/ imports an LLM module or SDK', async () => {
+  // v2 Stage 4a: the AI predictors (v2-agent, v1-ai) and the CLI that wires
+  // them may import LLM services, but only with injected mock/scripted models.
+  // No eval file may import a real client (SDK, `llm/anthropic`,
+  // `llm/agentAnthropic`) or the LLM factory before the 4c spend gate exists.
+  const AI_PREDICTOR_FILES = new Set(['cli.ts', 'predict-agent.ts', 'predict-v1-ai.ts']);
+  const REAL_CLIENT_RE = /@anthropic-ai|openai|llm\/anthropic|llm\/agentAnthropic|llm\/factory|src\/app\/|^next(\/|$)/;
+
+  it('no file under eval/ imports a real LLM client or SDK; only the AI predictor files import LLM modules', async () => {
     const files = await listTs(EVAL_DIR);
     expect(files.length).toBeGreaterThan(5);
     const importRe = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"]([^'"]+)['"]/g;
     const offenders: string[] = [];
     for (const file of files) {
       const src = await fs.readFile(file, 'utf8');
+      const aiFile = AI_PREDICTOR_FILES.has(path.basename(file));
       for (const m of src.matchAll(importRe)) {
         const spec = m[1] ?? '';
-        if (/llm\/|@anthropic-ai|openai|src\/app\/|^next(\/|$)/.test(spec)) offenders.push(`${file}: ${spec}`);
+        if (REAL_CLIENT_RE.test(spec) || (!aiFile && /llm\//.test(spec))) offenders.push(`${file}: ${spec}`);
       }
     }
     expect(offenders).toEqual([]);

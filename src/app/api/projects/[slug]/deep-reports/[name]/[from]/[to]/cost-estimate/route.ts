@@ -16,6 +16,10 @@
  * the test fake fetcher both pointed at `/cost-estimate`, so the modal
  * always 404'd in dev/prod. Renamed to `cost-estimate/` to match the
  * canonical contract.
+ *
+ * v2 Stage 4a.12: with `llm.reportEngine: 'agent'` (default) the response is
+ * the agent-run estimate (`estimatedCostUsd` = expected, plus `maxUsd` = the
+ * run's hard USD budget and the resolved `budgets`). Never starts a run.
  */
 import { NextResponse } from 'next/server';
 import { findBySlug } from '@/lib/storage/projects';
@@ -25,9 +29,10 @@ import { badRequest, notFound, internalError } from '@/lib/http/errors';
 import { withRequestLog, type RouteCtx } from '@/lib/http/guards';
 import { isValidParam, isValidVersionParam } from '@/lib/http/validate';
 import { decodeAndValidatePackageName } from '@/lib/http/packageName';
-import { readConfig } from '@/lib/storage/config';
+import { readConfig, reportEngineOf } from '@/lib/storage/config';
+import { agentRunEstimateResponse } from '@/lib/agent/reportJobs';
 import { loadEnv } from '@/lib/config';
-import { computeDeepReportEstimate } from '@/lib/llm/estimate';
+import { computeDeepReportEstimate, ESTIMATE_BASE_TOKENS, ESTIMATE_INPUT_CAP, ESTIMATE_TOKENS_PER_PACKAGE } from '@/lib/llm/estimate';
 import type { ProjectJson } from '@/lib/projects/add';
 import type { DeepReportEstimateResponse } from '@/lib/api-types';
 
@@ -55,6 +60,14 @@ export const GET = withRequestLog<RouteCtx<{ slug: string; name: string; from: s
     // Better proxy: parse the lockfile? Phase 1 already stored lockfileStateHash
     // but not the package count. For v1 we use direct dep count as the lower
     // bound; the deep scan itself will compute the true count.
+
+    if (reportEngineOf(config.llm.reportEngine) === 'agent') {
+      // The agent seed embeds the same pre-computed deep facts as the v1 prompt.
+      const seedTokens = Math.min(ESTIMATE_BASE_TOKENS + totalPackages * ESTIMATE_TOKENS_PER_PACKAGE, ESTIMATE_INPUT_CAP);
+      return NextResponse.json<DeepReportEstimateResponse>(
+        agentRunEstimateResponse({ view: 'deep-report', config, seedPromptBytes: seedTokens * 4, totalPackages })
+      );
+    }
 
     const result = computeDeepReportEstimate({
       provider: config.llm.provider,

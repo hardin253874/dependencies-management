@@ -22,6 +22,7 @@ export const GET = withRequestLog<unknown>(async () => {
     llm: cfg.llm,
     ui: cfg.ui,
     features: cfg.features,
+    agentBudgets: cfg.agentBudgets,
     apiKeys: {
       hasAnthropicKey: hasKey('anthropic')
     },
@@ -46,6 +47,9 @@ export const PATCH = withCsrf<unknown>(async (req) => {
       `llm.model "${String(body.llm.model)}" is not offered; pick one of: ${MODEL_OPTIONS.anthropic.join(', ')}.`
     );
   }
+  if (body.llm?.reportEngine !== undefined && body.llm.reportEngine !== 'agent' && body.llm.reportEngine !== 'v1') {
+    return badRequest('INVALID_BODY', 'llm.reportEngine must be "agent" or "v1".');
+  }
   try {
     const { config: next, notices } = await patchConfig(body);
     return NextResponse.json<ConfigResponse>({
@@ -53,6 +57,7 @@ export const PATCH = withCsrf<unknown>(async (req) => {
       llm: next.llm,
       ui: next.ui,
       features: next.features,
+      agentBudgets: next.agentBudgets,
       apiKeys: {
         hasAnthropicKey: hasKey('anthropic')
       },

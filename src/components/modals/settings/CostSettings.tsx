@@ -4,6 +4,8 @@ import type { JSX } from 'react';
 import { useEffect, useState } from 'react';
 import { getApiClient } from '@/lib/client/api-client';
 import type {
+  AgentBudgetSettingsDto,
+  ConfigResponse,
   CostSummaryEntry,
   CostSummaryResponse,
   LegacyLlmProvider,
@@ -31,7 +33,7 @@ interface ProjectRow {
  * estimates based on baked-in pricing tables (§11.11).
  */
 export function CostSettings(): JSX.Element {
-  const { projects } = useAppContext();
+  const { projects, config } = useAppContext();
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -152,7 +154,34 @@ export function CostSettings(): JSX.Element {
       <p className={styles.footnote}>
         Computed from baked-in pricing tables and cached AI envelopes. Estimates only.
       </p>
+
+      <AgentBudgets config={config} />
     </div>
+  );
+}
+
+/**
+ * v2 Stage 4a.12: agent run budgets, read-only (editing is backlog). Hidden
+ * when the server does not send them (older server / FE fixtures).
+ */
+function AgentBudgets({ config }: { config: ConfigResponse | null }): JSX.Element | null {
+  const b = config?.agentBudgets;
+  if (b === undefined || b === null) return null;
+  const row = (label: string, s: AgentBudgetSettingsDto) => (
+    <li role="listitem" key={label} className={styles.muted}>
+      {label}: {s.maxToolCalls} tool calls, {s.maxInputTokens.toLocaleString()} input / {s.maxOutputTokens.toLocaleString()} output tokens,{' '}
+      {Math.round(s.maxWallMs / 1000)} s, {s.maxUsd === null ? 'USD cap derived from the token budgets' : `$${s.maxUsd.toFixed(2)} max`}
+    </li>
+  );
+  return (
+    <section aria-label="Agent run budgets" data-testid="agent-budgets">
+      <h4 className={styles.heading}>Agent run budgets</h4>
+      <ul role="list" className={styles.list}>
+        {row('Update report', b.updateReport)}
+        {row('Deep report', b.deepReport)}
+      </ul>
+      <p className={styles.footnote}>Hard limits per run; a run never sends a request that could pass one. Read-only for now.</p>
+    </section>
   );
 }
 

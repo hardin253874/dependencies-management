@@ -47,10 +47,22 @@ export type LlmProvider = 'anthropic';
  */
 export type LegacyLlmProvider = 'openai';
 export type ThemeChoice = 'light' | 'dark' | 'system';
+/** v2 Stage 4a.12: `agent` = bounded tool loop over the code graph, `v1` = single-shot v1 services. */
+export type ReportEngine = 'agent' | 'v1';
+
+/** v2 Stage 4a: one view's agent run budgets (`maxUsd: null` = derived from the token budgets). */
+export interface AgentBudgetSettingsDto {
+  maxToolCalls: number;
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  maxWallMs: number;
+  maxUsd: number | null;
+  perTurnMaxTokens: number;
+}
 
 export interface ConfigResponse {
   schemaVersion: 1;
-  llm: { provider: LlmProvider; model: string };
+  llm: { provider: LlmProvider; model: string; reportEngine?: ReportEngine };
   ui: {
     sidebarCollapsed: boolean;
     theme: ThemeChoice;
@@ -58,6 +70,8 @@ export interface ConfigResponse {
     panelWidths?: { left: number; middle: number };
   };
   features: { resolverCheckEnabled: boolean };
+  /** v2 Stage 4a (optional: older servers / FE fixtures omit it). */
+  agentBudgets?: { updateReport: AgentBudgetSettingsDto; deepReport: AgentBudgetSettingsDto };
   /** Presence booleans only — values never leave the server (§5.5). */
   apiKeys: {
     hasAnthropicKey: boolean;
@@ -572,6 +586,36 @@ export interface UpdateReportDetail {
   recommendations: string[];
   /** Cost tracking (§11.11). Present on AI-generated payloads; absent on `deterministic-partial`. */
   cost?: AiCostFields;
+  /** v2 Stage 4a: set when the agent loop produced (or tried to produce) this report. Renderers default it. */
+  agentRun?: AgentRunSummary;
+}
+
+/** v2 Stage 4a: one tool call of an agent run's exploration trace. */
+export interface AgentTraceCall {
+  turn: number;
+  tool: string;
+  /** JSON of the tool input, at most 300 chars. */
+  inputSummary: string;
+  durationMs: number;
+  resultBytes: number;
+  truncated: boolean;
+  isError: boolean;
+}
+
+export type AgentRunStatusDto = 'submitted' | 'budget-exhausted' | 'no-submit' | 'cancelled' | 'error';
+
+/** v2 Stage 4a: what a report envelope carries about the agent run behind it (full record: library/<slug>/runs/<runId>.json). */
+export interface AgentRunSummary {
+  runId: string;
+  status: AgentRunStatusDto;
+  toolCalls: number;
+  costUsd: number;
+  /** Why the run stopped (budget name, `submitted`, `llm-error`, …). */
+  stopReason?: string;
+  /** filesToModify entries dropped because the path is not in the code graph. */
+  droppedPaths?: number;
+  /** The exploration trace (tool calls in order). Optional: older envelopes lack it. */
+  calls?: AgentTraceCall[];
 }
 
 // ============================================================================
@@ -979,6 +1023,8 @@ export interface DeepUpdateReportDetail {
   coUpgradeDeps: CoUpgradeDep[];
   /** Cost tracking (§11.11). Absent on deterministic-partial fallback. */
   cost?: AiCostFields;
+  /** v2 Stage 4a: agent run behind this report (optional; renderers default it). */
+  agentRun?: AgentRunSummary;
 }
 
 // ============================================================================
@@ -1029,6 +1075,22 @@ export interface DeepReportEstimateResponse {
   model: string;
   /** Total packages in the lockfile (visible in the FE prompt). */
   totalPackages: number;
+  /** v2 Stage 4a.12: which engine the estimate is for (absent on v1 servers = v1). */
+  engine?: ReportEngine;
+  /** v2 Stage 4a.12 (agent engine): the run's hard USD budget; the loop never passes it. */
+  maxUsd?: number;
+  /** v2 Stage 4a.12 (agent engine): the resolved budgets of the run. */
+  budgets?: AgentRunBudgetsDto;
+}
+
+/** v2 Stage 4a: resolved per-run agent budgets (USD always resolved). */
+export interface AgentRunBudgetsDto {
+  maxToolCalls: number;
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  maxWallMs: number;
+  maxUsd: number;
+  perTurnMaxTokens: number;
 }
 
 // ============================================================================

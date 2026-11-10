@@ -18,6 +18,8 @@ import { CacheFreshnessLine, isStale } from './CacheFreshnessLine';
 import { EmptyStateCTA } from './EmptyStateCTA';
 import { RegenerateButton } from './RegenerateButton';
 import { Button } from '../modals/Button';
+import { AgentRunConfirmModal } from '../modals/AgentRunConfirmModal';
+import { ExplorationTrace } from './ExplorationTrace';
 import styles from './DeepUpdateReportView.module.css';
 
 interface Props {
@@ -45,7 +47,7 @@ export function DeepUpdateReportView({
   fromVersion,
   toVersion
 }: Props): JSX.Element {
-  const { navigate } = useAppContext();
+  const { navigate, pushToast } = useAppContext();
   const fetch = useDetailFetch<FileEnvelope<DeepUpdateReportDetail>>({
     fetcher: (signal) =>
       getApiClient().getDeepUpdateReport(slug, depName, fromVersion, toVersion, { signal }),
@@ -54,6 +56,8 @@ export function DeepUpdateReportView({
 
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<'md' | 'html' | null>(null);
+  // v2 Stage 4a.13: every Generate / Regenerate goes through the cost confirm modal first.
+  const [runPrompt, setRunPrompt] = useState(false);
 
   // Abort controller for the SSE job-wait. See DependencyDetailView for rationale.
   const jobWaitAbortRef = useRef<AbortController | null>(null);
@@ -83,11 +87,35 @@ export function DeepUpdateReportView({
       fetch.reload();
     } catch (err) {
       if (controller.signal.aborted || (err as Error).name === 'AbortError') return;
+      // Never swallow a user-triggered failure (CLAUDE.md bug class "silent error swallow").
+      pushToast({
+        severity: 'error',
+        title: `Couldn't generate deep report`,
+        body: err instanceof Error ? err.message : 'Generation failed; please try again.'
+      });
     } finally {
       if (jobWaitAbortRef.current === controller) jobWaitAbortRef.current = null;
       fetch.setRegenerating(false);
     }
   };
+
+  const requestRegenerate = () => setRunPrompt(true);
+
+  const confirmModal = (
+    <AgentRunConfirmModal
+      open={runPrompt}
+      view="deep-report"
+      slug={slug}
+      depName={depName}
+      fromVersion={fromVersion}
+      toVersion={toVersion}
+      onCancel={() => setRunPrompt(false)}
+      onContinue={() => {
+        setRunPrompt(false);
+        void onRegenerate();
+      }}
+    />
+  );
 
   const onDownload = async (format: 'md' | 'html') => {
     setDownloading(format);
@@ -142,13 +170,16 @@ export function DeepUpdateReportView({
       );
     }
     return (
-      <EmptyStateCTA
-        title="No deep analysis yet."
-        description={`Generate a deep update report for ${depName} v${fromVersion} → v${toVersion}.`}
-        actionLabel="Generate deep report"
-        onAction={onRegenerate}
-        busy={fetch.regenerating}
-      />
+      <>
+        <EmptyStateCTA
+          title="No deep analysis yet."
+          description={`Generate a deep update report for ${depName} v${fromVersion} → v${toVersion}.`}
+          actionLabel="Generate deep report"
+          onAction={requestRegenerate}
+          busy={fetch.regenerating}
+        />
+        {confirmModal}
+      </>
     );
   }
 
@@ -159,7 +190,8 @@ export function DeepUpdateReportView({
         <p className={styles.errorBody}>
           {fetch.error ?? 'Please retry. If the problem persists, regenerate.'}
         </p>
-        <RegenerateButton onClick={onRegenerate} busy={fetch.regenerating} />
+        <RegenerateButton onClick={requestRegenerate} busy={fetch.regenerating} />
+        {confirmModal}
       </div>
     );
   }
@@ -183,9 +215,9 @@ export function DeepUpdateReportView({
         <CacheFreshnessLine
           status={stale ? 'stale' : 'fresh'}
           generatedAtIso={envelope.generatedAt}
-          onRegenerate={onRegenerate}
+          onRegenerate={requestRegenerate}
         />
-        <RegenerateButton onClick={onRegenerate} busy={fetch.regenerating} />
+        <RegenerateButton onClick={requestRegenerate} busy={fetch.regenerating} />
       </div>
 
       <section className={styles.section} aria-label="Summary">
@@ -301,6 +333,8 @@ export function DeepUpdateReportView({
         </section>
       )}
 
+      <ExplorationTrace run={detail.agentRun} />
+
       <section className={styles.section} aria-label="Shared with update report">
         <h3 className={styles.sectionTitleSmall}>From the update report</h3>
         <ul className={styles.sharedList}>
@@ -340,6 +374,7 @@ export function DeepUpdateReportView({
           {downloading === 'html' ? 'Downloading…' : 'Download HTML'}
         </Button>
       </div>
+      {confirmModal}
     </div>
   );
 }

@@ -1,0 +1,27 @@
+{
+  "scenario": "update-report",
+  "description": "Generic [D] agent run for MOCK_LLM dev/e2e: one graph query, then a submit with no file claims.",
+  "turns": [
+    {
+      "content": [{ "type": "tool_use", "name": "graph_summary", "input": {} }],
+      "usage": { "inputTokens": 3200, "outputTokens": 150, "cacheCreationInputTokens": 0 }
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "name": "submit_update_report",
+          "input": {
+            "summary": "MOCK agent report: the scripted model looked at the graph summary only.",
+            "riskLevel": "medium",
+            "breakingChanges": [],
+            "coUpgradeDeps": [],
+            "filesToModify": [],
+            "recommendations": ["MOCK_LLM is on; set MOCK_LLM=false for a real analysis."]
+          }
+        }
+      ],
+      "usage": { "inputTokens": 400, "outputTokens": 600, "cacheReadInputTokens": 3200 }
+    }
+  ]
+}

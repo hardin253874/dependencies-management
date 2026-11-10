@@ -5,7 +5,8 @@
 import { atomicWriteJson, readJson, pathExists } from './atomic';
 import { configFilePath } from '../paths';
 import { MODEL_OPTIONS, defaultModel } from '../llm/models';
-import type { ConfigNotice, LegacyLlmProvider, LlmProvider } from '../api-types';
+import type { ConfigNotice, LegacyLlmProvider, LlmProvider, ReportEngine } from '../api-types';
+import { DEFAULT_AGENT_BUDGETS, normalizeBudgetSettings, type AgentBudgetSettings, type AgentBudgetView } from '../../core/agent/budgets';
 
 export type { LlmProvider };
 export type ThemeChoice = 'light' | 'dark' | 'system';
@@ -18,6 +19,13 @@ export interface AppConfig {
   llm: {
     provider: LlmProvider;
     model: string;
+    /**
+     * v2 Stage 4a.12: which service answers [D] / [D-Deep]. `agent` = the
+     * bounded tool loop over the code graph, `v1` = the single-shot v1
+     * services (kept reachable, like D21 kept the v1 scanner). Missing = agent
+     * (read with `reportEngineOf`); optional so hand-written configs stay valid.
+     */
+    reportEngine?: ReportEngine;
   };
   ui: {
     sidebarCollapsed: boolean;
@@ -27,14 +35,35 @@ export interface AppConfig {
   features: {
     resolverCheckEnabled: boolean;
   };
+  /** v2 Stage 4a: per-view agent run budgets (read-only in the Settings UI for now). */
+  agentBudgets: Record<AgentBudgetView, AgentBudgetSettings>;
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
   schemaVersion: 1,
-  llm: { provider: 'anthropic', model: 'claude-opus-5-5' },
+  llm: { provider: 'anthropic', model: 'claude-opus-5-5', reportEngine: 'agent' },
   ui: { sidebarCollapsed: false, theme: 'light', showDeepAnalyzeWarning: true },
-  features: { resolverCheckEnabled: true }
+  features: { resolverCheckEnabled: true },
+  agentBudgets: { updateReport: { ...DEFAULT_AGENT_BUDGETS.updateReport }, deepReport: { ...DEFAULT_AGENT_BUDGETS.deepReport } }
 };
+
+export function reportEngineOf(raw: unknown): ReportEngine {
+  return raw === 'v1' ? 'v1' : 'agent';
+}
+
+/** Keeps a stored `reportEngine` (normalized); an absent one stays absent (= agent). */
+function engineField(raw: unknown): { reportEngine?: ReportEngine } {
+  return raw === undefined ? {} : { reportEngine: reportEngineOf(raw) };
+}
+
+/** Fills missing / invalid agent budget fields with the defaults (a config from before Stage 4 has none). */
+function agentBudgetsOf(raw: unknown): AppConfig['agentBudgets'] {
+  const o = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  return {
+    updateReport: normalizeBudgetSettings(o.updateReport, DEFAULT_AGENT_BUDGETS.updateReport),
+    deepReport: normalizeBudgetSettings(o.deepReport, DEFAULT_AGENT_BUDGETS.deepReport)
+  };
+}
 
 export interface MigratedConfig {
   config: AppConfig;
@@ -56,7 +85,10 @@ export function migrateConfig(raw: unknown): MigratedConfig {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new Error('_config.json must be a JSON object.');
   }
-  const stored = raw as Omit<AppConfig, 'llm'> & { llm?: { provider: StoredLlmProvider; model: string } };
+  const stored = raw as Omit<AppConfig, 'llm' | 'agentBudgets'> & {
+    llm?: { provider: StoredLlmProvider; model: string; reportEngine?: unknown };
+    agentBudgets?: unknown;
+  };
   if (stored.schemaVersion !== 1) {
     throw new Error(`Unsupported _config.json schemaVersion: ${String(stored.schemaVersion)}`);
   }
@@ -72,22 +104,23 @@ export function migrateConfig(raw: unknown): MigratedConfig {
     });
   } else if (storedLlm.provider !== 'anthropic') {
     const model = defaultModel('anthropic');
-    llm = { provider: 'anthropic', model };
+    llm = { provider: 'anthropic', model, ...engineField(storedLlm.reportEngine) };
     notices.push({
       code: 'PROVIDER_MIGRATED',
       message: `OpenAI support was removed in v2; switched to Anthropic ${model}.`
     });
   } else if (!MODEL_OPTIONS.anthropic.includes(storedLlm.model)) {
     const model = defaultModel('anthropic');
-    llm = { provider: 'anthropic', model };
+    llm = { provider: 'anthropic', model, ...engineField(storedLlm.reportEngine) };
     notices.push({
       code: 'MODEL_MIGRATED',
       message: `Model ${storedLlm.model} is no longer offered; switched to ${model}.`
     });
   } else {
-    llm = { provider: storedLlm.provider, model: storedLlm.model };
+    llm = { provider: storedLlm.provider, model: storedLlm.model, ...engineField(storedLlm.reportEngine) };
   }
-  return { config: { ...stored, llm }, notices };
+  // Stage 4a: the agent fields are filled silently (no notice); nothing the user chose changes.
+  return { config: { ...stored, llm, agentBudgets: agentBudgetsOf(stored.agentBudgets) }, notices };
 }
 
 /**
@@ -137,7 +170,8 @@ export async function patchConfig(patch: PatchInput): Promise<MigratedConfig> {
     schemaVersion: 1,
     llm: {
       provider: patch.llm?.provider ?? cur.llm.provider,
-      model: patch.llm?.model ?? cur.llm.model
+      model: patch.llm?.model ?? cur.llm.model,
+      reportEngine: patch.llm?.reportEngine ?? cur.llm.reportEngine
     },
     ui: {
       sidebarCollapsed: patch.ui?.sidebarCollapsed ?? cur.ui.sidebarCollapsed,
@@ -146,7 +180,9 @@ export async function patchConfig(patch: PatchInput): Promise<MigratedConfig> {
     },
     features: {
       resolverCheckEnabled: patch.features?.resolverCheckEnabled ?? cur.features.resolverCheckEnabled
-    }
+    },
+    // Read-only in 4a: PATCH cannot change budgets (editing them is backlog).
+    agentBudgets: cur.agentBudgets
   };
   await writeConfig(next);
   return { config: next, notices };

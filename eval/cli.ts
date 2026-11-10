@@ -1,6 +1,8 @@
 /**
  * `npm run eval -- <command>` entry point: dispatch + I/O only; the logic
- * lives in eval/lib/*. No LLM, no HTTP server, no UI (round 1).
+ * lives in eval/lib/*. No HTTP server, no UI. The AI predictors (v2-agent,
+ * v1-ai, Stage 4a) only run against mocks here (`--mock-script` /
+ * `--mock-llm`); real API runs arrive with `--real` in Stage 4c.
  *
  * Output goes to stdout/stderr directly: this is a CLI whose output *is*
  * the product, not server code, so the app logger does not apply.
@@ -20,6 +22,12 @@ import { readDeclaredPackages, runGraphEval } from './lib/graph-score';
 import { loadOrBuildCaseTruth } from './lib/graph-truth';
 import { graphForCase, predictV2Graph } from './lib/predict-graph';
 import { predictV1 } from './lib/predict-v1';
+import { EVAL_AGENT_BUDGETS, predictV2Agent, scriptedModelFactory, type MockScriptSource } from './lib/predict-agent';
+import { predictV1Ai } from './lib/predict-v1-ai';
+import { loadPlaybookDir } from '../src/core/agent/playbooks';
+import { MockLLMClient } from '../src/lib/llm/mock';
+import type { AiRunOptions } from './lib/args';
+import type { CasePrediction } from './lib/types';
 import { findingsSheetPath, LabelCollisionError, runEval } from './lib/results';
 import { RESULT_SCHEMA_VERSION, type LoadedCase, type ResultFile, type ToolInfo } from './lib/types';
 
@@ -28,6 +36,38 @@ const TOOL_ROOT = path.resolve(EVAL_DIR, '..');
 const DEFAULT_CASES_DIR = path.join(EVAL_DIR, 'corpus', 'cases');
 const DEFAULT_LOCAL_FILE = path.join(EVAL_DIR, 'corpus.local.json');
 const RESULTS_DIR = path.join(EVAL_DIR, 'results');
+
+/** Picks the `run` predictor; the AI ones get their (mock) model here. */
+async function predictorFor(
+  predictor: string,
+  ai: AiRunOptions | undefined,
+  cacheDir: string,
+  label: string
+): Promise<(c: LoadedCase, dir: string) => Promise<CasePrediction>> {
+  if (predictor === 'v2-graph') return (c, dir) => predictV2Graph(c, dir, cacheDir);
+  if (predictor === 'v2-agent' && ai?.mockScript !== undefined) {
+    const source = JSON.parse(await fs.readFile(path.resolve(ai.mockScript), 'utf8')) as MockScriptSource;
+    const playbooks = ai.playbooks === 'on' ? await loadPlaybookDir(path.join(TOOL_ROOT, 'playbooks')) : [];
+    return (c, dir) =>
+      predictV2Agent(c, dir, {
+        cacheDir,
+        label,
+        modelFor: scriptedModelFactory(source),
+        modelId: ai.model,
+        effort: ai.effort,
+        budgets: { ...EVAL_AGENT_BUDGETS[ai.budget] },
+        playbooks: ai.playbooks,
+        loadedPlaybooks: playbooks
+      });
+  }
+  if (predictor === 'v1-ai' && ai?.mock === true) {
+    const client = new MockLLMClient({ fixtureDir: path.join(TOOL_ROOT, 'test-fixtures', 'llm') });
+    return (c, dir) => predictV1Ai(c, dir, { cacheDir, client, model: ai.model });
+  }
+  if (predictor === 'v1-code-scan') return (c, dir) => predictV1(c, dir);
+  // parseArgs already refuses AI predictors without a mock; this is the safety net.
+  throw new UsageError(`--predictor ${predictor} has no real-API mode before Stage 4c`);
+}
 
 function out(text: string): void {
   process.stdout.write(text.endsWith('\n') ? text : `${text}\n`);
@@ -167,7 +207,7 @@ async function execute(cmd: ParsedCommand): Promise<number> {
           prepare: (c) => cache.prepare(c, { offline: cmd.offline }),
           truth: async (c, dir) =>
             (await cache.truthForPhases(c, dir)).map((p) => ({ phaseId: p.phaseId, truth: p.truth })),
-          predict: (c, dir) => (cmd.predictor === 'v2-graph' ? predictV2Graph(c, dir, cache.cacheDir) : predictV1(c, dir)),
+          predict: await predictorFor(cmd.predictor, cmd.ai, cache.cacheDir, cmd.label),
           log: out
         }
       });

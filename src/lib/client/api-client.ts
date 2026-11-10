@@ -527,6 +527,25 @@ export class ApiClient {
   }
 
   /**
+   * v2 Stage 4a.12: pre-run estimate for view [D] (agent engine: expected
+   * cost + `maxUsd`, the run's hard USD budget). Same shape as the deep one.
+   */
+  getUpdateReportCostEstimate(
+    slug: string,
+    name: string,
+    from: string,
+    to: string,
+    options?: ApiRequestOptions
+  ): Promise<DeepReportEstimateResponse> {
+    return this.request(
+      'GET',
+      `/api/projects/${encodeURIComponent(slug)}/reports/${encodeURIComponent(name)}/${encodeURIComponent(from)}/${encodeURIComponent(to)}/cost-estimate`,
+      undefined,
+      options
+    );
+  }
+
+  /**
    * Per-project cost summary (Settings → Cost panel). BE rolls up cached AI
    * envelopes for the given slug.
    */

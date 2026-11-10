@@ -1,7 +1,7 @@
 /**
  * Library disk usage (spec §7.7 Settings → Library, §9.3).
  *
- * Walks `library/<slug>/{deps,versions,usage,reports,deep-reports,file-reviews}/`
+ * Walks `library/<slug>/{deps,versions,usage,reports,deep-reports,file-reviews,runs}/`
  * and sums byte counts per category. Also reports the totals for `_logs/`,
  * `_config.json`, and `_projects.json` so the Settings UI can show a complete
  * size breakdown.
@@ -15,6 +15,7 @@ import {
   reportsDir,
   deepReportsDir,
   fileReviewsDir,
+  runsDir,
   logsDir,
   configFilePath,
   projectsFilePath,
@@ -32,6 +33,7 @@ export async function computeLibrarySize(): Promise<LibrarySizeResponse> {
     reports: 0,
     'deep-reports': 0,
     'file-reviews': 0,
+    runs: 0,
     logs: 0,
     config: 0
   };
@@ -44,6 +46,7 @@ export async function computeLibrarySize(): Promise<LibrarySizeResponse> {
     byKind.reports! += await sizeOfTree(reportsDir(project.slug));
     byKind['deep-reports']! += await sizeOfTree(deepReportsDir(project.slug));
     byKind['file-reviews']! += await sizeOfTree(fileReviewsDir(project.slug));
+    byKind.runs! += await sizeOfTree(runsDir(project.slug));
   }
   byKind.logs! += await sizeOfTree(logsDir());
 

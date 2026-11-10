@@ -1,0 +1,27 @@
+{
+  "scenario": "deep-report",
+  "description": "Generic [D-Deep] agent run for MOCK_LLM dev/e2e: one graph query, then a submit.",
+  "turns": [
+    {
+      "content": [{ "type": "tool_use", "name": "graph_summary", "input": {} }],
+      "usage": { "inputTokens": 5200, "outputTokens": 180 }
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "name": "submit_deep_update_report",
+          "input": {
+            "summary": "MOCK agent deep report.",
+            "riskLevel": "medium",
+            "narrative": "MOCK_LLM is on; this narrative is scripted.",
+            "estimatedEffort": "medium",
+            "criticalBlockers": [],
+            "suggestedUpgradeOrder": [{ "step": 1, "action": "Upgrade the package", "rationale": "Scripted." }]
+          }
+        }
+      ],
+      "usage": { "inputTokens": 500, "outputTokens": 900, "cacheReadInputTokens": 5200 }
+    }
+  ]
+}

@@ -92,7 +92,8 @@ function aggregatePhases(phases: readonly PhaseResult[]): { micro: PrecisionReca
 /** Micro, macro and by-tag values over ok cases; error cases are only counted. */
 export function aggregate(cases: readonly CaseResult[]): Aggregate {
   const ok = cases.filter((c) => c.status === 'ok');
-  const phases = ok.flatMap((c) => c.phases);
+  // Stage 4a: a skipped phase (the predictor had nothing to predict, e.g. v1-ai) is not scored.
+  const phases = ok.flatMap((c) => c.phases.filter((p) => p.status !== 'skipped'));
   const overall = aggregatePhases(phases);
 
   const tagged = new Map<string, PhaseResult[]>();

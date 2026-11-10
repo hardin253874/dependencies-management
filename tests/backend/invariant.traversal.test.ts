@@ -72,3 +72,24 @@ describe('invariant: allowlist validation on URL params (spec §9.2)', () => {
     expect(isValidPackageName('foo bar')).toBe(false);
   });
 });
+
+describe('invariant: agent read_file cannot leave workspaceRoot (v2 Stage 4a.3, design §8)', () => {
+  it('refuses traversal, absolute, UNC, encoded and .env paths, and allows a graph file', async () => {
+    const { buildAgentFixture } = await import('./helpers/agentFixture');
+    const { createReadToolRegistry } = await import('@/core/agent/tools');
+    sandbox = await createSandbox('agent-traverse');
+    const fx = await buildAgentFixture(sandbox, 'wrapper-module');
+    try {
+      const reg = createReadToolRegistry();
+      const outside = path.join(sandbox.scratchRoot, 'outside.txt');
+      for (const p of ['../outside.txt', '..\outside.txt', outside, `\\?\${outside}`, '%2e%2e/outside.txt', '.env', 'src/.env.production']) {
+        const r = await reg.call('read_file', { path: p }, fx.ctx());
+        expect(r.isError, p).toBe(true);
+        expect(r.content, p).toMatch(/path refused/);
+      }
+      expect((await reg.call('read_file', { path: 'src/lib/http.ts' }, fx.ctx())).isError).toBe(false);
+    } finally {
+      fx.graph.close();
+    }
+  });
+});

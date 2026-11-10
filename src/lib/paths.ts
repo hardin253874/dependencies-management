@@ -50,6 +50,20 @@ export function graphDbPath(slug: string): string {
   return path.join(projectDir(slug), 'graph.db');
 }
 
+/** Agent run records (v2 Stage 4a.8, design §8). `library/<slug>/memory/` is reserved for L4 and not created. */
+export function runsDir(slug: string): string {
+  return path.join(projectDir(slug), 'runs');
+}
+
+export function runFilePath(slug: string, runId: string): string {
+  return path.join(runsDir(slug), `${runId}.json`);
+}
+
+/** Package API diff cache (Stage 4a.4), shared by all projects. */
+export function apiDiffDir(): string {
+  return path.join(getLibraryRoot(), '_apidiff');
+}
+
 export function projectJobsDir(slug: string): string {
   return path.join(projectDir(slug), '_jobs');
 }

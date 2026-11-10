@@ -179,6 +179,9 @@ describe('UpdateReportView AI-down fallback', () => {
       expect(screen.getByTestId('ai-unavailable-retry')).toBeInTheDocument()
     );
     await userEvent.click(screen.getByTestId('ai-unavailable-retry'));
+    // v2 Stage 4a.13: every regenerate goes through the cost confirm modal first.
+    expect(onRefresh).not.toHaveBeenCalled();
+    await userEvent.click(await screen.findByTestId('agent-run-continue'));
     await waitFor(() =>
       expect(onRefresh).toHaveBeenCalledWith('p', 'react', '18.2.0', '19.0.0')
     );

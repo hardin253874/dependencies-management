@@ -100,11 +100,18 @@ export async function runCase(
     const phases = c.phases.map((phase) => {
       const t = truths.find((x) => x.phaseId === phase.id);
       if (t === undefined) throw new Error(`no truth computed for phase ${phase.id}`);
-      return scorePhase(
+      const scored = scorePhase(
         { id: phase.id, packages: phase.packages.map((p) => p.name), tags: phaseTags(c, phase) },
         t.truth,
         prediction.byPhase.get(phase.id) ?? []
       );
+      const skipped = prediction.skippedPhases?.get(phase.id);
+      const agent = prediction.agentByPhase?.get(phase.id);
+      return {
+        ...scored,
+        ...(skipped !== undefined ? { status: 'skipped' as const, reason: skipped } : {}),
+        ...(agent !== undefined ? { agent } : {})
+      };
     });
     return {
       result: {
@@ -113,8 +120,8 @@ export async function runCase(
         status: 'ok',
         filesScanned: prediction.filesScanned,
         durationMs: prediction.durationMs,
-        // No predictor calls an LLM in round 1.
-        costUsd: 0,
+        // Deterministic predictors cost nothing; the AI predictors (Stage 4) report their API cost.
+        costUsd: prediction.costUsd ?? 0,
         phases,
         findings: null
       },
