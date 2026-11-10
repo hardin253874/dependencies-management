@@ -28,4 +28,17 @@ describe('env file parse/serialize', () => {
     expect(out).toContain('D=added');
     expect(out.indexOf('B=NEW')).toBeGreaterThan(out.indexOf('A=1'));
   });
+
+  it('v2: a leftover OPENAI_API_KEY round-trips untouched when another key is patched', () => {
+    // OpenAI was removed, but a user's existing .env is never rewritten to drop it.
+    const original = 'ANTHROPIC_API_KEY=\nOPENAI_API_KEY=sk-old-openai-key\nLOG_LEVEL=info\n';
+    const out = serializeEnv({ ...parseEnv(original), ANTHROPIC_API_KEY: 'sk-ant-new' }, original);
+    expect(out).toContain('ANTHROPIC_API_KEY=sk-ant-new');
+    expect(out).toContain('OPENAI_API_KEY=sk-old-openai-key');
+    expect(parseEnv(out)).toEqual({
+      ANTHROPIC_API_KEY: 'sk-ant-new',
+      OPENAI_API_KEY: 'sk-old-openai-key',
+      LOG_LEVEL: 'info'
+    });
+  });
 });

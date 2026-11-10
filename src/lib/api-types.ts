@@ -36,7 +36,16 @@ export interface CsrfResponse {
 // Config (§5.3, §9.3)
 // ============================================================================
 
-export type LlmProvider = 'anthropic' | 'openai';
+/**
+ * The one LLM provider type for the whole app (v2 D8: OpenAI removed).
+ * Kept as a union-ready alias because Microsoft Foundry is the next provider.
+ */
+export type LlmProvider = 'anthropic';
+/**
+ * Providers that only appear in data written by older builds (v1 OpenAI
+ * reports). Read-only: nothing new is ever written with these.
+ */
+export type LegacyLlmProvider = 'openai';
 export type ThemeChoice = 'light' | 'dark' | 'system';
 
 export interface ConfigResponse {
@@ -52,8 +61,19 @@ export interface ConfigResponse {
   /** Presence booleans only — values never leave the server (§5.5). */
   apiKeys: {
     hasAnthropicKey: boolean;
-    hasOpenAIKey: boolean;
   };
+  /**
+   * One-time notices from migrating `_config.json` (e.g. OpenAI → Anthropic).
+   * Present only on the GET that performed the migration.
+   */
+  notices?: ConfigNotice[];
+}
+
+export type ConfigNoticeCode = 'PROVIDER_MIGRATED' | 'MODEL_MIGRATED';
+
+export interface ConfigNotice {
+  code: ConfigNoticeCode;
+  message: string;
 }
 
 export type ConfigPatch = {
@@ -266,8 +286,15 @@ export type SseEventName = 'progress' | 'state' | 'done' | 'error';
 // ============================================================================
 
 export interface AiCostFields {
+  /** Uncached input tokens (`usage.input_tokens`). */
   inputTokens: number;
   outputTokens: number;
+  /**
+   * Prompt-cache usage (v2). Optional so envelopes written by older builds
+   * stay valid; readers use `?? 0`.
+   */
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
   model: string;
   costEstimateUsd: number;
 }
@@ -278,6 +305,11 @@ export interface AiCostFields {
 // return the wrapped envelope so the FE can derive cache freshness.
 // ============================================================================
 
+/**
+ * `openai:<model>` is a legacy *read* value: v1 envelopes written with OpenAI
+ * stay readable and renderable. New writes use `WritableEnvelopeSource`
+ * (src/lib/storage/envelope.ts), which excludes it.
+ */
 export type DataSource =
   | 'registry'
   | 'deterministic'
@@ -285,6 +317,9 @@ export type DataSource =
   | `openai:${string}`
   | 'deterministic-partial'
   | 'endoflife.date';
+
+/** What new code may write: `DataSource` minus the legacy `openai:` prefix. */
+export type WritableDataSource = Exclude<DataSource, `openai:${string}`>;
 
 export interface FileEnvelope<T> {
   schemaVersion: 1;
@@ -951,7 +986,7 @@ export interface DeepUpdateReportDetail {
 // ============================================================================
 
 export interface CostSummaryEntry {
-  provider: LlmProvider;
+  provider: LlmProvider | LegacyLlmProvider;
   model: string;
   count: number;
   inputTokens: number;
@@ -964,9 +999,16 @@ export interface CostSummaryResponse {
   totalUsd: number;
   totalInputTokens: number;
   totalOutputTokens: number;
+  /** Prompt-cache totals (v2). Optional for older servers; FE reads `?? 0`. */
+  totalCacheReadInputTokens?: number;
+  totalCacheCreationInputTokens?: number;
   count: number;
-  /** Per-provider rollup. */
-  byProvider: Record<LlmProvider, CostSummaryEntry[]>;
+  /**
+   * Per-provider rollup. `openai` is the legacy bucket: spend recorded by v1
+   * OpenAI reports still counts (it was real money); the FE shows it only
+   * when non-empty, labelled "OpenAI (legacy)".
+   */
+  byProvider: Record<LlmProvider | LegacyLlmProvider, CostSummaryEntry[]>;
   /** Per-kind rollup (reports / deep-reports / file-reviews). */
   byKind: Record<string, { count: number; costUsd: number }>;
 }

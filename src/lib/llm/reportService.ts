@@ -13,8 +13,8 @@
  *   2. Render the prompt (Mustache).
  *   3. Compute the cache key (sha256 of prompt + tool + model).
  *   4. Call the LLM (or mock).
- *   5. On success: persist envelope with `source: anthropic:<model>` or
- *      `openai:<model>`, cost fields, plus full UpdateReportDetail.
+ *   5. On success: persist envelope with `source: anthropic:<model>`,
+ *      cost fields, plus full UpdateReportDetail.
  *   6. On LLM failure (after retries): persist deterministic-partial envelope
  *      with `source: deterministic-partial`, skeleton AI fields.
  *
@@ -25,6 +25,7 @@ import { renderUpdateReportPrompt, UPDATE_REPORT_TOOL_SCHEMA, type UpdateReportP
 import { SHARED_SYSTEM_PROMPT } from './prompts/shared';
 import { computeCacheKey } from './cacheKey';
 import { LLMError, type LLMClient } from './client';
+import { VIEW_EFFORT } from './effort';
 import { getLogger } from '../logger';
 import { loadEnv } from '../config';
 import type {
@@ -35,7 +36,7 @@ import type {
   ResolverCheckBlock,
   RiskLevel,
   UpdateReportDetail,
-  DataSource
+  WritableDataSource
 } from '../api-types';
 
 export interface RunUpdateReportInput {
@@ -65,7 +66,7 @@ export interface RunUpdateReportInput {
 export interface UpdateReportRun {
   cacheKey: string;
   detail: UpdateReportDetail;
-  source: DataSource;
+  source: WritableDataSource;
   /** Set when source === 'deterministic-partial'. */
   llmError?: LLMError;
 }
@@ -137,7 +138,7 @@ export async function runUpdateReport(
     model: input.model
   });
 
-  let llmResult: { output: UpdateReportToolOutput; tokens: AiCostFields; source: DataSource } | null = null;
+  let llmResult: { output: UpdateReportToolOutput; tokens: AiCostFields; source: WritableDataSource } | null = null;
   let llmError: LLMError | undefined;
   try {
     const call = await client.call<UpdateReportToolOutput>({
@@ -146,6 +147,7 @@ export async function runUpdateReport(
       userPrompt,
       tool: UPDATE_REPORT_TOOL_SCHEMA,
       maxOutputTokens: maxOutput,
+      effort: VIEW_EFFORT.updateReport,
       maxInputTokens: input.maxInputTokens ?? env.budgets.updateReport.input,
       onPhase: input.onPhase,
       signal: input.signal
@@ -155,10 +157,12 @@ export async function runUpdateReport(
       tokens: {
         inputTokens: call.inputTokens,
         outputTokens: call.outputTokens,
+        cacheReadInputTokens: call.cacheReadInputTokens,
+        cacheCreationInputTokens: call.cacheCreationInputTokens,
         model: call.model,
         costEstimateUsd: call.costEstimateUsd
       },
-      source: `${call.provider}:${call.model}` as DataSource
+      source: `${call.provider}:${call.model}` as WritableDataSource
     };
   } catch (err) {
     llmError = err instanceof LLMError ? err : new LLMError('LLM_NETWORK', (err as Error).message, false);

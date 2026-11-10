@@ -28,6 +28,9 @@ export interface MockFixture<T = unknown> {
   output: T;
   inputTokens: number;
   outputTokens: number;
+  /** Optional prompt-cache usage so tests can seed cache accounting. */
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
 }
 
 export interface MockLLMOptions {
@@ -112,11 +115,20 @@ export class MockLLMClient implements LLMClient {
   private toResult<T>(fixture: MockFixture<T>, req: LlmCallRequest): LlmCallResult<T> {
     req.onPhase?.({ phase: 'streaming', message: 'Streaming MOCK response…' });
     req.onPhase?.({ phase: 'finalizing', message: 'Finalizing structured output…' });
-    const cost = costEstimateUsd(this.provider, req.model, fixture.inputTokens, fixture.outputTokens);
+    const cacheReadInputTokens = fixture.cacheReadInputTokens ?? 0;
+    const cacheCreationInputTokens = fixture.cacheCreationInputTokens ?? 0;
+    const cost = costEstimateUsd(req.model, {
+      inputTokens: fixture.inputTokens,
+      outputTokens: fixture.outputTokens,
+      cacheReadInputTokens,
+      cacheCreationInputTokens
+    });
     return {
       output: fixture.output,
       inputTokens: fixture.inputTokens,
       outputTokens: fixture.outputTokens,
+      cacheReadInputTokens,
+      cacheCreationInputTokens,
       model: req.model,
       provider: this.provider,
       costEstimateUsd: cost

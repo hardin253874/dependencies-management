@@ -126,20 +126,6 @@ async function writeConfig(cfg) {
   await fs.rename(tmp, target);
 }
 
-async function promptProviders(rl) {
-  while (true) {
-    const answer = (
-      await rl.question('Which LLM provider(s) do you want to enable? [a]nthropic / [o]penai / [b]oth: ')
-    )
-      .trim()
-      .toLowerCase();
-    if (answer === 'a' || answer === 'anthropic') return ['anthropic'];
-    if (answer === 'o' || answer === 'openai') return ['openai'];
-    if (answer === 'b' || answer === 'both') return ['anthropic', 'openai'];
-    output.write('Please enter "a", "o", or "b".\n');
-  }
-}
-
 async function yesNo(rl, prompt, defaultYes) {
   const answer = (await rl.question(prompt)).trim().toLowerCase();
   if (answer === '') return defaultYes;
@@ -157,17 +143,17 @@ async function main() {
     const existingRaw = await readRawEnv();
     const existing = parseEnv(existingRaw);
 
-    const providers = await promptProviders(rl);
-
+    // v2: Anthropic is the only provider. An existing OPENAI_API_KEY line in
+    // .env is left alone (writeEnvFile only touches the keys it is given).
     const keyUpdates = {};
-    for (const provider of providers) {
-      const envKey = provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY';
-      const current = existing[envKey];
-      if (current !== undefined && current !== '') {
-        const keep = await yesNo(rl, `Existing ${envKey} present (length ${current.length}). Keep it? (Y/n) `, true);
-        if (keep) continue;
-      }
-      const value = await rl.question(`Enter ${provider} API key: `);
+    const envKey = 'ANTHROPIC_API_KEY';
+    const current = existing[envKey];
+    const keep =
+      current !== undefined &&
+      current !== '' &&
+      (await yesNo(rl, `Existing ${envKey} present (length ${current.length}). Keep it? (Y/n) `, true));
+    if (!keep) {
+      const value = await rl.question('Enter Anthropic API key: ');
       keyUpdates[envKey] = value.trim();
     }
 
@@ -196,9 +182,8 @@ async function main() {
 
     const existingConfig = await readMaybeJson(path.join(REPO_ROOT, 'library', '_config.json'));
     const cfg = existingConfig !== null ? existingConfig : JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-    if (providers.length === 1) {
-      cfg.llm.provider = providers[0];
-    }
+    // A v1 config with provider 'openai' is migrated by the server on the
+    // first GET /api/config (one-time notice), so it is not rewritten here.
     await writeConfig(cfg);
 
     output.write('\n');

@@ -18,7 +18,8 @@ import { createSmallNpmProject } from './helpers/fixtures';
 import { addProjectPipeline } from '@/lib/projects/add';
 import { runUpdateReport } from '@/lib/llm/reportService';
 import { MockLLMClient } from '@/lib/llm/mock';
-import { LLMError } from '@/lib/llm/client';
+import { LLMError, type LLMClient } from '@/lib/llm/client';
+import { VIEW_EFFORT } from '@/lib/llm/effort';
 import { computeCacheKey } from '@/lib/llm/cacheKey';
 import { renderUpdateReportPrompt, UPDATE_REPORT_TOOL_SCHEMA } from '@/lib/llm/prompts/update-report';
 import { SHARED_SYSTEM_PROMPT } from '@/lib/llm/prompts/shared';
@@ -119,6 +120,63 @@ describe('runUpdateReport — happy path (MOCK_LLM)', () => {
     // Pre-filled fields preserved from caller (not LLM output).
     expect(run.detail.fromVersion).toBe('18.3.1');
     expect(run.detail.toVersion).toBe('19.0.0');
+  });
+});
+
+describe('runUpdateReport — v2 cache accounting + effort', () => {
+  it('persists prompt-cache token fields in data.cost and sends the view effort', async () => {
+    const mock = new MockLLMClient({ provider: 'anthropic' });
+    const key = mock.setByInput(
+      {
+        systemPrompt: SHARED_SYSTEM_PROMPT,
+        userPrompt: renderUpdateReportPrompt(PROMPT_INPUT),
+        tool: UPDATE_REPORT_TOOL_SCHEMA,
+        model: 'claude-opus-5-5'
+      },
+      {
+        output: {
+          summary: 'ok',
+          riskLevel: 'low',
+          breakingChanges: [],
+          coUpgradeDeps: [],
+          filesToModify: [],
+          recommendations: []
+        },
+        inputTokens: 100,
+        outputTokens: 50,
+        cacheReadInputTokens: 1000,
+        cacheCreationInputTokens: 200
+      }
+    );
+    const efforts: string[] = [];
+    const spy: LLMClient = {
+      provider: 'anthropic',
+      call: (r) => {
+        efforts.push(r.effort);
+        return mock.call(r);
+      }
+    };
+
+    const run = await runUpdateReport(spy, {
+      promptInput: PROMPT_INPUT,
+      model: 'claude-opus-5-5',
+      resolverBlock: RESOLVER_OK,
+      fromVersion: '18.3.1',
+      toVersion: '19.0.0',
+      maxOutputTokens: 200,
+      maxInputTokens: 1000
+    });
+
+    expect(run.cacheKey).toBe(key);
+    expect(efforts).toEqual([VIEW_EFFORT.updateReport]);
+    expect(run.detail.cost).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 50,
+      cacheReadInputTokens: 1000,
+      cacheCreationInputTokens: 200,
+      model: 'claude-opus-5-5'
+    });
+    expect(run.detail.cost?.costEstimateUsd).toBeCloseTo((100 * 4 + 1000 * 0.2 + 200 * 5 + 50 * 20) / 1e6, 9);
   });
 });
 

@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { getApiClient } from '@/lib/client/api-client';
-import type { CostSummaryEntry, CostSummaryResponse, LlmProvider } from '@/lib/api-types';
+import type {
+  CostSummaryEntry,
+  CostSummaryResponse,
+  LegacyLlmProvider,
+  LlmProvider
+} from '@/lib/api-types';
 import { useAppContext } from '../../AppContext';
 import styles from './CostSettings.module.css';
 
@@ -129,6 +134,7 @@ export function CostSettings(): JSX.Element {
                         <p className={styles.errorMessage}>{row.error}</p>
                       )}
                       {row.summary && <ProviderBreakdown summary={row.summary} />}
+                      {row.summary && <CacheTokens summary={row.summary} />}
                     </div>
                   )}
                 </li>
@@ -149,9 +155,27 @@ export function CostSettings(): JSX.Element {
   );
 }
 
+/** Prompt-cache token totals; hidden when both are 0 (or absent on an older server). */
+function CacheTokens({ summary }: { summary: CostSummaryResponse }): JSX.Element | null {
+  const read = summary.totalCacheReadInputTokens ?? 0;
+  const write = summary.totalCacheCreationInputTokens ?? 0;
+  if (read === 0 && write === 0) return null;
+  return (
+    <p className={styles.muted} data-testid="cost-cache-tokens">
+      Cache read / write tokens: {read.toLocaleString('en-US')} / {write.toLocaleString('en-US')}
+    </p>
+  );
+}
+
+/** `openai` only holds spend from v1 reports (v2 removed OpenAI). Empty rows are hidden below. */
+const PROVIDER_LABELS: Record<LlmProvider | LegacyLlmProvider, string> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI (legacy)'
+};
+
 function ProviderBreakdown({ summary }: { summary: CostSummaryResponse }): JSX.Element {
   const providers = Object.entries(summary.byProvider) as Array<
-    [LlmProvider, CostSummaryEntry[]]
+    [LlmProvider | LegacyLlmProvider, CostSummaryEntry[]]
   >;
   if (providers.every(([, entries]) => entries.length === 0)) {
     return <p className={styles.muted}>No AI reports yet.</p>;
@@ -167,7 +191,7 @@ function ProviderBreakdown({ summary }: { summary: CostSummaryResponse }): JSX.E
             className={styles.providerRow}
             data-testid={`cost-provider-${provider}`}
           >
-            <span className={styles.providerName}>{provider}</span>
+            <span className={styles.providerName}>{PROVIDER_LABELS[provider]}</span>
             <span className={styles.providerCost}>${sub.toFixed(2)}</span>
           </li>
         );

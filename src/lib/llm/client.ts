@@ -1,9 +1,10 @@
 /**
  * LLM Client interface (spec §10.2, §11.2).
  *
- * Internal abstraction over the official Anthropic + OpenAI SDKs. All Stage 3
- * call sites depend on this interface only; provider-specific adapters live in
- * `anthropic.ts` and `openai.ts`. The `MockLLMClient` short-circuits to fixture
+ * Internal abstraction over the official Anthropic SDK (the only provider
+ * since v2; Microsoft Foundry is the next one). All call sites depend on this
+ * interface only; the provider adapter lives in `anthropic.ts`. The
+ * `MockLLMClient` short-circuits to fixture
  * responses when `MOCK_LLM=true` per spec §11.12.
  *
  * Tool-use is enforced: every call expects a single `ToolSchema` and the result
@@ -16,18 +17,17 @@
  */
 
 import type { LlmProvider } from '../api-types';
+import type { LlmEffort } from './effort';
 
 // ---------------------------------------------------------------------------
 // Tool schema — provider-agnostic shape (spec §11.2)
 // ---------------------------------------------------------------------------
 
 /**
- * Provider-agnostic tool schema. Adapters translate this into:
- *   - Anthropic: `{ name, description, input_schema: jsonSchema }`
- *   - OpenAI: `{ type: 'function', function: { name, description, parameters } }`
- * The JSON Schema dialect used is a strict subset compatible with both
- * providers' tool-use payloads (object + properties + required + enum +
- * array.items + type, no $ref or oneOf).
+ * Provider-agnostic tool schema. The Anthropic adapter translates this into
+ * `{ name, description, input_schema: jsonSchema }`. The JSON Schema dialect is
+ * a deliberately small subset (object + properties + required + enum +
+ * array.items + type, no $ref or oneOf) so a future provider can map it too.
  */
 export interface ToolSchema {
   name: string;
@@ -69,8 +69,13 @@ export interface LlmCallRequest {
   /** Rendered user prompt (already Mustache-substituted). */
   userPrompt: string;
   tool: ToolSchema;
-  /** Forced max tokens for the model's output. */
+  /** Max tokens for the model's output (thinking tokens count against it). */
   maxOutputTokens: number;
+  /**
+   * `output_config.effort`. Required so every service picks one explicitly
+   * (see `effort.ts`). Not part of the AI cache key.
+   */
+  effort: LlmEffort;
   /** Optional max input tokens cap; the adapter only uses this for telemetry. */
   maxInputTokens?: number;
   /** Abort signal for cancel support. */
@@ -100,6 +105,9 @@ export interface LlmCallResult<T = unknown> {
   /** Token usage (spec §11.11). */
   inputTokens: number;
   outputTokens: number;
+  /** Prompt-cache reads / writes (`usage.cache_*_input_tokens`, null → 0). */
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
   model: string;
   /** Provider name for the `source` field on persisted envelopes. */
   provider: LlmProvider;
@@ -121,6 +129,10 @@ export type LlmErrorCode =
   | 'LLM_TOOL_USE_INVALID'
   /** Provider hit max output tokens; structured output is incomplete. */
   | 'LLM_TRUNCATED'
+  /** The model declined (`stop_reason: 'refusal'`). Not retryable. */
+  | 'LLM_REFUSAL'
+  /** 4xx request error (e.g. a 400 from a regressed request shape). Not retryable. */
+  | 'LLM_BAD_REQUEST'
   | 'LLM_CANCELLED'
   | 'LLM_UNSUPPORTED_PROVIDER'
   | 'MOCK_LLM_NO_FIXTURE';

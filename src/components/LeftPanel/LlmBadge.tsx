@@ -1,25 +1,26 @@
 'use client';
 
-import type { LlmProvider } from '@/lib/api-types';
 import styles from './LlmBadge.module.css';
 
 interface LlmBadgeProps {
-  provider: LlmProvider | null;
+  /**
+   * Typed as a plain string on purpose: the badge must render (generic label)
+   * for any provider it does not know, e.g. a future provider or stale data.
+   */
+  provider: string | null;
   model: string | null;
   hasKey: boolean;
   collapsed: boolean;
   onClick: () => void;
 }
 
-function providerDisplayName(provider: LlmProvider | null): string {
+function providerDisplayName(provider: string | null): string {
   if (provider === 'anthropic') return 'Anthropic';
-  if (provider === 'openai') return 'OpenAI';
   return 'LLM';
 }
 
-function providerInitial(provider: LlmProvider | null): string {
+function providerInitial(provider: string | null): string {
   if (provider === 'anthropic') return 'A';
-  if (provider === 'openai') return 'O';
   return '?';
 }
 

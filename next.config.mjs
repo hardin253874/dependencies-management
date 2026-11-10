@@ -25,24 +25,20 @@ const nextConfig = {
     // instead of bundled by Webpack. Required for:
     //  - p-limit / p-queue / p-retry (use Node subpath imports like `#async_hooks`
     //    that Webpack cannot statically resolve)
-    //  - pino / pino-pretty (use worker threads + dynamic transports)
     //  - @npmcli/arborist, @yarnpkg/* (Node-only filesystem + child_process)
     //  - npm-registry-fetch (Node-only http internals)
-    //  - @anthropic-ai/sdk, openai (use Node streams + Buffer)
+    //  - @anthropic-ai/sdk (uses Node streams + Buffer)
     //  - @babel/parser, semver, ignore (work fine either way; externalize for
     //    consistency and to avoid Webpack re-bundling unnecessarily).
     serverComponentsExternalPackages: [
       'p-limit',
       'p-queue',
       'p-retry',
-      'pino',
-      'pino-pretty',
       '@npmcli/arborist',
       '@yarnpkg/lockfile',
       '@yarnpkg/parsers',
       'npm-registry-fetch',
       '@anthropic-ai/sdk',
-      'openai',
       '@babel/parser',
       'semver',
       'ignore'

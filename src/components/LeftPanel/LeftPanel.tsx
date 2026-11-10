@@ -60,11 +60,7 @@ export function LeftPanel(): JSX.Element {
           collapsed={sidebarCollapsed}
           provider={config?.llm.provider ?? null}
           model={config?.llm.model ?? null}
-          hasKey={Boolean(
-            config &&
-              ((config.llm.provider === 'anthropic' && config.apiKeys.hasAnthropicKey) ||
-                (config.llm.provider === 'openai' && config.apiKeys.hasOpenAIKey))
-          )}
+          hasKey={Boolean(config?.apiKeys.hasAnthropicKey)}
           onClick={() => openSettings('llm')}
         />
       </div>

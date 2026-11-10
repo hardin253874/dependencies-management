@@ -21,7 +21,7 @@ export const POST = withCsrf<unknown>(async (req) => {
   if (
     typeof body !== 'object' ||
     body === null ||
-    (body.provider !== 'anthropic' && body.provider !== 'openai') ||
+    body.provider !== 'anthropic' ||
     typeof body.apiKey !== 'string'
   ) {
     return badRequest('INVALID_BODY', 'Body must be { provider, apiKey }.');
@@ -51,9 +51,6 @@ async function validateKeyFormat(body: ApiKeySetRequest): Promise<ApiKeyTestResp
   }
   if (body.provider === 'anthropic' && !key.startsWith('sk-ant-')) {
     return { ok: false, message: 'Anthropic keys should start with `sk-ant-`.' };
-  }
-  if (body.provider === 'openai' && !key.startsWith('sk-')) {
-    return { ok: false, message: 'OpenAI keys should start with `sk-`.' };
   }
   return {
     ok: true,

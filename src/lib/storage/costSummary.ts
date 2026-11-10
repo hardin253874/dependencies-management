@@ -13,7 +13,10 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { readJson } from './atomic';
 import { reportsDir, deepReportsDir, fileReviewsDir } from '../paths';
-import type { AiCostFields, CostSummaryResponse, LlmProvider } from '../api-types';
+import type { AiCostFields, CostSummaryResponse, LegacyLlmProvider, LlmProvider } from '../api-types';
+
+/** `openai` is the legacy bucket: v1 OpenAI spend was real, so it keeps counting. */
+type CostProvider = LlmProvider | LegacyLlmProvider;
 
 type Kind = 'reports' | 'deep-reports' | 'file-reviews';
 
@@ -29,7 +32,7 @@ const KINDS: ReadonlyArray<{ kind: Kind; dir: (slug: string) => string }> = [
 ];
 
 export async function computeCostSummary(slug: string): Promise<CostSummaryResponse> {
-  const byProvider: Record<LlmProvider, Map<string, AggrEntry>> = {
+  const byProvider: Record<CostProvider, Map<string, AggrEntry>> = {
     anthropic: new Map(),
     openai: new Map()
   };
@@ -41,6 +44,8 @@ export async function computeCostSummary(slug: string): Promise<CostSummaryRespo
   let totalUsd = 0;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let totalCacheReadInputTokens = 0;
+  let totalCacheCreationInputTokens = 0;
   let totalCount = 0;
 
   for (const { kind, dir } of KINDS) {
@@ -64,6 +69,9 @@ export async function computeCostSummary(slug: string): Promise<CostSummaryRespo
       totalUsd += cost.costEstimateUsd;
       totalInputTokens += cost.inputTokens;
       totalOutputTokens += cost.outputTokens;
+      // Envelopes written before v2 have no cache fields.
+      totalCacheReadInputTokens += cost.cacheReadInputTokens ?? 0;
+      totalCacheCreationInputTokens += cost.cacheCreationInputTokens ?? 0;
       const map = byProvider[provider];
       const aggrKey = cost.model;
       const existing = map.get(aggrKey);
@@ -89,6 +97,8 @@ export async function computeCostSummary(slug: string): Promise<CostSummaryRespo
     totalUsd: round6(totalUsd),
     totalInputTokens,
     totalOutputTokens,
+    totalCacheReadInputTokens,
+    totalCacheCreationInputTokens,
     count: totalCount,
     byProvider: {
       anthropic: Array.from(byProvider.anthropic.values()).map((e) => ({
@@ -122,7 +132,7 @@ interface AggrEntry {
   costUsd: number;
 }
 
-function providerFromSource(source: string): LlmProvider | null {
+function providerFromSource(source: string): CostProvider | null {
   if (source.startsWith('anthropic:')) return 'anthropic';
   if (source.startsWith('openai:')) return 'openai';
   return null;

@@ -17,9 +17,7 @@ export function OnboardingFlow(): JSX.Element {
     dispatch({ type: 'advanceOnboarding', step: next });
   };
 
-  const hasKey = Boolean(
-    config && (config.apiKeys.hasAnthropicKey || config.apiKeys.hasOpenAIKey)
-  );
+  const hasKey = Boolean(config?.apiKeys.hasAnthropicKey);
 
   return (
     <div className={styles.wrap} data-testid="onboarding-flow">

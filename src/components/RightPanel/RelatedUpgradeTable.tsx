@@ -19,6 +19,7 @@ import type {
   RelatedDepUpgradeRecommendation,
   RelatedUpgradeDetail
 } from '@/lib/api-types';
+import { formatSourceLabel } from '@/lib/reports/sourceLabel';
 
 export interface RelatedUpgradeTableClassNames {
   /** Container for fallback banner, notes, table, footer. */
@@ -86,7 +87,7 @@ export function RelatedUpgradeTable({
         </tbody>
       </table>
       <p className={classNames.emptyHint}>
-        Generated {generatedAt.slice(0, 19).replace('T', ' ')} UTC · source: {source}
+        Generated {generatedAt.slice(0, 19).replace('T', ' ')} UTC · source: {formatSourceLabel(source)}
       </p>
     </div>
   );

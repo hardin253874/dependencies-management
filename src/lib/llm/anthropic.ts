@@ -1,62 +1,76 @@
 /**
- * Anthropic LLM client adapter (spec §10.2, §11.2, §11.8).
+ * Anthropic LLM client adapter (spec §10.2, §11.2, §11.8), `@anthropic-ai/sdk` 1.x.
  *
- * Wraps `@anthropic-ai/sdk` and exposes the `LLMClient` interface. Tool-use is
- * mandatory: every call sends a single tool with `tool_choice` forcing the
- * model to invoke it. Streaming is enabled so phase events fire while the
- * response is generated; the partial JSON of the tool call is NEVER surfaced
- * to the caller (the spec forbids client-side rendering of partial JSON).
+ * Request shape (v2 Stage 1.4, checked against the installed SDK 1.6.0 types):
+ * - One tool, `tool_choice: { type: 'auto', disable_parallel_tool_use: true }`.
+ *   Forced tool use (tool_choice of type tool or any) returns 400 on Opus 5.5,
+ *   Sonnet 5.5 and Fable 5.1. With `auto` the model may answer in text; that
+ *   surfaces as `LLM_TOOL_USE_MISSING` and the service falls back to
+ *   deterministic-partial.
+ * - `strict: true` is added HERE (not in `ToolSchema`) so `computeCacheKey`,
+ *   which hashes the ToolSchema, keeps existing on-disk caches + fixtures valid.
+ * - No `thinking` param: every picker model runs adaptive thinking when it is
+ *   omitted, and fixed thinking budgets and disabled thinking are 400s on current models.
+ *   Depth is controlled by `output_config.effort` (set per view, effort.ts).
+ * - Prompt caching: `cache_control: ephemeral` on the (only, hence last) tool
+ *   and on the system block. Render order is tools → system → messages, so the
+ *   stable prefix is tool schema + shared system prompt; the per-dep user
+ *   prompt stays uncached. Prefixes below the model minimum (512 tokens on
+ *   current models) silently don't cache — accounting still works (0 tokens).
  *
- * Retry handling lives one level up in the call-site (`p-retry`); this adapter
- * focuses on translating SDK events into `LlmCallResult` + `LLMError`.
+ * Streaming via `messages.stream()` → `finalMessage()`; the partial JSON of the
+ * tool call is NEVER surfaced to the caller (spec forbids it).
+ *
+ * Retries: the SDK is the single retry layer (`maxRetries`, it retries
+ * 408/409/429/5xx + connection errors with backoff). Nothing above the adapter
+ * retries LLM calls, so `LLMError.retryable` is informational only.
  */
-import Anthropic from '@anthropic-ai/sdk';
+import Anthropic, {
+  APIConnectionError,
+  APIConnectionTimeoutError,
+  APIError,
+  APIUserAbortError,
+  AuthenticationError,
+  BadRequestError,
+  GatewayTimeoutError,
+  InternalServerError,
+  RateLimitError,
+  RequestTimeoutError
+} from '@anthropic-ai/sdk';
 import { LLMError, type LLMClient, type LlmCallRequest, type LlmCallResult, type ToolSchema } from './client';
 import { costEstimateUsd } from './cost';
 import { getLogger } from '../logger';
 
+/** Explicit client settings (ms in the TS SDK). 10 min matches the SDK default; set so it is visible and tested. */
+export const ANTHROPIC_TIMEOUT_MS = 600_000;
+export const ANTHROPIC_MAX_RETRIES = 2;
+/** How much of an unexpected text answer goes into the warn log (never into the envelope). */
+const TEXT_LOG_CHARS = 200;
+
 export interface AnthropicAdapterOptions {
   apiKey: string;
-  /** Override the underlying SDK client (tests inject a stub). */
+  /** Override the underlying SDK client (tests inject a fake). */
   client?: AnthropicLike;
 }
 
+/** The part of a `MessageStream` the adapter uses; typed with SDK types. */
+export interface AnthropicStreamLike {
+  on(event: 'streamEvent', listener: (event: Anthropic.MessageStreamEvent) => void): unknown;
+  finalMessage(): Promise<Anthropic.Message>;
+}
+
 /**
- * Minimal subset of `@anthropic-ai/sdk` we depend on. Defined as an
- * interface so tests can inject a fake without coupling to the SDK internals.
+ * Injection seam: the slice of the SDK client the adapter depends on. The
+ * real `Anthropic` instance satisfies it structurally (no cast).
  */
 export interface AnthropicLike {
   messages: {
-    create(params: AnthropicCreateParams): Promise<AnthropicMessageResponse>;
-    stream?(params: AnthropicCreateParams): AnthropicStreamHandle;
+    stream(params: Anthropic.MessageStreamParams, options?: Anthropic.RequestOptions): AnthropicStreamLike;
   };
 }
 
-export interface AnthropicCreateParams {
-  model: string;
-  max_tokens: number;
-  system: string;
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
-  tools: Array<{ name: string; description: string; input_schema: unknown }>;
-  tool_choice?: { type: 'tool'; name: string };
-  stream?: boolean;
-}
-
-export interface AnthropicMessageResponse {
-  id: string;
-  model: string;
-  stop_reason: string | null;
-  content: Array<
-    | { type: 'text'; text: string }
-    | { type: 'tool_use'; id: string; name: string; input: unknown }
-  >;
-  usage: { input_tokens: number; output_tokens: number };
-}
-
-export interface AnthropicStreamHandle {
-  on(event: string, listener: (...args: unknown[]) => void): void;
-  finalMessage(): Promise<AnthropicMessageResponse>;
-  abort?(): void;
+export function createAnthropicSdk(apiKey: string): Anthropic {
+  return new Anthropic({ apiKey, timeout: ANTHROPIC_TIMEOUT_MS, maxRetries: ANTHROPIC_MAX_RETRIES });
 }
 
 export class AnthropicAdapter implements LLMClient {
@@ -67,52 +81,42 @@ export class AnthropicAdapter implements LLMClient {
     if (opts.apiKey === '' || opts.apiKey === undefined) {
       throw new LLMError('LLM_NO_API_KEY', 'Anthropic API key not configured.');
     }
-    this.sdk =
-      opts.client ??
-      (new Anthropic({ apiKey: opts.apiKey }) as unknown as AnthropicLike);
+    this.sdk = opts.client ?? createAnthropicSdk(opts.apiKey);
   }
 
   async call<T = unknown>(req: LlmCallRequest): Promise<LlmCallResult<T>> {
     req.onPhase?.({ phase: 'calling', message: 'Calling Anthropic…' });
     if (req.signal?.aborted) throw new LLMError('LLM_CANCELLED', 'Cancelled before request');
 
-    const params: AnthropicCreateParams = {
-      model: req.model,
-      max_tokens: req.maxOutputTokens,
-      system: req.systemPrompt,
-      messages: [{ role: 'user', content: req.userPrompt }],
-      tools: [translateTool(req.tool)],
-      tool_choice: { type: 'tool', name: req.tool.name }
-    };
+    const params = buildRequestParams(req);
 
-    let response: AnthropicMessageResponse;
+    let response: Anthropic.Message;
     try {
-      // Use streaming when available so we can fire phase events before the
-      // final tool call settles. Either branch returns the same shape, so
-      // downstream parsing is identical.
-      if (typeof this.sdk.messages.stream === 'function') {
-        const handle = this.sdk.messages.stream({ ...params, stream: true });
-        let firstEventSeen = false;
-        const onEvent = (): void => {
-          if (firstEventSeen) return;
-          firstEventSeen = true;
-          req.onPhase?.({ phase: 'streaming', message: 'Generating analysis…' });
-        };
-        handle.on('text', onEvent);
-        handle.on('streamEvent', onEvent);
-        if (req.signal !== undefined) {
-          req.signal.addEventListener('abort', () => handle.abort?.(), { once: true });
-        }
-        response = await handle.finalMessage();
-      } else {
-        response = await this.sdk.messages.create(params);
-      }
+      const stream = this.sdk.messages.stream(params, { signal: req.signal });
+      let firstEventSeen = false;
+      // Any first event (thinking deltas usually arrive before text/tool input)
+      // flips the phase to "streaming".
+      stream.on('streamEvent', () => {
+        if (firstEventSeen) return;
+        firstEventSeen = true;
+        req.onPhase?.({ phase: 'streaming', message: 'Generating analysis…' });
+      });
+      response = await stream.finalMessage();
     } catch (err) {
-      throw mapAnthropicError(err);
+      throw mapAnthropicError(err, req.signal);
     }
 
     req.onPhase?.({ phase: 'finalizing', message: 'Finalizing structured output…' });
+    const model = response.model || req.model;
 
+    // Order matters: check stop_reason before reading content.
+    if (response.stop_reason === 'refusal') {
+      const category = response.stop_details?.category ?? null;
+      throw new LLMError(
+        'LLM_REFUSAL',
+        `Anthropic declined the request (stop_reason: refusal${category !== null ? `, category: ${category}` : ''}).`
+      );
+    }
     // A response cut off by `max_tokens` carries a truncated (or absent)
     // tool_use input — required fields silently go missing. Fail loudly so the
     // service takes its deterministic-partial path instead of caching junk.
@@ -123,48 +127,99 @@ export class AnthropicAdapter implements LLMClient {
       );
     }
 
-    const tool = response.content.find((c) => c.type === 'tool_use');
+    const tool = response.content.find(
+      (c): c is Anthropic.ToolUseBlock => c.type === 'tool_use' && c.name === req.tool.name
+    );
     if (tool === undefined) {
+      logTextAnswer(response, model);
       throw new LLMError('LLM_TOOL_USE_MISSING', 'Anthropic response did not include a tool_use block.');
     }
-    if (tool.type !== 'tool_use') {
+    if (typeof tool.input !== 'object' || tool.input === null) {
       throw new LLMError('LLM_TOOL_USE_INVALID', 'Anthropic tool_use entry malformed.');
     }
-    const inputTokens = response.usage.input_tokens;
-    const outputTokens = response.usage.output_tokens;
 
+    const usage = {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cacheReadInputTokens: response.usage.cache_read_input_tokens ?? 0,
+      cacheCreationInputTokens: response.usage.cache_creation_input_tokens ?? 0
+    };
     return {
       output: tool.input as T,
-      inputTokens,
-      outputTokens,
-      model: response.model || req.model,
+      ...usage,
+      model,
       provider: 'anthropic',
-      costEstimateUsd: costEstimateUsd('anthropic', response.model || req.model, inputTokens, outputTokens)
+      costEstimateUsd: costEstimateUsd(model, usage)
     };
   }
 }
 
-export function translateTool(tool: ToolSchema): { name: string; description: string; input_schema: unknown } {
+export function buildRequestParams(req: LlmCallRequest): Anthropic.MessageStreamParams {
+  const tool: Anthropic.Tool = {
+    ...translateTool(req.tool),
+    // Last (only) tool definition carries the tools-prefix cache breakpoint.
+    cache_control: { type: 'ephemeral' }
+  };
   return {
-    name: tool.name,
-    description: tool.description,
-    input_schema: tool.inputSchema
+    model: req.model,
+    max_tokens: req.maxOutputTokens,
+    system: [{ type: 'text', text: req.systemPrompt, cache_control: { type: 'ephemeral' } }],
+    messages: [{ role: 'user', content: req.userPrompt }],
+    tools: [tool],
+    tool_choice: { type: 'auto', disable_parallel_tool_use: true },
+    output_config: { effort: req.effort }
   };
 }
 
-function mapAnthropicError(err: unknown): LLMError {
-  // The SDK throws typed errors with `status` + `name`. We map the well-known
-  // ones to our LlmErrorCode taxonomy; anything else is `LLM_NETWORK`.
-  const e = err as { name?: string; status?: number; message?: string };
-  if (e?.name === 'AbortError' || (err as Error).name === 'AbortError') {
+export function translateTool(tool: ToolSchema): Anthropic.Tool {
+  return {
+    name: tool.name,
+    description: tool.description,
+    // Spread: JsonSchemaObject has no index signature; a fresh literal does.
+    input_schema: { ...tool.inputSchema },
+    strict: true
+  };
+}
+
+function logTextAnswer(response: Anthropic.Message, model: string): void {
+  const text = response.content
+    .filter((c): c is Anthropic.TextBlock => c.type === 'text')
+    .map((c) => c.text)
+    .join(' ')
+    .slice(0, TEXT_LOG_CHARS);
+  void getLogger()
+    .then((log) =>
+      log.warn(
+        { model, stopReason: response.stop_reason, textPreview: text },
+        'Anthropic answered without calling the tool (tool_choice auto)'
+      )
+    )
+    .catch(() => undefined);
+}
+
+/** Most specific first; SDK 1.x typed errors (verified in core/error.d.ts). */
+export function mapAnthropicError(err: unknown, signal?: AbortSignal): LLMError {
+  if (err instanceof LLMError) return err;
+  if (err instanceof APIUserAbortError || signal?.aborted === true) {
     return new LLMError('LLM_CANCELLED', 'Cancelled');
   }
-  const status = typeof e.status === 'number' ? e.status : undefined;
-  const message = e.message ?? 'Anthropic call failed';
-  if (status === 401) return new LLMError('LLM_NO_API_KEY', message);
-  if (status === 429) return new LLMError('LLM_RATE_LIMIT', message, true);
-  if (status === 408 || status === 504) return new LLMError('LLM_TIMEOUT', message, true);
-  if (status !== undefined && status >= 500) return new LLMError('LLM_NETWORK', message, true);
+  const message = err instanceof Error ? err.message : 'Anthropic call failed';
+  if (err instanceof AuthenticationError) return new LLMError('LLM_NO_API_KEY', message);
+  if (err instanceof RateLimitError) return new LLMError('LLM_RATE_LIMIT', message, true);
+  if (
+    err instanceof APIConnectionTimeoutError ||
+    err instanceof RequestTimeoutError ||
+    err instanceof GatewayTimeoutError
+  ) {
+    return new LLMError('LLM_TIMEOUT', message, true);
+  }
+  if (err instanceof InternalServerError) return new LLMError('LLM_NETWORK', message, true);
+  if (err instanceof BadRequestError) return new LLMError('LLM_BAD_REQUEST', message);
+  if (err instanceof APIConnectionError) return new LLMError('LLM_NETWORK', message, true);
+  if (err instanceof APIError && typeof err.status === 'number' && err.status >= 400 && err.status < 500) {
+    // 403 / 404 (unknown model) / 413 / 422…: retrying the same request cannot help.
+    return new LLMError('LLM_BAD_REQUEST', message);
+  }
   // Fire-and-forget log — never block error mapping on logger init.
   void getLogger().then((log) => log.warn({ err }, 'Anthropic call failed')).catch(() => undefined);
   return new LLMError('LLM_NETWORK', message, true);

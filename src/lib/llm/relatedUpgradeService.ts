@@ -27,11 +27,12 @@ import {
 import { SHARED_SYSTEM_PROMPT } from './prompts/shared';
 import { computeCacheKey } from './cacheKey';
 import { LLMError, type LLMClient } from './client';
+import { VIEW_EFFORT } from './effort';
 import { getLogger } from '../logger';
 import { loadEnv } from '../config';
 import type {
   AiCostFields,
-  DataSource,
+  WritableDataSource,
   DepDetail,
   RelatedDep,
   RelatedDepUpgradeRecommendation,
@@ -169,7 +170,7 @@ export interface RunRelatedUpgradeInput extends DeterministicAnalysisInput {
 export interface RelatedUpgradeRun {
   cacheKey: string;
   detail: RelatedUpgradeDetail;
-  source: DataSource;
+  source: WritableDataSource;
   llmError?: LLMError;
 }
 
@@ -212,7 +213,7 @@ export async function runRelatedUpgrade(
     };
   }
 
-  let llmResult: { output: RelatedUpgradeToolOutput; tokens: AiCostFields; source: DataSource } | null = null;
+  let llmResult: { output: RelatedUpgradeToolOutput; tokens: AiCostFields; source: WritableDataSource } | null = null;
   let llmError: LLMError | undefined;
   try {
     const call = await client.call<RelatedUpgradeToolOutput>({
@@ -221,6 +222,7 @@ export async function runRelatedUpgrade(
       userPrompt,
       tool: RELATED_UPGRADE_TOOL_SCHEMA,
       maxOutputTokens: maxOutput,
+      effort: VIEW_EFFORT.relatedUpgrade,
       maxInputTokens: maxInput,
       onPhase: input.onPhase,
       signal: input.signal
@@ -230,10 +232,12 @@ export async function runRelatedUpgrade(
       tokens: {
         inputTokens: call.inputTokens,
         outputTokens: call.outputTokens,
+        cacheReadInputTokens: call.cacheReadInputTokens,
+        cacheCreationInputTokens: call.cacheCreationInputTokens,
         model: call.model,
         costEstimateUsd: call.costEstimateUsd
       },
-      source: `${call.provider}:${call.model}` as DataSource
+      source: `${call.provider}:${call.model}` as WritableDataSource
     };
   } catch (err) {
     llmError = err instanceof LLMError ? err : new LLMError('LLM_NETWORK', (err as Error).message, false);

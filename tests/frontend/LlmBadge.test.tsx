@@ -50,13 +50,21 @@ describe('LlmBadge', () => {
   it('renders provider initial when collapsed', () => {
     render(
       <LlmBadge
-        provider="openai"
-        model="gpt-5.5"
+        provider="anthropic"
+        model="claude-opus-5"
         hasKey={true}
         collapsed={true}
         onClick={vi.fn()}
       />
     );
-    expect(screen.getByText('O')).toBeInTheDocument();
+    expect(screen.getByText('A')).toBeInTheDocument();
+  });
+
+  it('renders a generic label for an unknown provider instead of crashing (v2: OpenAI removed)', () => {
+    render(
+      <LlmBadge provider="openai" model="gpt-4o" hasKey={true} collapsed={false} onClick={vi.fn()} />
+    );
+    expect(screen.getByTestId('llm-badge')).toHaveTextContent('LLM');
+    expect(screen.getByTestId('llm-badge')).not.toHaveTextContent('OpenAI');
   });
 });

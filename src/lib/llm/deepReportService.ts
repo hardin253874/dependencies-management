@@ -10,7 +10,7 @@
  *   1. Render the deep-update-report prompt.
  *   2. Compute the cache key (sha256 of prompt + tool + model).
  *   3. Call the LLM (or mock).
- *   4. On success: persist envelope with `source: anthropic:<model>` / `openai:<model>` and cost fields.
+ *   4. On success: persist envelope with `source: anthropic:<model>` and cost fields.
  *   5. On LLM failure (after retries): persist deterministic-partial envelope with
  *      `source: deterministic-partial`, skeleton AI fields.
  *
@@ -26,13 +26,14 @@ import {
 import { SHARED_SYSTEM_PROMPT } from './prompts/shared';
 import { computeCacheKey } from './cacheKey';
 import { LLMError, type LLMClient } from './client';
+import { VIEW_EFFORT } from './effort';
 import { getLogger } from '../logger';
 import { loadEnv } from '../config';
 import type {
   AiCostFields,
   CoUpgradeDep,
   CveDelta,
-  DataSource,
+  WritableDataSource,
   DeepCriticalBlocker,
   DeepEstimatedEffort,
   DeepRiskLevel,
@@ -68,7 +69,7 @@ export interface RunDeepUpdateReportInput {
 export interface DeepUpdateReportRun {
   cacheKey: string;
   detail: DeepUpdateReportDetail;
-  source: DataSource;
+  source: WritableDataSource;
   llmError?: LLMError;
 }
 
@@ -136,7 +137,7 @@ export async function runDeepUpdateReport(
   let llmResult: {
     output: DeepUpdateReportToolOutput;
     tokens: AiCostFields;
-    source: DataSource;
+    source: WritableDataSource;
   } | null = null;
   let llmError: LLMError | undefined;
 
@@ -147,6 +148,7 @@ export async function runDeepUpdateReport(
       userPrompt,
       tool: DEEP_UPDATE_REPORT_TOOL_SCHEMA,
       maxOutputTokens: maxOutput,
+      effort: VIEW_EFFORT.deepReport,
       maxInputTokens: maxInput,
       onPhase: input.onPhase,
       signal: input.signal
@@ -156,10 +158,12 @@ export async function runDeepUpdateReport(
       tokens: {
         inputTokens: call.inputTokens,
         outputTokens: call.outputTokens,
+        cacheReadInputTokens: call.cacheReadInputTokens,
+        cacheCreationInputTokens: call.cacheCreationInputTokens,
         model: call.model,
         costEstimateUsd: call.costEstimateUsd
       },
-      source: `${call.provider}:${call.model}` as DataSource
+      source: `${call.provider}:${call.model}` as WritableDataSource
     };
   } catch (err) {
     llmError = err instanceof LLMError ? err : new LLMError('LLM_NETWORK', (err as Error).message, false);

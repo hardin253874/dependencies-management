@@ -35,12 +35,10 @@ export function computeDeepReportEstimate(input: EstimateInput): DeepReportEstim
   const rawInput = ESTIMATE_BASE_TOKENS + input.totalPackages * ESTIMATE_TOKENS_PER_PACKAGE;
   const estimatedInputTokens = Math.min(rawInput, ESTIMATE_INPUT_CAP);
   const estimatedOutputTokens = input.outputBudgetTokens;
-  const estimatedCostUsd = costEstimateUsd(
-    input.provider,
-    input.model,
-    estimatedInputTokens,
-    estimatedOutputTokens
-  );
+  const estimatedCostUsd = costEstimateUsd(input.model, {
+    inputTokens: estimatedInputTokens,
+    outputTokens: estimatedOutputTokens
+  });
   return {
     estimatedInputTokens,
     estimatedOutputTokens,

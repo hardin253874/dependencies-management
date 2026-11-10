@@ -11,6 +11,7 @@ import { createSandbox, disposeAllSandboxes, type Sandbox } from './helpers/sand
 import { createSmallNpmProject } from './helpers/fixtures';
 import { addProjectPipeline } from '@/lib/projects/add';
 import { writeEnvelope } from '@/lib/storage/envelope';
+import { atomicWriteJson } from '@/lib/storage/atomic';
 import {
   reportFilePath,
   deepReportFilePath,
@@ -137,10 +138,16 @@ describe('computeCostSummary', () => {
         costEstimateUsd: 0.012
       }
     };
-    await writeEnvelope<FileReviewDetail>(
-      fileReviewFilePath(result.slug, 'react', 'abcdef123456'),
-      { source: 'openai:gpt-4o', ttlHours: null, data: review }
-    );
+    // Legacy v1 OpenAI envelope: new code cannot *write* an `openai:` source
+    // (WritableEnvelopeSource), so write the raw on-disk shape directly. It
+    // must still be counted, in the legacy `openai` bucket.
+    await atomicWriteJson(fileReviewFilePath(result.slug, 'react', 'abcdef123456'), {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      source: 'openai:gpt-4o',
+      ttlHours: null,
+      data: review
+    });
 
     const summary = await computeCostSummary(result.slug);
 
@@ -159,6 +166,54 @@ describe('computeCostSummary', () => {
     expect(summary.byKind.reports?.count).toBe(2);
     expect(summary.byKind['deep-reports']?.count).toBe(1);
     expect(summary.byKind['file-reviews']?.count).toBe(1);
+  });
+
+  it('sums prompt-cache token fields, and older envelopes without them still sum (v2)', async () => {
+    sandbox = await createSandbox('cost-cache-fields');
+    const proj = path.join(sandbox.scratchRoot, 'p');
+    await createSmallNpmProject(proj);
+    const result = await addProjectPipeline({ absolutePath: proj });
+    if (!result.ok) throw new Error('Add failed');
+    const base: UpdateReportDetail = {
+      fromVersion: '18.3.1',
+      toVersion: '19.0.0',
+      summary: 'x',
+      riskLevel: 'medium',
+      resolverCheck: RESOLVER_OK,
+      coUpgradeDeps: [],
+      breakingChanges: [],
+      filesToModify: [],
+      recommendations: []
+    };
+    await writeEnvelope<UpdateReportDetail>(reportFilePath(result.slug, 'react', '18.3.1', '19.0.0'), {
+      source: 'anthropic:claude-opus-5-5',
+      ttlHours: null,
+      data: {
+        ...base,
+        cost: {
+          inputTokens: 100,
+          outputTokens: 50,
+          cacheReadInputTokens: 1000,
+          cacheCreationInputTokens: 200,
+          model: 'claude-opus-5-5',
+          costEstimateUsd: 0.0024
+        }
+      }
+    });
+    // Pre-v2 envelope: no cache fields at all.
+    await writeEnvelope<UpdateReportDetail>(reportFilePath(result.slug, 'react-dom', '18.3.1', '19.0.0'), {
+      source: 'anthropic:claude-opus-4-7',
+      ttlHours: null,
+      data: { ...base, cost: { inputTokens: 300, outputTokens: 30, model: 'claude-opus-4-7', costEstimateUsd: 0.01 } }
+    });
+
+    const summary = await computeCostSummary(result.slug);
+    expect(summary.count).toBe(2);
+    expect(summary.totalInputTokens).toBe(400);
+    expect(summary.totalOutputTokens).toBe(80);
+    expect(summary.totalCacheReadInputTokens).toBe(1000);
+    expect(summary.totalCacheCreationInputTokens).toBe(200);
+    expect(summary.totalUsd).toBeCloseTo(0.0124, 6);
   });
 
   it('skips deterministic-partial envelopes (no cost field)', async () => {

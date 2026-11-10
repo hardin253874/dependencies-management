@@ -355,6 +355,14 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
     });
   }, []);
 
+  // One-time `_config.json` migration notices (v2: OpenAI removed). The
+  // server returns them only on the GET that migrated, so each shows once.
+  useEffect(() => {
+    for (const notice of config?.notices ?? []) {
+      pushToast({ severity: 'info', title: notice.message });
+    }
+  }, [config, pushToast]);
+
   const requestCancel = useCallback((req: CancelRequest) => {
     setCancelRequest(req);
   }, []);
@@ -472,7 +480,7 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
   useEffect(() => {
     if (configLoading || projectsLoading) return;
     if (!config) return;
-    const hasKey = config.apiKeys.hasAnthropicKey || config.apiKeys.hasOpenAIKey;
+    const hasKey = config.apiKeys.hasAnthropicKey;
     const needsOnboarding = !hasKey || projects.length === 0;
     if (needsOnboarding) {
       dispatch({

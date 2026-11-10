@@ -17,10 +17,10 @@ import type { ConfigResponse } from '@/lib/api-types';
 
 const DEFAULT_CONFIG: ConfigResponse = {
   schemaVersion: 1,
-  llm: { provider: 'anthropic', model: 'claude-opus-4-7' },
+  llm: { provider: 'anthropic', model: 'claude-opus-5-5' },
   ui: { sidebarCollapsed: false, theme: 'light', showDeepAnalyzeWarning: true },
   features: { resolverCheckEnabled: true },
-  apiKeys: { hasAnthropicKey: true, hasOpenAIKey: false }
+  apiKeys: { hasAnthropicKey: true }
 };
 
 function captureConfigPatches(): {
@@ -48,10 +48,10 @@ describe('LlmSettings — model selector', () => {
     const select = (await screen.findByTestId('model-select')) as HTMLSelectElement;
     // The select mounts with the catalog default and adopts the configured
     // model once /api/config resolves — wait for that, don't assert on mount.
-    await waitFor(() => expect(select.value).toBe('claude-opus-4-7'));
+    await waitFor(() => expect(select.value).toBe('claude-opus-5-5'));
     const options = Array.from(select.options).map((o) => o.value);
-    expect(options).toContain('claude-opus-4-7');
-    expect(options).toContain('claude-sonnet-5');
+    expect(options).toContain('claude-opus-5-5');
+    expect(options).toContain('claude-sonnet-5-5');
     // OpenAI options are NOT visible when provider is anthropic.
     expect(options).not.toContain('gpt-5');
   });
@@ -75,38 +75,18 @@ describe('LlmSettings — model selector', () => {
       }
     });
     const select = (await screen.findByTestId('model-select')) as HTMLSelectElement;
-    await userEvent.selectOptions(select, 'claude-sonnet-5');
+    await userEvent.selectOptions(select, 'claude-sonnet-5-5');
 
     await waitFor(() => expect(patches).toHaveLength(1));
     expect(patches[0]).toEqual({
-      llm: { provider: 'anthropic', model: 'claude-sonnet-5' }
+      llm: { provider: 'anthropic', model: 'claude-sonnet-5-5' }
     });
   });
 
-  it('switching provider PATCHes provider + defaults model to the first entry of that providers list', async () => {
-    const { patches, patcher } = captureConfigPatches();
-    renderWithProviders(<LlmSettings />, {
-      backend: {
-        config: DEFAULT_CONFIG,
-        custom: {
-          '/api/config': vi.fn(async (init: RequestInit) => {
-            if (init.method === 'GET' || !init.method) {
-              return new Response(JSON.stringify(DEFAULT_CONFIG), {
-                status: 200,
-                headers: { 'content-type': 'application/json' }
-              });
-            }
-            return patcher(init);
-          })
-        }
-      }
-    });
-    await userEvent.click(await screen.findByTestId('provider-openai'));
-
-    await waitFor(() => expect(patches).toHaveLength(1));
-    // Implementation defaults to the first OpenAI entry.
-    const patch = patches[0] as { llm: { provider: string; model: string } };
-    expect(patch.llm.provider).toBe('openai');
-    expect(patch.llm.model.startsWith('gpt-')).toBe(true);
+  it('v2: shows Anthropic as static text and renders no provider radio group', async () => {
+    renderWithProviders(<LlmSettings />, { backend: { config: DEFAULT_CONFIG } });
+    expect(await screen.findByTestId('provider-name')).toHaveTextContent('Anthropic');
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.queryByTestId('provider-openai')).toBeNull();
   });
 });

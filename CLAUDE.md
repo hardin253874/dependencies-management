@@ -6,7 +6,7 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 **The functional spec is the single source of truth.** It lives OUTSIDE this repo, in the Obsidian vault: `../working/dependencies-management/Plans/FUNCTIONAL_SPEC.md` (alongside `IMPLEMENTATION_PLAN.md`, stage reviews and `V1_CLOSURE_REPORT.md`). Every `Plans/…` reference below means that folder.
 
-**v2 is in planning/progress (2026-11).** Before any v2 work read `Plans/V2_UPGRADE_PLAN.md` (goals, confirmed decisions D1–D9, stage status), then the stage doc you're working on: `V2_EVAL_HARNESS.md` (Stage 0), `V2_STACK_UPGRADE.md` (Stages 1–2), `V2_CODE_GRAPH_DESIGN.md` (Stage 3), `V2_AI_OVER_GRAPH.md` (Stage 4). For v2 work the V2 docs override the v1 spec where they disagree; update the spec when a v2 stage lands. Headline v2 changes: `src/core/` split (no Next/React imports), per-project SQLite code graph, Claude Agent SDK read-only investigator with MCP-first tools, OpenAI removed. Project subagents (`pm`, `developer`, `qa`) live in `.claude/agents/`. This file captures patterns and gotchas; the spec captures the design contract. When the two disagree, the spec wins — update this file to match.
+**v2 is in planning/progress (2026-11).** Before any v2 work read `Plans/V2_UPGRADE_PLAN.md` (goals, confirmed decisions D1–D11, stage status), then the stage doc you're working on: `V2_EVAL_HARNESS.md` (Stage 0), `V2_STACK_UPGRADE.md` (Stages 1–2), `V2_CODE_GRAPH_DESIGN.md` (Stage 3), `V2_AI_OVER_GRAPH.md` (Stage 4). For v2 work the V2 docs override the v1 spec where they disagree; update the spec when a v2 stage lands. Headline v2 changes: `src/core/` split (no Next/React imports; not created yet — code still lives in `src/lib/`), per-project SQLite code graph, Claude Agent SDK read-only investigator with MCP-first tools, OpenAI removed. Project subagents (`pm`, `developer`, `qa`) live in `.claude/agents/`. This file captures patterns and gotchas; the spec captures the design contract. When the two disagree, the spec wins — update this file to match.
 
 ---
 
@@ -14,27 +14,29 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 A locally-run AI-augmented agent that scans, analyses, and reviews dependencies of legacy JS/TS projects. Next.js 14.2 App Router (Route Handlers, not Server Actions). Server binds 127.0.0.1 only. Six right-panel views per dep ([A]–[E] + [D-Deep]). Cache-first design: every view reads its persisted envelope first; LLM calls happen only on explicit user action. The agent is **read-only against target projects** — all writes go to `library/`.
 
-Test baseline (2026-11): 515 passed / 2 skipped across 100 files (~30 s). Typecheck + lint must be clean before any commit.
+Test baseline (2026-11-09, after v2 Stage 1): 662 passed / 1 skipped across 116 files (~8 s wall). Typecheck + lint must be clean before any commit.
 
 ## Commands
 
 ```bash
 npm run dev                 # next dev on 127.0.0.1:3000
 npm run setup               # interactive: writes .env + library/_config.json
-npm run typecheck && npm run lint && npm test
+npm run typecheck && npm run lint && npm test   # lint = `eslint .` (ESLint 9 flat config, eslint.config.mjs; `next lint` does not read flat config on Next 14)
+npm run eval -- help        # Stage 0 eval harness (vite-node eval/cli.ts; corpus in eval/corpus, output in eval/results)
+npm run build && npm start  # production build, also bound to 127.0.0.1:3000
 npx vitest run tests/backend/resolver.test.ts          # single file
 npx vitest run tests/backend/resolver.test.ts -t "name" # single test
 npm run test:e2e            # Playwright; auto-starts `npm run dev` (reuses a running one)
 ```
 
-Vitest picks the environment by path: `tests/backend/**` → node, `tests/frontend/**` and `*.test.tsx` → jsdom. `MOCK_LLM=true` answers LLM calls from `test-fixtures/llm/` (keyed by SHA of system+user prompt+tool+model); a missing fixture throws with the expected filename.
+Vitest 5 `test.projects` (vitest.config.ts): `backend` = `tests/backend/**` → node, `frontend` = `tests/frontend/**` (incl. non-JSX `.test.ts`) → jsdom. A test file outside those two folders runs in neither project (`tests/backend/vitest-projects.test.ts` fails if one appears). `MOCK_LLM=true` answers LLM calls from `test-fixtures/llm/` (keyed by SHA of system+user prompt+tool+model); a missing fixture throws with the expected filename.
 
 ## Big-picture flow
 
 1. **Add project** → Phase 1 (sync, `scanners/packageJson.ts` + `lockfile.ts`) writes `library/<slug>/project.json`.
 2. **Phase 2** (`scanners/phase2.ts`, background job) fetches registry packuments + OSV CVEs + endoflife.date and writes per-dep envelopes; the StatusBar shows progress via SSE.
 3. **Right-panel views** read cached envelopes via GET routes. User clicks POST a refresh → route enqueues a job on `lib/jobs/queue.ts` → a service runs → envelope written → FE `awaitJob` polls, then reloads.
-4. **AI views** live in `lib/llm/*Service.ts` (report, relatedUpgrade, fileReview, deepReport, cveImpact). Each builds a deterministic skeleton from scanners (`code.ts` import graph, `resolver.ts` npm dry-run, `deepScan.ts`, `importSiteContext.ts`) and merges the LLM tool-call output on top. `llm/factory.ts` picks Anthropic / OpenAI / mock.
+4. **AI views** live in `lib/llm/*Service.ts` (report, relatedUpgrade, fileReview, deepReport, cveImpact). Each builds a deterministic skeleton from scanners (`code.ts` import graph, `resolver.ts` npm dry-run, `deepScan.ts`, `importSiteContext.ts`) and merges the LLM tool-call output on top. `llm/factory.ts` picks Anthropic / mock (OpenAI removed in v2; the factory is the seam for Microsoft Foundry). Each service passes an explicit `effort` from `llm/effort.ts`; the adapter (`llm/anthropic.ts`, SDK 1.x) uses `tool_choice: auto` + `strict` tools, prompt caching on tools + system, and maps `stop_reason: refusal` → `LLM_REFUSAL`.
 5. `lib/api-types.ts` is the FE↔BE contract; `lib/client/api-client.ts` is the only FE caller; `lib/reports/render.ts` produces MD/HTML downloads.
 
 ---
@@ -79,7 +81,7 @@ function getMyThing(): MyThing {
 
 If you `grep "^const [A-Z_]*\s*=\s*new (Map|Set)\(" src/lib/` and find a non-readonly hit in `src/lib/`, that's a flag. Same for `^let \w+` at module top level (read-only `let env = …` after first call is OK; mutable singletons are not).
 
-Currently-pinned singletons: `JobQueue`, CSRF token, logger state, project locks, orphan cache, LLM client cache, canonical-writer STATES.
+Currently-pinned singletons: `JobQueue`, CSRF token, logger state, project locks, orphan cache, LLM client cache + its config signature (`__DEP_AGENT_LLM_SIGNATURE__`, `llm/factory.ts`), LLM concurrency limiters (`__DEP_AGENT_LLM_LIMITS__`), canonical-writer STATES.
 
 ### 5. Test isolation
 Every test that touches the library or a fixture project gets its own tempdir via `createSandbox(name)` (`tests/backend/helpers/sandbox.ts`). NEVER write to the developer's real `library/` from a test.
@@ -131,7 +133,7 @@ Every cached JSON file (except `_config.json`, `_projects.json`) wraps its paylo
 interface Envelope<T> {
   schemaVersion: number;
   generatedAt: string;   // ISO
-  source: 'registry' | 'deterministic' | 'deterministic-partial' | 'endoflife.date' | 'anthropic:<model>' | 'openai:<model>';
+  source: 'registry' | 'deterministic' | 'deterministic-partial' | 'endoflife.date' | 'anthropic:<model>' | 'openai:<model>' /* read-only legacy (v1); writes use WritableEnvelopeSource */;
   ttlHours: number | null;
   data: T;
 }
@@ -196,7 +198,7 @@ const log = (await getLogger()).child({ scope: 'phase2', slug });
 log.info({ total, durationMs }, `phase2 registry done — ${ok}/${total} ok`);
 ```
 
-DON'T import `pino` or `pino-pretty`. The v0.5 logger is a custom direct-file appender; pino was removed from the code (spec §10.11), though both are still listed in `package.json` and could be dropped.
+DON'T import `pino` or `pino-pretty`. The v0.5 logger is a custom direct-file appender; pino was removed from the code (spec §10.11) and both packages were dropped from `package.json` in v2 Stage 1.
 
 ---
 
@@ -224,7 +226,7 @@ These are the bugs that have actually shipped in this repo. Each one is here bec
 ```bash
 npm run typecheck   # tsc --noEmit — must be clean
 npm run lint        # ESLint — must be clean
-npm test            # Full Vitest suite — must match current baseline (515 pass / 2 skipped)
+npm test            # Full Vitest suite — must match current baseline (662 pass / 1 skipped)
 ```
 
 ### When you change a route

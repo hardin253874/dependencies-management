@@ -71,7 +71,7 @@ const DEFAULT_CONFIG: ConfigResponse = {
   llm: { provider: 'anthropic', model: 'claude-opus-4-7' },
   ui: { sidebarCollapsed: false, theme: 'light', showDeepAnalyzeWarning: true },
   features: { resolverCheckEnabled: true },
-  apiKeys: { hasAnthropicKey: true, hasOpenAIKey: false }
+  apiKeys: { hasAnthropicKey: true }
 };
 
 export function makeFakeFetcher(backend: Partial<FakeBackend> = {}): typeof fetch {

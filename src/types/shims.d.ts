@@ -14,3 +14,12 @@ declare module '@yarnpkg/lockfile' {
   export function parse(fileContents: string, fileLoc?: string): LockfileParseResult;
   export function stringify(json: Record<string, unknown>, noHeader?: boolean, enableVersions?: boolean): string;
 }
+
+/**
+ * Global stylesheet side-effect imports (`import './globals.css'` in
+ * app/layout.tsx). TypeScript 6 turns on `noUncheckedSideEffectImports` by
+ * default, and Next 14's `next/types/global.d.ts` only declares `*.module.css`.
+ * Webpack handles the import; this only tells tsc the module exists. Narrow
+ * pattern on purpose: a bare '*.css' could shadow Next's typed '*.module.css'.
+ */
+declare module '*/globals.css';

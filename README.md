@@ -22,9 +22,9 @@ Designed for senior developers driving long-term dependency hygiene on legacy fr
 
 | Requirement | Notes |
 |---|---|
-| Node.js ≥ 18 LTS | Tested with Node 20 + 22. The setup script needs Node ≥ 18 for native `readline/promises`. |
+| Node.js ≥ 22 | Developed and tested on Node 24. `package.json` declares `engines: { node: ">=22" }`. |
 | `npm` on `PATH` | Used by the agent's resolver-check feature (`npm install --dry-run`). Volta-pinned `npm` is preferred when the target project has it. |
-| LLM API key | Anthropic or OpenAI (at least one). You can also run with `MOCK_LLM=true` for dev iteration without spend — see [Development](#development). |
+| LLM API key | Anthropic (the only provider since v2; OpenAI support was removed). You can also run with `MOCK_LLM=true` for dev iteration without spend — see [Development](#development). |
 | OS | Windows, macOS, Linux. Windows has a couple of extra `next.config.mjs` notes — see the spec §5.1.1; everything is wired up correctly out of the box. |
 
 ## Quick start
@@ -50,8 +50,8 @@ When the dev server starts, open <http://127.0.0.1:3000>. The first run launches
 
 The setup script (`scripts/setup.mjs`) is interactive and idempotent — running it again lets you update or keep existing values.
 
-1. Asks which LLM provider(s) to enable (`anthropic`, `openai`, or both).
-2. Prompts for the corresponding API key(s).
+1. Prompts for your Anthropic API key (keeps an existing one if you say so).
+2. (Anthropic is the only provider since v2; an old `OPENAI_API_KEY` line is left untouched and ignored.)
 3. Optionally walks through the 6 token-budget knobs (you can press Enter to accept defaults — covers 99% of users).
 4. Writes:
    - `.env` (credentials + tunables; **gitignored**)
@@ -129,8 +129,7 @@ Everything is JSON, atomic-written (temp-then-rename), wrapped in a versioned en
 
 | Variable | Default | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | — | Required when `_config.json.llm.provider === 'anthropic'` |
-| `OPENAI_API_KEY` | — | Required when `_config.json.llm.provider === 'openai'` |
+| `ANTHROPIC_API_KEY` | — | Required (Anthropic is the only provider since v2) |
 | `LOG_LEVEL` | `info` | `trace` / `debug` / `info` / `warn` / `error` / `fatal` |
 | `MOCK_LLM` | `false` | When `true`, LLM calls are replied to from `test-fixtures/llm/` |
 | `TOKEN_BUDGET_FILE_REVIEW_IN` | 30000 | |
@@ -208,7 +207,7 @@ npm run test:watch       # Iterative dev loop
 npm run test:e2e         # Playwright UI smoke tests
 ```
 
-The full suite runs in ~7 seconds; tests are deterministic and run against per-test sandboxed `library/` directories (no developer-state leakage). One nightly CI job can be configured to run the integration suite against the real LLM for prompt regression — that requires `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` and unset `MOCK_LLM`.
+The full suite runs in ~7 seconds; tests are deterministic and run against per-test sandboxed `library/` directories (no developer-state leakage). One nightly CI job can be configured to run the integration suite against the real LLM for prompt regression — that requires `ANTHROPIC_API_KEY` and unset `MOCK_LLM`.
 
 ## Troubleshooting
 

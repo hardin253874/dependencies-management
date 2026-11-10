@@ -1,7 +1,7 @@
 /**
  * POST /api/config/api-key — write a provider key to `.env` (spec §9.3, §5.4).
  *
- * Body: { provider: 'anthropic' | 'openai', apiKey: string }
+ * Body: { provider: 'anthropic', apiKey: string } (v2: OpenAI removed → 400)
  * Response: { ok: true }
  *
  * The server writes the key to `.env` (chmod 600 on Unix), mutates the in-process
@@ -15,8 +15,15 @@ import { writeEnvFile } from '@/lib/storage/envFile';
 import { setApiKey } from '@/lib/config';
 import type { ApiKeySetRequest, LlmProvider } from '@/lib/api-types';
 
-function envKeyFor(provider: LlmProvider): 'ANTHROPIC_API_KEY' | 'OPENAI_API_KEY' {
-  return provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY';
+function envKeyFor(provider: LlmProvider): 'ANTHROPIC_API_KEY' {
+  switch (provider) {
+    case 'anthropic':
+      return 'ANTHROPIC_API_KEY';
+    default: {
+      const unknown: never = provider;
+      throw new Error(`Unknown provider: ${unknown as string}`);
+    }
+  }
 }
 
 export const POST = withCsrf<unknown>(async (req) => {
@@ -26,7 +33,7 @@ export const POST = withCsrf<unknown>(async (req) => {
   if (
     typeof body !== 'object' ||
     body === null ||
-    (body.provider !== 'anthropic' && body.provider !== 'openai') ||
+    body.provider !== 'anthropic' ||
     typeof body.apiKey !== 'string' ||
     body.apiKey.trim() === ''
   ) {

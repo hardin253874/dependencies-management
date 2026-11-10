@@ -57,7 +57,7 @@ describe('AppShell — boot path', () => {
           llm: { provider: 'anthropic', model: 'claude-opus-4-7' },
           ui: { sidebarCollapsed: false, theme: 'light', showDeepAnalyzeWarning: true },
           features: { resolverCheckEnabled: true },
-          apiKeys: { hasAnthropicKey: false, hasOpenAIKey: false }
+          apiKeys: { hasAnthropicKey: false }
         }
       }
     });

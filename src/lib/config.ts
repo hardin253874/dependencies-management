@@ -9,7 +9,9 @@
  * API-key fields are mutable in-process via setApiKey().
  */
 
-export type LlmProvider = 'anthropic' | 'openai';
+import type { LlmProvider } from './api-types';
+
+export type { LlmProvider };
 
 export interface TokenBudget {
   input: number;
@@ -18,7 +20,6 @@ export interface TokenBudget {
 
 export interface AppEnv {
   anthropicApiKey: string | null;
-  openaiApiKey: string | null;
   logLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
   mockLlm: boolean;
   budgets: {
@@ -64,7 +65,6 @@ export function loadEnv(): AppEnv {
   if (cached !== null) return cached;
   cached = {
     anthropicApiKey: readNonEmpty('ANTHROPIC_API_KEY'),
-    openaiApiKey: readNonEmpty('OPENAI_API_KEY'),
     logLevel: readLogLevel(),
     mockLlm: (process.env.MOCK_LLM ?? 'false').toLowerCase() === 'true',
     budgets: {
@@ -99,20 +99,29 @@ export function resetEnvCache(): void {
 export function setApiKey(provider: LlmProvider, value: string | null): void {
   const env = loadEnv();
   const cleaned = value === null || value.trim() === '' ? null : value.trim();
-  if (provider === 'anthropic') {
-    env.anthropicApiKey = cleaned;
-    if (cleaned === null) delete process.env.ANTHROPIC_API_KEY;
-    else process.env.ANTHROPIC_API_KEY = cleaned;
-  } else {
-    env.openaiApiKey = cleaned;
-    if (cleaned === null) delete process.env.OPENAI_API_KEY;
-    else process.env.OPENAI_API_KEY = cleaned;
+  switch (provider) {
+    case 'anthropic':
+      env.anthropicApiKey = cleaned;
+      if (cleaned === null) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = cleaned;
+      return;
+    default: {
+      const unknown: never = provider;
+      throw new Error(`Unknown provider: ${unknown as string}`);
+    }
   }
 }
 
 export function hasKey(provider: LlmProvider): boolean {
   const env = loadEnv();
-  return provider === 'anthropic' ? env.anthropicApiKey !== null : env.openaiApiKey !== null;
+  switch (provider) {
+    case 'anthropic':
+      return env.anthropicApiKey !== null;
+    default: {
+      const unknown: never = provider;
+      throw new Error(`Unknown provider: ${unknown as string}`);
+    }
+  }
 }
 
 /**
@@ -120,5 +129,12 @@ export function hasKey(provider: LlmProvider): boolean {
  * Used by the .env / .env.example reconciliation on boot (§5.2).
  */
 export function requiredKeysForProvider(provider: LlmProvider): string[] {
-  return provider === 'anthropic' ? ['ANTHROPIC_API_KEY'] : ['OPENAI_API_KEY'];
+  switch (provider) {
+    case 'anthropic':
+      return ['ANTHROPIC_API_KEY'];
+    default: {
+      const unknown: never = provider;
+      throw new Error(`Unknown provider: ${unknown as string}`);
+    }
+  }
 }

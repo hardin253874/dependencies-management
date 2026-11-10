@@ -22,6 +22,7 @@ import { RegenerateButton } from './RegenerateButton';
 import { Button } from '../modals/Button';
 import { CveImpactConfirmModal } from '../modals/CveImpactConfirmModal';
 import styles from './DependencyDetailView.module.css';
+import { formatSourceLabel } from '@/lib/reports/sourceLabel';
 
 interface Props {
   slug: string;
@@ -944,7 +945,7 @@ function CveImpactReport({
         ))}
       </ul>
       <p className={styles.muted}>
-        Generated {envelope.generatedAt.slice(0, 19).replace('T', ' ')} UTC · source: {envelope.source}
+        Generated {envelope.generatedAt.slice(0, 19).replace('T', ' ')} UTC · source: {formatSourceLabel(envelope.source)}
         {detail.inputs.contextTruncated && ' · context truncated (large project)'}
         {' · '}
         {detail.inputs.filesAnalyzed} file{detail.inputs.filesAnalyzed === 1 ? '' : 's'} analyzed

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import type { LlmProvider } from '@/lib/api-types';
 import { ApiError, getApiClient } from '@/lib/client/api-client';
 import { Button } from '../modals/Button';
 import { useAppContext } from '../AppContext';
@@ -14,7 +13,8 @@ interface Props {
 
 export function LlmSetupStep({ onContinue }: Props): JSX.Element {
   const { refreshConfig } = useAppContext();
-  const [provider, setProvider] = useState<LlmProvider>('anthropic');
+  // v2 D8: Anthropic is the only provider, so there is no provider picker.
+  const provider = 'anthropic' as const;
   const [model, setModel] = useState<string>(defaultModel('anthropic'));
   const [apiKey, setApiKey] = useState('');
   const [reveal, setReveal] = useState(false);
@@ -61,45 +61,10 @@ export function LlmSetupStep({ onContinue }: Props): JSX.Element {
         Pick your LLM
       </h1>
       <p className={styles.subtitle}>
-        Choose a provider and paste an API key. The key is stored locally in your{' '}
+        Paste your Anthropic API key and pick a model. The key is stored locally in your{' '}
         <code>.env</code> file.
       </p>
 
-      <fieldset className={styles.field}>
-        <legend className={styles.label}>Provider</legend>
-        <label
-          style={{
-            display: 'inline-flex',
-            gap: 'var(--space-2)',
-            marginRight: 'var(--space-4)'
-          }}
-        >
-          <input
-            type="radio"
-            name="onboarding-provider"
-            checked={provider === 'anthropic'}
-            onChange={() => {
-              setProvider('anthropic');
-              setModel(defaultModel('anthropic'));
-            }}
-            data-testid="onboarding-provider-anthropic"
-          />
-          Anthropic
-        </label>
-        <label style={{ display: 'inline-flex', gap: 'var(--space-2)' }}>
-          <input
-            type="radio"
-            name="onboarding-provider"
-            checked={provider === 'openai'}
-            onChange={() => {
-              setProvider('openai');
-              setModel(defaultModel('openai'));
-            }}
-            data-testid="onboarding-provider-openai"
-          />
-          OpenAI
-        </label>
-      </fieldset>
 
       <label className={styles.field}>
         <span className={styles.label}>Model</span>

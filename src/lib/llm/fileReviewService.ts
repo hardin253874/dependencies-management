@@ -22,9 +22,10 @@ import {
 import { SHARED_SYSTEM_PROMPT } from './prompts/shared';
 import { computeCacheKey } from './cacheKey';
 import { LLMError, type LLMClient, type LlmPhaseEvent } from './client';
+import { VIEW_EFFORT } from './effort';
 import { truncateFileContent } from './prompts/truncate';
 import { loadEnv } from '../config';
-import type { AiCostFields, DataSource, FileReviewDetail, ReviewFinding } from '../api-types';
+import type { AiCostFields, WritableDataSource, FileReviewDetail, ReviewFinding } from '../api-types';
 
 export interface RunFileReviewInput {
   /** Relative POSIX path from project root. */
@@ -51,7 +52,7 @@ export interface RunFileReviewInput {
 export interface FileReviewRun {
   cacheKey: string;
   detail: FileReviewDetail;
-  source: DataSource;
+  source: WritableDataSource;
 }
 
 export async function loadFileForReview(absPath: string): Promise<{ content: string; hash: string }> {
@@ -104,6 +105,7 @@ export async function runFileReview(client: LLMClient, input: RunFileReviewInput
     userPrompt,
     tool: FILE_REVIEW_TOOL_SCHEMA,
     maxOutputTokens: env.budgets.fileReview.output,
+    effort: VIEW_EFFORT.fileReview,
     maxInputTokens: env.budgets.fileReview.input,
     onPhase: input.onPhase,
     signal: input.signal
@@ -117,6 +119,8 @@ export async function runFileReview(client: LLMClient, input: RunFileReviewInput
   const cost: AiCostFields = {
     inputTokens: call.inputTokens,
     outputTokens: call.outputTokens,
+    cacheReadInputTokens: call.cacheReadInputTokens,
+    cacheCreationInputTokens: call.cacheCreationInputTokens,
     model: call.model,
     costEstimateUsd: call.costEstimateUsd
   };
@@ -134,7 +138,7 @@ export async function runFileReview(client: LLMClient, input: RunFileReviewInput
     findings: normalizeFindings(call.output.findings),
     cost
   };
-  return { cacheKey, detail, source: `${call.provider}:${call.model}` as DataSource };
+  return { cacheKey, detail, source: `${call.provider}:${call.model}` as WritableDataSource };
 }
 
 export function sha1PathHash(relativePath: string): string {

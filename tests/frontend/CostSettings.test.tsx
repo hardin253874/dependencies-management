@@ -33,7 +33,7 @@ const summaryP1: CostSummaryResponse = {
     openai: [
       {
         provider: 'openai',
-        model: 'gpt-5.5',
+        model: 'gpt-4o',
         count: 1,
         inputTokens: 20,
         outputTokens: 10,
@@ -59,7 +59,7 @@ const summaryP2: CostSummaryResponse = {
     openai: [
       {
         provider: 'openai',
-        model: 'gpt-5.5',
+        model: 'gpt-4o',
         count: 12,
         inputTokens: 500,
         outputTokens: 200,
@@ -129,6 +129,62 @@ describe('CostSettings (Stage 4)', () => {
     await waitFor(() =>
       expect(screen.getByTestId('cost-provider-anthropic')).toHaveTextContent('$1.83')
     );
+    // v2: OpenAI spend from v1 reports is a legacy bucket, labelled as such.
     expect(screen.getByTestId('cost-provider-openai')).toHaveTextContent('$0.58');
+    expect(screen.getByTestId('cost-provider-openai')).toHaveTextContent('OpenAI (legacy)');
+    expect(screen.getByTestId('cost-provider-anthropic')).toHaveTextContent('Anthropic');
+  });
+
+  it('hides the legacy OpenAI row when that bucket is empty', async () => {
+    const anthropicOnly: CostSummaryResponse = {
+      ...summaryP1,
+      byProvider: { anthropic: summaryP1.byProvider.anthropic, openai: [] }
+    };
+    renderWithProviders(<CostSettings />, {
+      backend: {
+        projects: [
+          {
+            slug: 'p1',
+            name: 'my-app',
+            path: '/p1',
+            packageManager: 'npm',
+            depCount: 1,
+            lastScanAt: null,
+            pathExists: true
+          }
+        ],
+        costSummaries: { p1: anthropicOnly }
+      }
+    });
+
+    await waitFor(() => expect(screen.getByTestId('cost-row-p1')).toBeInTheDocument());
+    await userEvent.click(screen.getByTestId('cost-row-p1').querySelector('button')!);
+    await waitFor(() => expect(screen.getByTestId('cost-provider-anthropic')).toBeInTheDocument());
+    expect(screen.queryByTestId('cost-provider-openai')).toBeNull();
+  });
+
+  it('shows cache read / write tokens only when > 0', async () => {
+    const withCache: CostSummaryResponse = {
+      ...summaryP1,
+      totalCacheReadInputTokens: 1200,
+      totalCacheCreationInputTokens: 300
+    };
+    renderWithProviders(<CostSettings />, {
+      backend: {
+        projects: [
+          { slug: 'p1', name: 'my-app', path: '/p1', packageManager: 'npm', depCount: 1, lastScanAt: null, pathExists: true },
+          { slug: 'p2', name: 'legacy-shop', path: '/p2', packageManager: 'npm', depCount: 1, lastScanAt: null, pathExists: true }
+        ],
+        costSummaries: { p1: withCache, p2: summaryP2 }
+      }
+    });
+    await waitFor(() => expect(screen.getByTestId('cost-row-p1')).toBeInTheDocument());
+    await userEvent.click(screen.getByTestId('cost-row-p1').querySelector('button')!);
+    await userEvent.click(screen.getByTestId('cost-row-p2').querySelector('button')!);
+    await waitFor(() =>
+      expect(screen.getByTestId('cost-detail-p1')).toHaveTextContent('Cache read / write tokens: 1,200 / 300')
+    );
+    expect(screen.getByTestId('cost-detail-p2')).not.toHaveTextContent('Cache read');
   });
 });
+

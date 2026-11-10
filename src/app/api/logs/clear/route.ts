@@ -2,7 +2,7 @@
  * POST /api/logs/clear — empties `library/_logs/` (spec §7.7, §9.3).
  *
  * Removes every file inside the logs directory but leaves the directory itself
- * in place so pino can keep appending. Returns `{ filesRemoved, bytesRemoved }`
+ * in place so the logger can keep appending. Returns `{ filesRemoved, bytesRemoved }`
  * so the UI can confirm what was deleted.
  *
  * CSRF-protected.

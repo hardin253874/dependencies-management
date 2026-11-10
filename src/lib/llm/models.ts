@@ -7,25 +7,21 @@
  * first entry so switching provider always lands on a sane choice.
  *
  * Anthropic IDs are the exact first-party strings — no date suffixes. Snapshot
- * taken 2026-09-24 from the Claude API model table. v1.x may replace this with
- * `GET /api/llm/models?provider=…` backed by the providers' live model lists.
+ * taken 2026-11-09 from the Claude API model table (claude-api reference,
+ * cached 2026-10-06, and the pricing page checked 2026-11-09). The live
+ * Models API (`client.models.list()`) was NOT called: that is a real API call
+ * and stays a user action. A `GET /api/llm/models` backed by it is backlog.
+ *
+ * Picker = current generation + Fable 5.1 (open question Q5, recommendation
+ * taken). Older ids stay priced in `cost.ts`; a stored config naming one is
+ * migrated to the default with a one-time notice (`migrateConfig`).
  */
 import type { LlmProvider } from '../api-types';
 
 export const MODEL_OPTIONS: Record<LlmProvider, readonly string[]> = {
-  anthropic: [
-    'claude-opus-5',
-    'claude-fable-5-1',
-    'claude-opus-4-8',
-    'claude-opus-4-7',
-    'claude-opus-4-6',
-    'claude-sonnet-5',
-    'claude-sonnet-4-6',
-    'claude-haiku-4-5'
-  ],
-  openai: ['gpt-5.5', 'gpt-5', 'gpt-5-mini', 'gpt-4o', 'gpt-4o-mini']
+  anthropic: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1']
 };
 
-export function defaultModel(provider: LlmProvider): string {
+export function defaultModel(provider: LlmProvider = 'anthropic'): string {
   return MODEL_OPTIONS[provider][0]!;
 }

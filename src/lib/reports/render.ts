@@ -26,6 +26,7 @@ import type {
   UpdateReportDetail,
   UsageDetail
 } from '../api-types';
+import { formatSourceLabel } from './sourceLabel';
 
 /**
  * Optional companion-cache inputs accepted by the [D] renderers. Each is
@@ -74,7 +75,7 @@ export function renderUpdateReportMd(
   lines.push(`**Upgrade:** ${detail.fromVersion} → ${detail.toVersion}`);
   lines.push(`**Risk:** ${detail.riskLevel}`);
   lines.push(`**Generated:** ${meta.generatedAt}`);
-  lines.push(`**Source:** ${meta.source}`);
+  lines.push(`**Source:** ${formatSourceLabel(meta.source)}`);
   lines.push('');
   if (detail.summary !== '') {
     lines.push('## Summary');
@@ -163,7 +164,7 @@ function appendRelatedUpgradeMd(
   lines.push('## Related Deps Upgrade Impact');
   lines.push('');
   if (meta !== undefined) {
-    lines.push(`_Generated ${meta.generatedAt} · source: ${meta.source}_`);
+    lines.push(`_Generated ${meta.generatedAt} · source: ${formatSourceLabel(meta.source)}_`);
     lines.push('');
   }
   if (detail.globalNotes !== '') {
@@ -260,7 +261,7 @@ export function renderDeepUpdateReportMd(
   lines.push(`**Estimated Effort:** ${detail.estimatedEffort}`);
   lines.push(`**Lockfile state:** ${detail.lockfileStateHashShort}`);
   lines.push(`**Generated:** ${meta.generatedAt}`);
-  lines.push(`**Source:** ${meta.source}`);
+  lines.push(`**Source:** ${formatSourceLabel(meta.source)}`);
   lines.push('');
   // Older caches may lack the LLM string fields entirely (see DeepUpdateReportView).
   const summary = typeof detail.summary === 'string' ? detail.summary : '';
@@ -409,7 +410,7 @@ export function renderUpdateReportHtml(
   parts.push(`<strong>Upgrade:</strong> ${esc(detail.fromVersion)} &rarr; ${esc(detail.toVersion)}<br/>`);
   parts.push(`<strong>Risk:</strong> <span class="risk-${detail.riskLevel}">${esc(detail.riskLevel)}</span><br/>`);
   parts.push(`<strong>Generated:</strong> ${esc(meta.generatedAt)}<br/>`);
-  parts.push(`<strong>Source:</strong> ${esc(meta.source)}`);
+  parts.push(`<strong>Source:</strong> ${esc(formatSourceLabel(meta.source))}`);
   parts.push('</div>');
 
   if (detail.summary !== '') {
@@ -480,7 +481,7 @@ function appendRelatedUpgradeHtml(
 ): void {
   parts.push('<section><h2>Related Deps Upgrade Impact</h2>');
   if (meta !== undefined) {
-    parts.push(`<p class="meta">Generated ${esc(meta.generatedAt)} • source: ${esc(meta.source)}</p>`);
+    parts.push(`<p class="meta">Generated ${esc(meta.generatedAt)} • source: ${esc(formatSourceLabel(meta.source))}</p>`);
   }
   if (detail.globalNotes !== '') {
     parts.push(`<blockquote>${esc(detail.globalNotes)}</blockquote>`);
@@ -583,7 +584,7 @@ export function renderDeepUpdateReportHtml(
   parts.push(`<strong>Estimated Effort:</strong> ${esc(detail.estimatedEffort)}<br/>`);
   parts.push(`<strong>Lockfile state:</strong> <code>${esc(detail.lockfileStateHashShort)}</code><br/>`);
   parts.push(`<strong>Generated:</strong> ${esc(meta.generatedAt)}<br/>`);
-  parts.push(`<strong>Source:</strong> ${esc(meta.source)}`);
+  parts.push(`<strong>Source:</strong> ${esc(formatSourceLabel(meta.source))}`);
   parts.push('</div>');
 
   // Older caches may lack the LLM string fields entirely (see DeepUpdateReportView).

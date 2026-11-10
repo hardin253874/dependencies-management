@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { LlmProvider } from '@/lib/api-types';
 import { ApiError, getApiClient } from '@/lib/client/api-client';
 import { Button } from '../Button';
 import { useAppContext } from '../../AppContext';
@@ -13,7 +12,8 @@ type TestState = { status: 'idle' | 'testing' | 'ok' | 'error'; message?: string
 
 export function LlmSettings(): JSX.Element {
   const { config, refreshConfig } = useAppContext();
-  const [provider, setProvider] = useState<LlmProvider>(config?.llm.provider ?? 'anthropic');
+  // v2 D8: Anthropic is the only provider, so there is no provider picker.
+  const provider = 'anthropic' as const;
   const [model, setModel] = useState<string>(
     config?.llm.model ?? defaultModel('anthropic')
   );
@@ -24,28 +24,11 @@ export function LlmSettings(): JSX.Element {
 
   useEffect(() => {
     if (config) {
-      setProvider(config.llm.provider);
       setModel(config.llm.model);
     }
   }, [config]);
 
-  const hasKey =
-    provider === 'anthropic'
-      ? Boolean(config?.apiKeys.hasAnthropicKey)
-      : Boolean(config?.apiKeys.hasOpenAIKey);
-
-  const onProviderChange = async (next: LlmProvider) => {
-    setProvider(next);
-    const nextModel = defaultModel(next);
-    setModel(nextModel);
-    try {
-      await getApiClient().patchConfig({ llm: { provider: next, model: nextModel } });
-      await refreshConfig();
-    } catch (err) {
-      setSaveState('error');
-      console.error(err);
-    }
-  };
+  const hasKey = Boolean(config?.apiKeys.hasAnthropicKey);
 
   const onModelChange = async (next: string) => {
     setModel(next);
@@ -91,31 +74,10 @@ export function LlmSettings(): JSX.Element {
     <div className={styles.pane}>
       <h3 className={styles.heading}>LLM</h3>
 
-      <fieldset className={styles.field}>
-        <legend className={styles.label}>Provider</legend>
-        <label className={styles.radio}>
-          <input
-            type="radio"
-            name="provider"
-            value="anthropic"
-            checked={provider === 'anthropic'}
-            onChange={() => onProviderChange('anthropic')}
-            data-testid="provider-anthropic"
-          />
-          Anthropic
-        </label>
-        <label className={styles.radio}>
-          <input
-            type="radio"
-            name="provider"
-            value="openai"
-            checked={provider === 'openai'}
-            onChange={() => onProviderChange('openai')}
-            data-testid="provider-openai"
-          />
-          OpenAI
-        </label>
-      </fieldset>
+      <div className={styles.field}>
+        <span className={styles.label}>Provider</span>
+        <span data-testid="provider-name">Anthropic</span>
+      </div>
 
       <label className={styles.field}>
         <span className={styles.label}>Model</span>

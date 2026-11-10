@@ -45,12 +45,10 @@ export function computeCveImpactEstimate(
     input.filesInUsage * CVE_IMPACT_ESTIMATE_TOKENS_PER_FILE;
   const estimatedInputTokens = Math.min(rawInput, CVE_IMPACT_ESTIMATE_INPUT_CAP);
   const estimatedOutputTokens = input.outputBudgetTokens;
-  const estimatedCostUsd = costEstimateUsd(
-    input.provider,
-    input.model,
-    estimatedInputTokens,
-    estimatedOutputTokens
-  );
+  const estimatedCostUsd = costEstimateUsd(input.model, {
+    inputTokens: estimatedInputTokens,
+    outputTokens: estimatedOutputTokens
+  });
   return {
     cveCount: input.cveCount,
     filesInUsage: input.filesInUsage,

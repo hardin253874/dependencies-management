@@ -49,7 +49,8 @@ describe('MockLLMClient — in-memory fixture', () => {
       systemPrompt: 'sys',
       userPrompt: 'u',
       tool: TOOL,
-      maxOutputTokens: 100
+      maxOutputTokens: 100,
+      effort: 'medium'
     });
     expect(r.output).toEqual({ ok: true });
     expect(r.inputTokens).toBe(100);
@@ -67,18 +68,19 @@ describe('MockLLMClient — file fixture', () => {
       path.join(dir, `${key}.json`),
       JSON.stringify({ output: { ok: true }, inputTokens: 50, outputTokens: 10 })
     );
-    const client = new MockLLMClient({ provider: 'openai', fixtureDir: dir });
+    const client = new MockLLMClient({ provider: 'anthropic', fixtureDir: dir });
     const r = await client.call<{ ok: boolean }>({
       model: 'm1',
       systemPrompt: 's',
       userPrompt: 'u',
       tool: TOOL,
-      maxOutputTokens: 100
+      maxOutputTokens: 100,
+      effort: 'medium'
     });
     expect(r.output).toEqual({ ok: true });
     expect(r.inputTokens).toBe(50);
     expect(r.outputTokens).toBe(10);
-    expect(r.provider).toBe('openai');
+    expect(r.provider).toBe('anthropic');
   });
 });
 
@@ -97,7 +99,8 @@ describe('MockLLMClient — missing fixture', () => {
         systemPrompt: 'sys',
         userPrompt: 'no-fixture',
         tool: TOOL,
-        maxOutputTokens: 100
+        maxOutputTokens: 100,
+      effort: 'medium'
       })
     ).rejects.toMatchObject({
       name: 'LLMError',
@@ -111,7 +114,8 @@ describe('MockLLMClient — missing fixture', () => {
         systemPrompt: 'sys',
         userPrompt: 'no-fixture',
         tool: TOOL,
-        maxOutputTokens: 100
+        maxOutputTokens: 100,
+      effort: 'medium'
       });
     } catch (err) {
       const e = err as LLMError;
@@ -127,7 +131,8 @@ describe('MockLLMClient — missing fixture', () => {
         systemPrompt: 'x',
         userPrompt: 'y',
         tool: TOOL,
-        maxOutputTokens: 100
+        maxOutputTokens: 100,
+      effort: 'medium'
       });
       expect.fail('Expected an LLMError');
     } catch (err) {
@@ -149,6 +154,7 @@ describe('MockLLMClient — abort signal honored', () => {
         userPrompt: 'u',
         tool: TOOL,
         maxOutputTokens: 100,
+      effort: 'medium',
         signal: ctrl.signal
       })
     ).rejects.toMatchObject({ code: 'LLM_CANCELLED' });

@@ -1,7 +1,7 @@
 /**
  * E2E — First-launch onboarding (spec §16, Stage 1)
  *
- * Stage 1 scope: pick provider, enter dummy key (mocked test endpoint),
+ * Stage 1 scope: enter dummy key (mocked test endpoint),
  * add `small-modern` fixture project, middle panel renders within 2s
  * with deps + installed versions.
  *
@@ -26,8 +26,8 @@ test('first-launch onboarding flow', async ({ page }) => {
   // Get started → step 2 (LLM setup).
   await page.getByTestId('welcome-continue').click();
 
-  // Step 2 — pick Anthropic, paste a dummy key, save.
-  await page.getByTestId('onboarding-provider-anthropic').check();
+  // Step 2 — paste a dummy key, save. (v2: Anthropic is the only provider,
+  // so there is no provider radio to pick any more.)
   await page.getByTestId('onboarding-apikey').fill('sk-ant-test-key');
   await page.getByTestId('onboarding-llm-continue').click();
 

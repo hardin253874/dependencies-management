@@ -9,13 +9,21 @@
 import { atomicWriteJson, readJson } from './atomic';
 import { applyMigrations } from './migrations';
 
-export type EnvelopeSource =
+/**
+ * Two source types on purpose (v2 D8, OpenAI removed):
+ * - `EnvelopeSource` is what a *read* can return. It keeps `openai:<model>`
+ *   so v1 envelopes written with OpenAI stay readable and renderable.
+ * - `WritableEnvelopeSource` is what new code may *write*. It excludes
+ *   `openai:` so nothing new is ever attributed to the removed provider.
+ */
+export type WritableEnvelopeSource =
   | 'registry'
   | 'deterministic'
   | 'deterministic-partial'
   | 'endoflife.date'
-  | `anthropic:${string}`
-  | `openai:${string}`;
+  | `anthropic:${string}`;
+
+export type EnvelopeSource = WritableEnvelopeSource | `openai:${string}`;
 
 export interface Envelope<T> {
   schemaVersion: number;
@@ -27,7 +35,7 @@ export interface Envelope<T> {
 }
 
 export interface WriteEnvelopeInput<T> {
-  source: EnvelopeSource;
+  source: WritableEnvelopeSource;
   ttlHours: number | null;
   data: T;
   schemaVersion?: number;

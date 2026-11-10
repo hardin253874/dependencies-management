@@ -17,14 +17,23 @@ import { loadEnv } from '../config';
 import { readConfig } from '../storage/config';
 import { LLMError, type LLMClient } from './client';
 import { AnthropicAdapter } from './anthropic';
-import { OpenAIAdapter } from './openai';
 import { MockLLMClient } from './mock';
 
 const LLM_CONCURRENCY_PER_PROVIDER = 2;
 
-const limits: Map<LlmProvider, ReturnType<typeof pLimit>> = new Map();
+// Spec §10.8 cap must hold across ALL route bundles: Next.js dev evaluates
+// this module once per route bundle, so a module-scoped Map gave every route
+// its own limiter (invariant #4 violation, fixed in v2 Stage 1.4).
+declare global {
+  // eslint-disable-next-line no-var
+  var __DEP_AGENT_LLM_LIMITS__: Map<LlmProvider, ReturnType<typeof pLimit>> | undefined;
+}
 
 function limitFor(provider: LlmProvider): ReturnType<typeof pLimit> {
+  if (globalThis.__DEP_AGENT_LLM_LIMITS__ === undefined) {
+    globalThis.__DEP_AGENT_LLM_LIMITS__ = new Map();
+  }
+  const limits = globalThis.__DEP_AGENT_LLM_LIMITS__;
   let l = limits.get(provider);
   if (l === undefined) {
     l = pLimit(LLM_CONCURRENCY_PER_PROVIDER);
@@ -60,7 +69,7 @@ export async function getLlmClient(): Promise<LLMClient> {
   const env = loadEnv();
   const cfg = await readConfig();
   const provider = cfg.llm.provider;
-  const apiKey = provider === 'anthropic' ? env.anthropicApiKey : env.openaiApiKey;
+  const apiKey = env.anthropicApiKey;
   const signature = `${env.mockLlm ? 'mock' : provider}::${apiKey === null ? 'no-key' : 'has-key'}`;
   if (
     globalThis.__DEP_AGENT_LLM_CLIENT__ !== undefined &&
@@ -75,11 +84,10 @@ export async function getLlmClient(): Promise<LLMClient> {
   } else if (provider === 'anthropic') {
     if (apiKey === null) throw new LLMError('LLM_NO_API_KEY', 'Anthropic API key not configured.');
     client = new AnthropicAdapter({ apiKey });
-  } else if (provider === 'openai') {
-    if (apiKey === null) throw new LLMError('LLM_NO_API_KEY', 'OpenAI API key not configured.');
-    client = new OpenAIAdapter({ apiKey });
   } else {
-    throw new LLMError('LLM_UNSUPPORTED_PROVIDER', `Unknown provider: ${provider as string}`);
+    // Exhaustive: the next provider (Microsoft Foundry) gets its own branch here.
+    const unknown: never = provider;
+    throw new LLMError('LLM_UNSUPPORTED_PROVIDER', `Unknown provider: ${unknown as string}`);
   }
   globalThis.__DEP_AGENT_LLM_CLIENT__ = client;
   globalThis.__DEP_AGENT_LLM_SIGNATURE__ = signature;
