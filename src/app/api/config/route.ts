@@ -50,6 +50,12 @@ export const PATCH = withCsrf<unknown>(async (req) => {
       `llm.model "${String(body.llm.model)}" is not offered; pick one of: ${MODEL_OPTIONS.anthropic.join(', ')}.`
     );
   }
+  if (body.llm?.agentModel !== undefined && !MODEL_OPTIONS.anthropic.includes(body.llm.agentModel)) {
+    return badRequest(
+      'INVALID_BODY',
+      `llm.agentModel "${String(body.llm.agentModel)}" is not offered; pick one of: ${MODEL_OPTIONS.anthropic.join(', ')}.`
+    );
+  }
   if (body.llm?.reportEngine !== undefined && body.llm.reportEngine !== 'agent' && body.llm.reportEngine !== 'v1') {
     return badRequest('INVALID_BODY', 'llm.reportEngine must be "agent" or "v1".');
   }

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { ApiError, getApiClient } from '@/lib/client/api-client';
 import { Button } from '../Button';
 import { useAppContext } from '../../AppContext';
-import { MODEL_OPTIONS, defaultModel } from '@/lib/llm/models';
+import { DEFAULT_AGENT_MODEL, MODEL_OPTIONS, defaultModel } from '@/lib/llm/models';
 import styles from './LlmSettings.module.css';
 import { JudgeSettings } from './JudgeSettings';
 
@@ -19,6 +19,8 @@ export function LlmSettings(): JSX.Element {
   const [model, setModel] = useState<string>(
     config?.llm.model ?? defaultModel('anthropic')
   );
+  // D32: the agent engine's [D] / [D-Deep] model; an older server omits it (= its default).
+  const [agentModel, setAgentModel] = useState<string>(config?.llm.agentModel ?? DEFAULT_AGENT_MODEL);
   const [apiKey, setApiKey] = useState('');
   const [reveal, setReveal] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -27,6 +29,7 @@ export function LlmSettings(): JSX.Element {
   useEffect(() => {
     if (config) {
       setModel(config.llm.model);
+      setAgentModel(config.llm.agentModel ?? DEFAULT_AGENT_MODEL);
     }
   }, [config]);
 
@@ -36,6 +39,17 @@ export function LlmSettings(): JSX.Element {
     setModel(next);
     try {
       const patched = await getApiClient().patchConfig({ llm: { provider, model: next } });
+      await refreshConfig(patched.notices);
+    } catch (err) {
+      setSaveState('error');
+      console.error(err);
+    }
+  };
+
+  const onAgentModelChange = async (next: string) => {
+    setAgentModel(next);
+    try {
+      const patched = await getApiClient().patchConfig({ llm: { agentModel: next } });
       await refreshConfig(patched.notices);
     } catch (err) {
       setSaveState('error');
@@ -82,12 +96,28 @@ export function LlmSettings(): JSX.Element {
       </div>
 
       <label className={styles.field}>
-        <span className={styles.label}>Model</span>
+        <span className={styles.label}>Model (file review, CVE impact, related upgrade, v1 reports)</span>
         <select
           value={model}
           onChange={(e) => onModelChange(e.target.value)}
           className={styles.select}
           data-testid="model-select"
+        >
+          {MODEL_OPTIONS[provider].map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className={styles.field}>
+        <span className={styles.label}>Agent report model ([D] Update Report, [D-Deep] Deep Report)</span>
+        <select
+          value={agentModel}
+          onChange={(e) => onAgentModelChange(e.target.value)}
+          className={styles.select}
+          data-testid="agent-model-select"
         >
           {MODEL_OPTIONS[provider].map((m) => (
             <option key={m} value={m}>

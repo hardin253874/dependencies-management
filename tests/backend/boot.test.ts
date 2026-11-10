@@ -13,7 +13,7 @@ afterEach(async () => {
 describe('.env / .env.example reconciliation on boot (spec §5.2)', () => {
   it('returns a reconciliation result shaped { missingRequired, missingOptional }', async () => {
     sandbox = await createSandbox('boot-recon');
-    await writeConfig({ ...DEFAULT_CONFIG, llm: { provider: 'anthropic', model: 'claude-opus-4-7' } });
+    await writeConfig({ ...DEFAULT_CONFIG, llm: { ...DEFAULT_CONFIG.llm, provider: 'anthropic', model: 'claude-opus-4-7' } });
     const result = await reconcileEnv();
     expect(Array.isArray(result.missingRequired)).toBe(true);
     expect(Array.isArray(result.missingOptional)).toBe(true);

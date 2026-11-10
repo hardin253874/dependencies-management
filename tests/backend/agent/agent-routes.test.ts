@@ -112,7 +112,7 @@ describe('POST [D] refresh with the agent engine (4a.12)', () => {
     expect(await waitJob(jobId)).toBe('done');
 
     const env = await readEnvelope<UpdateReportDetail>(reportFilePath(s, 'react', '18.3.1', '19.0.0'));
-    expect(env.source).toBe('anthropic:claude-opus-5-5');
+    expect(env.source).toBe('anthropic:claude-sonnet-5-5'); // D32: agent engine default = llm.agentModel (Sonnet 5.5)
     expect(env.data.filesToModify.map((f) => f.path)).toEqual(['src/index.tsx']);
     expect(env.data.agentRun?.status).toBe('submitted');
     const record = await readRunRecord(s, env.data.agentRun!.runId);
@@ -208,7 +208,7 @@ describe('POST [D-Deep] refresh with the agent engine (4a.12)', () => {
 
     const file = await waitDeepReportFile(s);
     const env = await readEnvelope<DeepUpdateReportDetail>(file);
-    expect(env.source).toBe('anthropic:claude-opus-5-5');
+    expect(env.source).toBe('anthropic:claude-sonnet-5-5');
     expect(env.data.summary).toBe('React 19 deep summary.');
     expect(env.data.agentRun?.status).toBe('submitted');
     const record = await readRunRecord(s, env.data.agentRun!.runId);

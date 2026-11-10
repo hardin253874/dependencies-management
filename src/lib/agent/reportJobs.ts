@@ -1,6 +1,8 @@
 /**
  * Job-side wiring of the agent report services (V2_STAGE4_SPEC 4a.12), used
  * by the [D] and [D-Deep] refresh routes when `llm.reportEngine` is `agent`.
+ * The run's model is `llm.agentModel` (D32, default Sonnet 5.5) unless the
+ * router (D28, off by default) picks one.
  *
  * Per run: refresh the code graph (cached, incremental), open a dedicated
  * read handle for the run (the shared reader cache must not be held across
@@ -77,7 +79,7 @@ async function withRunGraph<T>(ctx: AgentJobContext, fn: (graph: ReturnType<type
  */
 async function routeJob(ctx: AgentJobContext, graph: ReturnType<typeof openGraphReader>, view: 'agent' | 'deep-report', dep: { name: string; fromVersion: string; toVersion: string }): Promise<RouterDecision | null> {
   if (!ctx.config.judge.router) return null;
-  const facts = await buildRouterFacts({ view, slug: ctx.slug, name: dep.name, from: dep.fromVersion, to: dep.toVersion, graphFileCount: graphFileCountOf(graph, [dep.name]), configuredModel: ctx.config.llm.model });
+  const facts = await buildRouterFacts({ view, slug: ctx.slug, name: dep.name, from: dep.fromVersion, to: dep.toVersion, graphFileCount: graphFileCountOf(graph, [dep.name]), configuredModel: ctx.config.llm.agentModel });
   return resolveModel({ facts, slug: ctx.slug, config: ctx.config, allowJudge: true, signal: ctx.signal });
 }
 
@@ -100,7 +102,7 @@ export async function runAgentUpdateReportJob(
 ): Promise<AgentUpdateReportRun> {
   return withRunGraph(ctx, async (graph) => {
     const routing = await routeJob(ctx, graph, 'agent', input.promptInput.dep);
-    const modelId = routing?.model ?? ctx.config.llm.model;
+    const modelId = routing?.model ?? ctx.config.llm.agentModel;
     const budgets = resolveBudgets(ctx.config.agentBudgets.updateReport, modelId, costEstimateUsd);
     const apiDiff = await jevSeedApiDiff(ctx, input.promptInput.dep);
     const run = await withLlmLimit(ctx.config.llm.provider, async () =>
@@ -130,7 +132,7 @@ export async function runAgentDeepReportJob(
 ): Promise<AgentDeepReportRun> {
   return withRunGraph(ctx, async (graph) => {
     const routing = await routeJob(ctx, graph, 'deep-report', input.promptInput.dep);
-    const modelId = routing?.model ?? ctx.config.llm.model;
+    const modelId = routing?.model ?? ctx.config.llm.agentModel;
     const budgets = resolveBudgets(ctx.config.agentBudgets.deepReport, modelId, costEstimateUsd);
     const apiDiff = await jevSeedApiDiff(ctx, input.promptInput.dep);
     const run = await withLlmLimit(ctx.config.llm.provider, async () =>
@@ -175,7 +177,7 @@ export function agentRunEstimateResponse(opts: {
   /** v2 Stage 5b.8: rules-only routing from the GET (absent when the router is off). */
   routing?: RouterDecision | null;
 }): DeepReportEstimateResponse {
-  const modelId = opts.routing?.model ?? opts.config.llm.model;
+  const modelId = opts.routing?.model ?? opts.config.llm.agentModel;
   const settings = opts.view === 'update-report' ? opts.config.agentBudgets.updateReport : opts.config.agentBudgets.deepReport;
   const budgets = resolveBudgets(settings, modelId, costEstimateUsd);
   const terminal = opts.view === 'update-report' ? UPDATE_REPORT_TERMINAL : DEEP_REPORT_TERMINAL;
@@ -198,6 +200,15 @@ export function agentRunEstimateResponse(opts: {
     budgets,
     ...(opts.routing !== undefined && opts.routing !== null ? { routing: opts.routing } : {})
   };
+}
+
+/**
+ * The model a view runs on when the router does not pick one (D32): the agent
+ * engine's [D] (`agent`) and [D-Deep] (`deep-report`, routed only on the agent
+ * engine) use `llm.agentModel`; v1 [D] and [E] file review use `llm.model`.
+ */
+export function configuredModelFor(view: 'agent' | 'deep-report' | 'file-review' | 'update-report', config: AppConfig): string {
+  return view === 'agent' || view === 'deep-report' ? config.llm.agentModel : config.llm.model;
 }
 
 /**
@@ -224,6 +235,6 @@ export async function estimateRouting(opts: {
   } catch {
     graphFileCount = 0;
   }
-  const facts = await buildRouterFacts({ view: opts.view, slug: opts.slug, name: opts.name, from: opts.from, to: opts.to, graphFileCount, configuredModel: opts.config.llm.model });
+  const facts = await buildRouterFacts({ view: opts.view, slug: opts.slug, name: opts.name, from: opts.from, to: opts.to, graphFileCount, configuredModel: configuredModelFor(opts.view, opts.config) });
   return resolveModel({ facts, slug: opts.slug, config: opts.config, allowJudge: opts.allowJudge === true, ...(opts.signal !== undefined ? { signal: opts.signal } : {}) });
 }

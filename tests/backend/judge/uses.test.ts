@@ -9,7 +9,7 @@ import type { JudgeClient } from '@/core/judge/client';
 import { Judge } from '@/core/judge/judge';
 import { MockJudgeClient } from '@/core/judge/mock';
 import { REQUEST_MAX_BOUND_TOKENS, requestBoundTokens } from '@/core/judge/payload';
-import { normalizeJudgeSwitches, J_FLAGS, type JudgeSubject } from '@/core/judge/types';
+import { explicitJudgeSwitches, normalizeJudgeSwitches, J_FLAGS, type JudgeSubject } from '@/core/judge/types';
 import {
   bandFromScore,
   coUpgradeJ5,
@@ -51,7 +51,7 @@ describe('J1 rank files', () => {
 
   it('flag off → null, no request', async () => {
     const mock = new MockJudgeClient();
-    const out = await rankFilesJ1(ctxWith(mock, normalizeJudgeSwitches({ enabled: true })), { pkg: 'react', from: '1.0.0', to: '2.0.0', files: [{ path: 'a.ts', snippet: 'x' }] });
+    const out = await rankFilesJ1(ctxWith(mock, explicitJudgeSwitches({ enabled: true })), { pkg: 'react', from: '1.0.0', to: '2.0.0', files: [{ path: 'a.ts', snippet: 'x' }] });
     expect(out).toBeNull();
     expect(mock.requests).toHaveLength(0);
   });
@@ -153,7 +153,7 @@ describe('J7 / J8 public text', () => {
 describe('each flag independently gates its J', () => {
   it.each(J_FLAGS)('%s only', async (j) => {
     const mock = new MockJudgeClient();
-    const ctx = ctxWith(mock, normalizeJudgeSwitches({ enabled: true, flags: { [j]: true } }));
+    const ctx = ctxWith(mock, explicitJudgeSwitches({ enabled: true, flags: { [j]: true } }));
     const snip = [{ path: 'a.ts', text: 'x' }];
     await rankFilesJ1(ctx, { pkg: 'p', from: '1.0.0', to: '2.0.0', files: [{ path: 'a.ts', snippet: 'x' }] });
     await evidenceCheckJ2(ctx, [{ id: 'a', claim: 'c', evidence: snip }]);

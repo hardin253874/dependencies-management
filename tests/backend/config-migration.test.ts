@@ -15,7 +15,7 @@ import {
   readConfig,
   readConfigWithNotices
 } from '@/lib/storage/config';
-import { defaultModel } from '@/lib/llm/models';
+import { DEFAULT_AGENT_MODEL, defaultModel } from '@/lib/llm/models';
 import { GET, PATCH } from '@/app/api/config/route';
 import { CSRF_HEADER, getCsrfToken } from '@/lib/csrf';
 import type { ConfigResponse } from '@/lib/api-types';
@@ -48,7 +48,7 @@ async function readRawConfig(): Promise<{ llm: { provider: string; model: string
 describe('migrateConfig (pure)', () => {
   it("provider 'openai' → anthropic + default model + one PROVIDER_MIGRATED notice", () => {
     const { config, notices } = migrateConfig(legacyOpenAiConfig());
-    expect(config.llm).toEqual({ provider: 'anthropic', model: defaultModel('anthropic') });
+    expect(config.llm).toEqual({ provider: 'anthropic', model: defaultModel('anthropic'), agentModel: DEFAULT_AGENT_MODEL });
     expect(notices).toHaveLength(1);
     expect(notices[0]!.code).toBe('PROVIDER_MIGRATED');
     expect(notices[0]!.message).toContain(defaultModel('anthropic'));
@@ -78,7 +78,7 @@ describe('migrateConfig (pure)', () => {
   it('a config with no llm section → default llm + MODEL_MIGRATED notice, other sections kept', () => {
     const raw = { schemaVersion: 1, ui: { ...DEFAULT_CONFIG.ui, theme: 'dark' }, features: DEFAULT_CONFIG.features };
     const { config, notices } = migrateConfig(raw);
-    expect(config.llm).toEqual({ provider: 'anthropic', model: defaultModel('anthropic') });
+    expect(config.llm).toEqual({ provider: 'anthropic', model: defaultModel('anthropic'), agentModel: DEFAULT_AGENT_MODEL });
     expect(config.ui.theme).toBe('dark');
     expect(notices.map((n) => n.code)).toEqual(['MODEL_MIGRATED']);
     expect(notices[0]!.message).toContain(defaultModel('anthropic'));
@@ -87,7 +87,7 @@ describe('migrateConfig (pure)', () => {
   it('an llm section that is not an object is treated as missing', () => {
     const raw = { ...JSON.parse(JSON.stringify(DEFAULT_CONFIG)), llm: 'claude' };
     const { config, notices } = migrateConfig(raw);
-    expect(config.llm).toEqual({ provider: 'anthropic', model: defaultModel('anthropic') });
+    expect(config.llm).toEqual({ provider: 'anthropic', model: defaultModel('anthropic'), agentModel: DEFAULT_AGENT_MODEL });
     expect(notices.map((n) => n.code)).toEqual(['MODEL_MIGRATED']);
   });
 

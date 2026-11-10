@@ -25,3 +25,11 @@ export const MODEL_OPTIONS: Record<LlmProvider, readonly string[]> = {
 export function defaultModel(provider: LlmProvider = 'anthropic'): string {
   return MODEL_OPTIONS[provider][0]!;
 }
+
+/**
+ * D32 (confirmed 2026-11-10): default of `_config.json` `llm.agentModel`, the
+ * model the agent engine runs [D] Update Report and [D-Deep] Deep Report on.
+ * Stage 5c measured Sonnet 5.5 within 2 recall points of Opus at -81% cost.
+ * Every other AI view keeps `llm.model` (`defaultModel()`).
+ */
+export const DEFAULT_AGENT_MODEL = 'claude-sonnet-5-5';

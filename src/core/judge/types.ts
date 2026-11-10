@@ -115,19 +115,42 @@ export interface JudgeSwitches {
   flags: Record<JFlag, boolean>;
 }
 
+/**
+ * D32 (confirmed 2026-11-10): Jev and J1 on by default; the router (D28) and
+ * J2–J8 stay off. J1 still only sends anything for a public project (D30) or
+ * one with the per-project source opt-in, and only with `TYPESAFE_API_KEY`.
+ */
 export const DEFAULT_JUDGE_SWITCHES: Readonly<JudgeSwitches> = Object.freeze({
-  enabled: false,
+  enabled: true,
   router: false,
-  flags: Object.freeze({ J1: false, J2: false, J3: false, J4: false, J5: false, J6: false, J7: false, J8: false })
+  flags: Object.freeze({ J1: true, J2: false, J3: false, J4: false, J5: false, J6: false, J7: false, J8: false })
 }) as Readonly<JudgeSwitches>;
 
-/** Fills missing / invalid switch fields with `false` (a config from before 5b has none). */
+function boolOr(v: unknown, fallback: boolean): boolean {
+  return typeof v === 'boolean' ? v : fallback;
+}
+
+/**
+ * A missing / non-boolean field takes its default (a config from before 5b
+ * has none); an explicit boolean the user saved, `false` included, is kept.
+ */
 export function normalizeJudgeSwitches(raw: unknown): JudgeSwitches {
   const o = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const f = o.flags !== null && typeof o.flags === 'object' ? (o.flags as Record<string, unknown>) : {};
   const flags = {} as Record<JFlag, boolean>;
-  for (const j of J_FLAGS) flags[j] = f[j] === true;
-  return { enabled: o.enabled === true, router: o.router === true, flags };
+  for (const j of J_FLAGS) flags[j] = boolOr(f[j], DEFAULT_JUDGE_SWITCHES.flags[j]);
+  return { enabled: boolOr(o.enabled, DEFAULT_JUDGE_SWITCHES.enabled), router: boolOr(o.router, DEFAULT_JUDGE_SWITCHES.router), flags };
+}
+
+/**
+ * Only the switches named `true` are on; anything missing is off. The eval
+ * builds per-use judges with this so a D32 app default (J1 on) never leaks
+ * into a measurement of another use.
+ */
+export function explicitJudgeSwitches(raw: { enabled?: boolean; router?: boolean; flags?: Partial<Record<JFlag, boolean>> }): JudgeSwitches {
+  const flags = {} as Record<JFlag, boolean>;
+  for (const j of J_FLAGS) flags[j] = raw.flags?.[j] === true;
+  return { enabled: raw.enabled === true, router: raw.router === true, flags };
 }
 
 /** Refused by code before any client call (flag off, privacy, payload class). Callers fall back to today's behaviour. */

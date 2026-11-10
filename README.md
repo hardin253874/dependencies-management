@@ -174,7 +174,12 @@ Use the direct `node …` command, not `npm run mcp`: npm prints its script bann
 ```jsonc
 {
   "schemaVersion": 1,
-  "llm": { "provider": "anthropic", "model": "claude-opus-5" },
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",        // file review, CVE impact, related upgrade, v1 report engine
+    "agentModel": "claude-sonnet-5-5", // agent engine: [D] Update Report + [D-Deep] Deep Report
+    "reportEngine": "agent"
+  },
   "ui": {
     "sidebarCollapsed": false,
     "theme": "light",
@@ -182,19 +187,23 @@ Use the direct `node …` command, not `npm run mcp`: npm prints its script bann
   },
   "features": {
     "resolverCheckEnabled": true
-  }
+  },
+  "judge": { "enabled": true, "router": false, "flags": { "J1": true, "J2": false /* … J8: false */ } },
+  "migrations": ["d32-judge-j1-default"]
 }
 ```
 
 This file is re-read on every request that needs it — Settings → Behavior toggles take effect immediately, no restart required.
 
+**Defaults (D32).** The agent engine runs [D] Update Report and [D-Deep] Deep Report on **Sonnet 5.5** (`llm.agentModel`; the Stage 5c measurement found it within 2 recall points of Opus 5.5 at about a fifth of the cost). Every other AI view keeps `llm.model` (Opus 5.5). Both are separate pickers in Settings → LLM, and the confirm dialog prices the model the run will actually use. A config written before this field existed gets Sonnet 5.5 silently. If the model router is on, it still picks the model per run. Jev **J1** is on by default (see below); the router and J2–J8 stay off. `migrations` records one-time config migrations, so turning J1 off sticks.
+
 ## Jev (TypeSafe) — optional
 
-[TypeSafe](https://docs.typesafe.ai) Jev returns small typed judgments (a choice, a score, a yes-probability) for a fraction of a cent. The agent can use it in two places. **Both are optional, and all of it is off by default.** With no `TYPESAFE_API_KEY`, or with the switches off, the agent behaves exactly as it does without Jev. A Jev error or timeout never blocks a view: the agent falls back to its normal behaviour.
+[TypeSafe](https://docs.typesafe.ai) Jev returns small typed judgments (a choice, a score, a yes-probability) for a fraction of a cent. The agent can use it in two places. **Both are optional.** Since D32 the global switch and **J1** are on by default; the router and J2–J8 are off. J1 sends nothing unless a `TYPESAFE_API_KEY` is set **and** the project is marked public (or has the per-project source opt-in). With no `TYPESAFE_API_KEY`, or with the switches off, the agent behaves exactly as it does without Jev. A config saved by an older build with every switch off has Jev + J1 turned on once by a one-time migration; if you turn them off again, they stay off. A Jev error or timeout never blocks a view: the agent falls back to its normal behaviour.
 
 **Model router** (Settings → LLM → "Model router"). Clear cases are routed by rules in code. A patch upgrade with few files and no CVEs goes to Haiku 5.5. A large major upgrade goes to Opus 5.5. The Deep Report always uses Opus 5.5. For the unclear cases, Jev decides (easy → Haiku, moderate → Sonnet, hard → Opus), and low confidence moves one step up. Only metadata is sent: the jump kind, package count, file count, CVE count and removed-export count. Each routed report shows a line like "Model: Sonnet 5.5 — reason (rule / Jev / default)". The cost estimate in the confirm dialog uses rules only and never calls Jev.
 
-**Judgments** (one switch each, all off by default):
+**Judgments** (one switch each; J1 on by default, J2–J8 off):
 
 | Flag | What it does | Data sent |
 |---|---|---|

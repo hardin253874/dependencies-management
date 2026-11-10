@@ -124,7 +124,7 @@ describe('5b.8 router behind the [D] job', () => {
     // The graph is rebuilt between the runs; only its timestamp line in the seed may differ.
     const norm = (x: unknown) => JSON.stringify(x).replace(/graph built at: [0-9T:.Z-]+/g,'graph built at: <t>');
     expect(norm(b.model.requests)).toBe(norm(a.model.requests));
-    expect(a.model.requests[0]!.model).toBe('claude-opus-5-5');
+    expect(a.model.requests[0]!.model).toBe('claude-sonnet-5-5'); // D32: agent model default
     expect(a.detail.routing).toBeUndefined();
     expect(mock.requests).toHaveLength(0);
   });
@@ -148,7 +148,7 @@ describe('5b.8 router behind the [D] job', () => {
     const mock = new MockJudgeClient({ responder: () => ({ difficulty: { choice: 'moderate', confidence: 0.9 } }) });
     setJudgeClientOverride(mock);
     const priv = await runD(s, '18.3.1', '18.4.0');
-    expect(priv.detail.routing).toMatchObject({ model: 'claude-opus-5-5', via: 'default', reason: 'private project: rules only' });
+    expect(priv.detail.routing).toMatchObject({ model: 'claude-sonnet-5-5', via: 'default', reason: 'private project: rules only' }); // D32: fallback = llm.agentModel
     expect(mock.requests).toHaveLength(0);
     expect((await patchProject(req('PATCH', { privacy: 'public' }), routeCtx({ slug: s }))).status).toBe(200);
     const pub = await runD(s, '18.3.1', '18.4.0');
@@ -172,16 +172,16 @@ describe('5b.8 router behind the [D] job', () => {
 });
 
 describe('5b.9 switches and project privacy', () => {
-  it('migration fills judge defaults (all off) silently', () => {
+  it('migration fills judge defaults (D32: Jev + J1 on, the rest off) silently', () => {
     const { config, notices } = migrateConfig({ schemaVersion: 1, llm: { provider: 'anthropic', model: 'claude-opus-5-5' }, ui: DEFAULT_CONFIG.ui, features: DEFAULT_CONFIG.features });
-    expect(config.judge).toEqual({ enabled: false, router: false, flags: { J1: false, J2: false, J3: false, J4: false, J5: false, J6: false, J7: false, J8: false } });
+    expect(config.judge).toEqual({ enabled: true, router: false, flags: { J1: true, J2: false, J3: false, J4: false, J5: false, J6: false, J7: false, J8: false } });
     expect(notices).toEqual([]);
   });
 
   it('PATCH /api/config sets switches; unknown flag / non-boolean → 400; GET shows hasTypesafeKey, never the key', async () => {
     await setup('judge-config');
     const ok = (await (await patchConfigRoute(req('PATCH', { judge: { enabled: true, flags: { J5: true } } }), undefined as never)).json()) as ConfigResponse;
-    expect(ok.judge).toMatchObject({ enabled: true, router: false, flags: { J5: true, J1: false } });
+    expect(ok.judge).toMatchObject({ enabled: true, router: false, flags: { J5: true, J1: true, J2: false } });
     expect((await patchConfigRoute(req('PATCH', { judge: { flags: { J9: true } } }), undefined as never)).status).toBe(400);
     expect((await patchConfigRoute(req('PATCH', { judge: { enabled: 'yes' } }), undefined as never)).status).toBe(400);
     const secret = 'ts-supersecret-DO-NOT-LEAK-0123456789';

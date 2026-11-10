@@ -27,7 +27,7 @@ import { Judge } from '../../src/core/judge/judge';
 import type { JudgeCache } from '../../src/core/judge/cache';
 import { MockJudgeClient } from '../../src/core/judge/mock';
 import type { JudgeClient } from '../../src/core/judge/client';
-import { normalizeJudgeSwitches, type JFlag, type JudgeSubject } from '../../src/core/judge/types';
+import { explicitJudgeSwitches, type JFlag, type JudgeSubject } from '../../src/core/judge/types';
 import { coUpgradeJ5, rankFilesJ1, relatedUnknownJ6, type JudgeContext } from '../../src/core/judge/uses';
 import { COMMON_PAIRING_MAP } from '../../src/lib/llm/coUpgrade';
 import type { DependencyChange } from './truth';
@@ -145,7 +145,7 @@ export async function runJudgeEval(opts: { use: MeasuredUse; label: string; now:
       return inner.ask(input);
     }
   };
-  const judge = new Judge({ client: counted, cache: opts.deps.cache ?? null, switches: normalizeJudgeSwitches({ enabled: true, flags: { [flag]: true } }) });
+  const judge = new Judge({ client: counted, cache: opts.deps.cache ?? null, switches: explicitJudgeSwitches({ enabled: true, flags: { [flag]: true } }) });
   const subject: JudgeSubject = { privacy: 'public' };
   const ctx: JudgeContext = { judge, subject };
   const phases: JudgeEvalPhase[] = [];

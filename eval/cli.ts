@@ -33,7 +33,7 @@ import { askRouterJev, computeRouterArms, jevCacheLookup, RouterArmsError } from
 import { judgeEvalCacheDir, JudgeEvalError, MEASURABLE_USES, mockJudgeClient, NOT_MEASURABLE, runJudgeEval, type MeasuredUse } from './lib/judge';
 import { JudgeCache } from '../src/core/judge/cache';
 import { Judge } from '../src/core/judge/judge';
-import { normalizeJudgeSwitches } from '../src/core/judge/types';
+import { explicitJudgeSwitches } from '../src/core/judge/types';
 import { JevLedger, jevLedgerPathEval } from '../src/core/judge/ledger';
 import { jevSpendSession, type JevSpendSession } from './lib/jev-report';
 import type { JudgeClient } from '../src/core/judge/client';
@@ -416,7 +416,7 @@ async function execute(cmd: ParsedCommand): Promise<number> {
             files: { opus: await readResultFile(path.resolve(cmd.opus)), sonnet: await readResultFile(path.resolve(cmd.sonnet)), haiku: await readResultFile(path.resolve(cmd.haiku)) },
             inputNames: { opus: path.basename(cmd.opus), sonnet: path.basename(cmd.sonnet), haiku: path.basename(cmd.haiku) },
             ...(cmd.configuredModel !== undefined ? { configuredModel: cmd.configuredModel } : {}),
-            judge: new Judge({ client, cache: judgeCache, switches: normalizeJudgeSwitches({ enabled: true, router: true }) }),
+            judge: new Judge({ client, cache: judgeCache, switches: explicitJudgeSwitches({ enabled: true, router: true }) }),
             client: client.kind,
             jevCache: judgeCacheDir
           });

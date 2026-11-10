@@ -14,7 +14,7 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 A locally-run AI-augmented agent that scans, analyses, and reviews dependencies of legacy JS/TS projects. Next.js 16.4 App Router + React 19.3 (Route Handlers, not Server Actions; Turbopack for dev and build since v2 Stage 2). Server binds 127.0.0.1 only. Six right-panel views per dep ([A]–[E] + [D-Deep]). Cache-first design: every view reads its persisted envelope first; LLM calls happen only on explicit user action. The agent is **read-only against target projects** — all writes go to `library/`.
 
-Test baseline (2026-11-10, after v2 Stage 5b): 1357 passed / 5 skipped across 172 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
+Test baseline (2026-11-10, after v2 Stage 5 D32 defaults): 1376 passed / 5 skipped across 174 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
 
 ## Commands
 
@@ -72,6 +72,7 @@ Design contract: `Plans/V2_STAGE4_SPEC.md` §2–§3 + `Plans/V2_AI_OVER_GRAPH.m
 - **Scripted mock**: `MOCK_LLM=true` → `ScriptedAgentModel` from `test-fixtures/agent/<scenario>.json` (`MOCK_AGENT_SCENARIO` or the view id), keyed by scenario, not prompt hash. Tests pin models/intel with `setAgentModelOverride` / `setAgentIntelOverride` (globalThis, reset to `null` in `afterEach`); never let a test reach the npm registry.
 - **Eval-importable**: files the eval imports (`agentReportService`, `agentRun`, `runStore`, `storage/config`, the prompts) use relative imports — vite-node has no `@/` alias.
 - **Impacted files = graph base set + agent overlay (5a)**: the [D] detail's `impactedFiles` start from `core/agent/impactBase.ts` `impactBaseSet` (the v2-graph rule; also on the `deterministic-partial` envelope); the agent ranks/adds via `filesToModify` and excludes via the required `excludeFiles` terminal field, valid only for base files it `read_file`d in the run (`readPaths` on the run result/record). The agent terminal schema is `AGENT_UPDATE_REPORT_TOOL_SCHEMA` (v1 schema spread + `excludeFiles`); never edit v1 `UPDATE_REPORT_TOOL_SCHEMA` for agent needs. Scripted `submit_update_report` inputs must include `excludeFiles` (may be `[]`). Eval `v2-agent` scores the full set, `v2-agent:subset` the agent's pick. Details: `src/core/agent/README.md`.
+- **Agent model (D32)**: the agent engine's [D] / [D-Deep] run on `_config.json` `llm.agentModel` (default `claude-sonnet-5-5`, `DEFAULT_AGENT_MODEL` in `llm/models.ts`); every other view (file review, CVE impact, related upgrade, v1 engine) uses `llm.model`. Read the model through `reportJobs.ts` (`configuredModelFor`), never `llm.model`, in agent code; the router, when on, still overrides it.
 - **Confirm before every run**: `AgentRunConfirmModal` (GET `…/reports|deep-reports/…/cost-estimate`: expected + `maxUsd`) gates every [D] / [D-Deep] Generate/Regenerate.
 
 ## Jev judge + model router (v2 Stage 5b) — `src/core/judge`, `src/core/llm/router.ts`, `src/lib/judge`
@@ -83,7 +84,7 @@ Design contract: `Plans/V2_STAGE5_SPEC.md` §4 (5b) + the J1–J8 table and D28 
 - **Client options are all explicit** (D31): key, base URL, `defaultModel: 'jev-1.14.0'`, `logLevel: 'error'` + a body-free logger, `retry.maxRetries: 0`, `timeout`, `compression: false`. The SDK only reads `TYPESAFE_*` env vars for omitted options (checked in the installed `dist`). Router calls time out at 3 s.
 - **Jev ledger, HARD $0.50** (`core/judge/ledger.ts`, `JEV_CAP_USD` code constant): reserve (UTF-8 bytes of the request × price × 1.1) before every real request, settle from `usage.input_tokens`; app `library/_spend/jev-round1.json` (opened per operation), eval `%LOCALAPPDATA%\dep-agent-eval\_spend\jev-round1.json` (held for the session). `src/core/spend/**` is frozen for Stage 5: never edit it for Jev.
 - **Cache** `library/_judge/<sha256>.json` (key = use + model + state + questions + `JUDGE_PROMPT_VERSION`; bump it when a question text or builder output changes). Errors are never cached; same-key calls share one request (in-flight map on the cache instance).
-- **Switches:** `_config.json` `judge: { enabled, router, flags: { J1…J8 } }`, all default false (`migrateConfig` fills them silently). `judgeContextFor(slug, config, use)` returns `null` when a switch is off: the call site then runs today's code path exactly (tests assert byte-identical output). Only user-triggered jobs take a judge context; a GET never does (`judgeContextCount` spy test).
+- **Switches:** `_config.json` `judge: { enabled, router, flags: { J1…J8 } }`; D32 defaults `enabled` + `J1` true, router + J2–J8 false. `normalizeJudgeSwitches` fills a missing field with its default but keeps an explicit `false`; the one-time D32 migration (id in `_config.json` `migrations`) turns `enabled` + J1 on once for configs 5b saved all-off. A new default flip = a new migration id, never a silent default change. J1's call site uses `usableJudgeContextFor` (null without a client or when privacy refuses), so no key / private project = today's path. Eval judges use `explicitJudgeSwitches` (missing = off). `judgeContextFor(slug, config, use)` returns `null` when a switch is off: the call site then runs today's code path exactly (tests assert byte-identical output). Only user-triggered jobs take a judge context; a GET never does (`judgeContextCount` spy test).
 - **Router** (`core/llm/router.ts`, D28 proposed): `routeRules` (pure) → Jev for unclear → configured model on anything else. `resolveModel` (`llm/factory.ts`) with `judge.router: false` returns the configured model and the job adds no `routing` field (requests unchanged). Cost-estimate GETs route with rules only (`estimateRouting`, `allowJudge: false`). Budgets derive from the routed model.
 - **Project settings** live on `project.json` (`privacy`, `judge`, `judgeSourceOptIn`), written by `PATCH /api/projects/:slug` through the canonical writer (it holds project.json in memory); rescan / relocate carry them over (`judgeSettingsOf`).
 - **Tests:** `MockJudgeClient` (`core/judge/mock.ts`, fixtures `test-fixtures/judge/<use>.json`, `MOCK_LLM=true` uses it too); pin one with `setJudgeClientOverride` and reset it to `null` in `afterEach`. No test may reach TypeSafe.
@@ -295,7 +296,7 @@ These are the bugs that have actually shipped in this repo. Each one is here bec
 ```bash
 npm run typecheck   # tsc --noEmit — must be clean
 npm run lint        # ESLint — must be clean
-npm test            # Full Vitest suite — must match current baseline (1357 pass / 5 skipped)
+npm test            # Full Vitest suite — must match current baseline (1376 pass / 5 skipped)
 ```
 
 ### When you change a route

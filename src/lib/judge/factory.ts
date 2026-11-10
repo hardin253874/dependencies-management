@@ -24,7 +24,7 @@ import { TypeSafeJudgeClient, type JudgeClient } from '@/core/judge/client';
 import { jevLedgerPathApp, perOperationGate, type JevSpendGate } from '@/core/judge/ledger';
 import { createJudgeBreaker, type JudgeContext } from '@/core/judge/uses';
 import type { JudgeSubject, JudgeSwitches, JudgeUse } from '@/core/judge/types';
-import { isUseSwitchedOn } from '@/core/judge/privacy';
+import { isUseSwitchedOn, judgeAllowedFor } from '@/core/judge/privacy';
 import { loadEnv } from '../config';
 import { getLibraryRoot, projectJsonPath } from '../paths';
 import { readJson, pathExists } from '../storage/atomic';
@@ -129,4 +129,18 @@ export async function getJudgeContext(slug: string, signal?: AbortSignal): Promi
 export async function judgeContextFor(slug: string, config: AppConfig, use: JudgeUse, signal?: AbortSignal): Promise<JudgeContext | null> {
   if (!isUseSwitchedOn(use, config.judge)) return null;
   return getJudgeContext(slug, signal);
+}
+
+/**
+ * D32: like `judgeContextFor`, but also `null` when Jev cannot answer this use
+ * for this project at all: no client (no `TYPESAFE_API_KEY`, not mock) or the
+ * privacy guard refuses it (private / unknown project without the opt-in,
+ * project switch off). With J1 on by default, the call site then keeps
+ * today's code path exactly instead of taking a hook that always falls back.
+ */
+export async function usableJudgeContextFor(slug: string, config: AppConfig, use: JudgeUse, signal?: AbortSignal): Promise<JudgeContext | null> {
+  const ctx = await judgeContextFor(slug, config, use, signal);
+  if (ctx === null) return null;
+  if (!ctx.judge.hasClient || !judgeAllowedFor(use, ctx.subject, ctx.judge.switches)) return null;
+  return ctx;
 }

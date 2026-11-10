@@ -62,7 +62,11 @@ export interface AgentBudgetSettingsDto {
 
 export interface ConfigResponse {
   schemaVersion: 1;
-  llm: { provider: LlmProvider; model: string; reportEngine?: ReportEngine };
+  /**
+   * `model` = every AI view except the agent [D] / [D-Deep]; `agentModel`
+   * (D32) = the agent engine's model (optional: older servers / FE fixtures omit it).
+   */
+  llm: { provider: LlmProvider; model: string; reportEngine?: ReportEngine; agentModel?: string };
   ui: {
     sidebarCollapsed: boolean;
     theme: ThemeChoice;
