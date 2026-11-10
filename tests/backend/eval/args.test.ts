@@ -62,6 +62,38 @@ describe('parseArgs', () => {
     expect(parseArgs(['score-findings', 'r.json'])).toEqual({ command: 'score-findings', resultsPath: 'r.json' });
   });
 
+  it('accepts --predictor v2-graph for run', () => {
+    expect(parseArgs(['run', '--label', 'g1', '--predictor', 'v2-graph'])).toMatchObject({ command: 'run', predictor: 'v2-graph' });
+  });
+
+  it('parses graph with defaults and every option', () => {
+    expect(parseArgs(['graph', '--label', 'v2-stage3'])).toEqual({
+      command: 'graph',
+      label: 'v2-stage3',
+      offline: false,
+      packages: 'declared',
+      refreshTruth: false
+    });
+    expect(
+      parseArgs(['graph', '--label', 'g', '--cases', 'a-case,b-case', '--packages', 'phase', '--offline', '--refresh-truth', '--cache-dir', 'C:/c'])
+    ).toEqual({
+      command: 'graph',
+      label: 'g',
+      cases: ['a-case', 'b-case'],
+      offline: true,
+      packages: 'phase',
+      refreshTruth: true,
+      cacheDir: 'C:/c'
+    });
+  });
+
+  it('rejects a bad graph invocation', () => {
+    expect(() => parseArgs(['graph'])).toThrow(/needs --label/);
+    expect(() => parseArgs(['graph', '--label', 'g', '--packages', 'all'])).toThrow(/unknown --packages/);
+    expect(() => parseArgs(['graph', '--label', 'g', '--predictor', 'v2-graph'])).toThrow(/unknown option --predictor/);
+    expect(() => parseArgs(['graph', '--label', 'g', 'extra'])).toThrow(/unexpected argument/);
+  });
+
   it('rejects a flag given twice', () => {
     expect(() => parseArgs(['run', '--label', 'a1', '--label', 'b1'])).toThrow(/more than once/);
   });

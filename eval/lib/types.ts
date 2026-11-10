@@ -109,7 +109,7 @@ export interface TruthSet {
 // Prediction
 // ---------------------------------------------------------------------------
 
-export type PredictorId = 'v1-code-scan';
+export type PredictorId = 'v1-code-scan' | 'v2-graph';
 
 export interface CasePrediction {
   filesScanned: number;
@@ -226,3 +226,112 @@ export interface ResultFile {
 // ---------------------------------------------------------------------------
 
 export type FindingVerdict = 'found' | 'partial' | 'missed' | 'n/a';
+
+// ---------------------------------------------------------------------------
+// Graph usage measurement (V2_STAGE3_SPEC 3b-B.3, `eval -- graph`)
+// ---------------------------------------------------------------------------
+
+export type GraphPackageSource = 'phase' | 'declared';
+
+export interface SetScore {
+  truth: number;
+  predicted: number;
+  tp: number;
+  /** null when the denominator is 0, never NaN. */
+  precision: number | null;
+  recall: number | null;
+}
+
+export interface GraphPackageResult extends SetScore {
+  name: string;
+  /** Wrapper hits (unscored). */
+  wrapperHits: number;
+  /** Graph hits only through a bundler alias TS cannot see (excluded from scoring). */
+  aliasOnlyHits: number;
+  /** Graph hits only as config references (excluded from scoring). */
+  configRefOnlyHits: number;
+  /**
+   * A workspace package of the project: the graph links it as a package, the
+   * TS truth resolves it to source files (tsconfig paths). Listed, not scored.
+   */
+  workspace: boolean;
+}
+
+export interface GraphSample {
+  pkg: string;
+  path: string;
+}
+
+export interface GraphUnresolved {
+  totalEdges: number;
+  unresolved: number;
+  /** unresolved / totalEdges; null when there are no edges. */
+  pct: number | null;
+  byReason: Record<string, number>;
+}
+
+export interface GraphCaseResult {
+  id: string;
+  tags: string[];
+  status: CaseStatus;
+  error?: string;
+  files: { graph: number; truth: number };
+  buildMs: number;
+  truthMs: { direct: number; reexport: number };
+  truthCached: boolean;
+  /** 'unavailable' when any projectDir hit the time box (then only direct truth is scored there). */
+  reexportTruth: 'ok' | 'unavailable';
+  /** Packages queried (after the phase/declared selection). */
+  packagesQueried: number;
+  micro: SetScore;
+  macro: { precision: number | null; recall: number | null };
+  /** Packages with at least one truth or graph hit, by name. */
+  packages: GraphPackageResult[];
+  wrapperHits: number;
+  aliasOnlyHits: number;
+  configRefOnlyHits: number;
+  /** Workspace packages listed but left out of micro/macro. */
+  workspacePackages: number;
+  unresolved: GraphUnresolved;
+  truthStats: { specifiers: number; unresolvedRelative: number; bareByName: number };
+  /** Public cases only (omitted for private ones): up to 20 each. */
+  graphOnlySample?: GraphSample[];
+  truthOnlySample?: GraphSample[];
+  /** Public cases only: most frequent unresolved specifiers. */
+  topUnresolved?: Array<{ projectDir: string; reason: string; specifier: string; count: number }>;
+}
+
+export interface GraphTargets {
+  recallTarget: number;
+  precisionTarget: number;
+  unresolvedTarget: number;
+  recallMet: boolean;
+  precisionMet: boolean;
+  unresolvedMet: boolean;
+  met: boolean;
+}
+
+export interface GraphAggregate {
+  micro: SetScore;
+  /** Mean of the ok cases' micro precision/recall. */
+  macro: { precision: number | null; recall: number | null };
+  medianUnresolvedPct: number | null;
+  errors: number;
+  targets: GraphTargets;
+}
+
+export const GRAPH_RESULT_SCHEMA_VERSION = 1;
+
+export interface GraphResultFile {
+  kind: 'graph-usage';
+  schemaVersion: typeof GRAPH_RESULT_SCHEMA_VERSION;
+  label: string;
+  generatedAt: string;
+  tool: ToolInfo;
+  visibility: Visibility;
+  packages: GraphPackageSource;
+  scoredSet: 'direct+reexport (JS/TS files)';
+  truth: { method: string; truthVersion: number; tsVersion: string; limitations: readonly string[] };
+  cases: GraphCaseResult[];
+  aggregate: GraphAggregate;
+}

@@ -6,7 +6,7 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 **The functional spec is the single source of truth.** It lives OUTSIDE this repo, in the Obsidian vault: `../working/dependencies-management/Plans/FUNCTIONAL_SPEC.md` (alongside `IMPLEMENTATION_PLAN.md`, stage reviews and `V1_CLOSURE_REPORT.md`). Every `Plans/…` reference below means that folder.
 
-**v2 is in planning/progress (2026-11).** Before any v2 work read `Plans/V2_UPGRADE_PLAN.md` (goals, confirmed decisions D1–D11 + D14 ESLint 9 + D16 Node 24.22.2 (npm-registry-fetch 20 / arborist 10), stage status), then the stage doc you're working on: `V2_EVAL_HARNESS.md` (Stage 0), `V2_STACK_UPGRADE.md` (Stages 1–2), `V2_CODE_GRAPH_DESIGN.md` (Stage 3), `V2_AI_OVER_GRAPH.md` (Stage 4). For v2 work the V2 docs override the v1 spec where they disagree; update the spec when a v2 stage lands. Headline v2 changes: `src/core/` split (no Next/React imports; not created yet — code still lives in `src/lib/`), per-project SQLite code graph, Claude Agent SDK read-only investigator with MCP-first tools, OpenAI removed. Project subagents (`pm`, `developer`, `qa`) live in `.claude/agents/`. This file captures patterns and gotchas; the spec captures the design contract. When the two disagree, the spec wins — update this file to match.
+**v2 is in planning/progress (2026-11).** Before any v2 work read `Plans/V2_UPGRADE_PLAN.md` (goals, confirmed decisions D1–D11 + D14 ESLint 9 + D16 Node 24.22.2 (npm-registry-fetch 20 / arborist 10), stage status), then the stage doc you're working on: `V2_EVAL_HARNESS.md` (Stage 0), `V2_STACK_UPGRADE.md` (Stages 1–2), `V2_CODE_GRAPH_DESIGN.md` (Stage 3), `V2_AI_OVER_GRAPH.md` (Stage 4). For v2 work the V2 docs override the v1 spec where they disagree; update the spec when a v2 stage lands. Headline v2 changes: `src/core/` split (no Next/React imports; started in Stage 3 with `src/core/graph`, the rest still lives in `src/lib/`), per-project SQLite code graph (see "Code graph" below), Claude Agent SDK read-only investigator with MCP-first tools, OpenAI removed. Project subagents (`pm`, `developer`, `qa`) live in `.claude/agents/`. This file captures patterns and gotchas; the spec captures the design contract. When the two disagree, the spec wins — update this file to match.
 
 ---
 
@@ -14,7 +14,7 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 A locally-run AI-augmented agent that scans, analyses, and reviews dependencies of legacy JS/TS projects. Next.js 16.4 App Router + React 19.3 (Route Handlers, not Server Actions; Turbopack for dev and build since v2 Stage 2). Server binds 127.0.0.1 only. Six right-panel views per dep ([A]–[E] + [D-Deep]). Cache-first design: every view reads its persisted envelope first; LLM calls happen only on explicit user action. The agent is **read-only against target projects** — all writes go to `library/`.
 
-Test baseline (2026-11-10, after v2 Stage 2): 686 passed / 1 skipped across 117 files (~8 s wall). Typecheck + lint must be clean before any commit.
+Test baseline (2026-11-10, after v2 Stage 3b): 879 passed / 5 skipped across 137 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
 
 ## Commands
 
@@ -36,8 +36,24 @@ Vitest 5 `test.projects` (vitest.config.ts): `backend` = `tests/backend/**` → 
 1. **Add project** → Phase 1 (sync, `scanners/packageJson.ts` + `lockfile.ts`) writes `library/<slug>/project.json`.
 2. **Phase 2** (`scanners/phase2.ts`, background job) fetches registry packuments + OSV CVEs + endoflife.date and writes per-dep envelopes; the StatusBar shows progress via SSE.
 3. **Right-panel views** read cached envelopes via GET routes. User clicks POST a refresh → route enqueues a job on `lib/jobs/queue.ts` → a service runs → envelope written → FE `awaitJob` polls, then reloads.
-4. **AI views** live in `lib/llm/*Service.ts` (report, relatedUpgrade, fileReview, deepReport, cveImpact). Each builds a deterministic skeleton from scanners (`code.ts` import graph, `resolver.ts` npm dry-run, `deepScan.ts`, `importSiteContext.ts`) and merges the LLM tool-call output on top. `llm/factory.ts` picks Anthropic / mock (OpenAI removed in v2; the factory is the seam for Microsoft Foundry). Each service passes an explicit `effort` from `llm/effort.ts`; the adapter (`llm/anthropic.ts`, SDK 1.x) uses `tool_choice: auto` + `strict` tools, prompt caching on tools + system, and maps `stop_reason: refusal` → `LLM_REFUSAL`.
-5. `lib/api-types.ts` is the FE↔BE contract; `lib/client/api-client.ts` is the only FE caller; `lib/reports/render.ts` produces MD/HTML downloads.
+4. **[C] Usage** is answered from the code graph: refresh routes call `refreshProjectGraph` (build or incremental rescan of `library/<slug>/graph.db`) and map it to the unchanged `UsageDetail` with `usageFromGraph` (`src/lib/graph/`). v1 `scanners/code.ts` `scanCode` stays only so the eval's v1 baseline keeps measuring v1.
+5. **AI views** live in `lib/llm/*Service.ts` (report, relatedUpgrade, fileReview, deepReport, cveImpact). Each builds a deterministic skeleton from scanners (`code.ts` import graph, `resolver.ts` npm dry-run, `deepScan.ts`, `importSiteContext.ts`) and merges the LLM tool-call output on top. `llm/factory.ts` picks Anthropic / mock (OpenAI removed in v2; the factory is the seam for Microsoft Foundry). Each service passes an explicit `effort` from `llm/effort.ts`; the adapter (`llm/anthropic.ts`, SDK 1.x) uses `tool_choice: auto` + `strict` tools, prompt caching on tools + system, and maps `stop_reason: refusal` → `LLM_REFUSAL`.
+6. `lib/api-types.ts` is the FE↔BE contract; `lib/client/api-client.ts` is the only FE caller; `lib/reports/render.ts` produces MD/HTML downloads.
+
+---
+
+## Code graph (v2 Stage 3) — `src/core/graph` + `src/lib/graph`
+
+Design contract: `Plans/V2_CODE_GRAPH_DESIGN.md` + `Plans/V2_STAGE3_SPEC.md`; module map in `src/core/graph/README.md`. The rules that bite:
+
+- **Core boundary (D1/D23).** `src/core/**` imports no `next`, `react`, `react-dom`, nothing from `src/app` / `src/components` / `src/lib/client` / `src/lib/http`, and uses **relative imports only** (no `@/`), because `npm run eval` runs under vite-node without the alias. ESLint (`no-restricted-imports` block in `eslint.config.mjs`) and `tests/backend/core-boundary.test.ts` enforce it. App code imports core via `@/core/...` as usual.
+- **Location.** One DB per project at `library/<slug>/graph.db` (`graphDbPath(slug)` in `lib/paths.ts`). Derived data: on schema change or corruption it is dropped and rebuilt, never migrated. The core refuses a DB path inside the target project.
+- **Read-only target.** The build only reads (readdir/stat/readFile), never opens `.env*`, never executes target configs (they are parsed as data). `tests/backend/graph/invariant.readonly.test.ts` is the guard.
+- **Driver.** `node:sqlite` (builtin, no ExperimentalWarning on Node 24.22; Node 22 prints one). Only `core/graph/store.ts` imports it; WAL, one writer. `better-sqlite3` is the documented fallback behind `GraphDriver`, not installed.
+- **`serverExternalPackages`** (`next.config.mjs`): `oxc-resolver` is a napi addon and Turbopack `next build` fails without the entry ("node addon is not placeable in ESM chunks"); `@babel/traverse` is externalized like `@babel/parser`. `node:sqlite` needs no entry.
+- **App entry points** (`src/lib/graph/`): `refreshProjectGraph({ slug, projectRoot, report, signal })` builds with `mode: 'auto'` under `withProjectLock('graph:<slug>')` — a separate key from the slug's `project.json` lock, so a long build does not block those writers while two builds of one project serialize. `getGraphReader(slug)` hands out the cached read handle (throws `GraphNotBuiltError` when there is no completed build); use it synchronously, never across an `await`.
+- **Close readers before deleting.** On Windows an open SQLite handle makes `fs.rm(library/<slug>)` fail with EBUSY/EPERM. Anything that removes or replaces the project dir must run inside `withProjectGraphLock(slug, …)` and call `closeGraphReaders(slug)` first (see the project DELETE route).
+- **Perf budgets** are gated: `$env:GRAPH_PERF='1'; npx vitest run tests/backend/graph/perf.test.ts`.
 
 ---
 
@@ -46,7 +62,7 @@ Vitest 5 `test.projects` (vitest.config.ts): `backend` = `tests/backend/**` → 
 These are the rules; violating them is a bug, regardless of how convenient the shortcut looks.
 
 ### 1. Target project is read-only
-The agent NEVER writes to, deletes from, or modifies the target project's source tree. There is no dedicated test for this yet (the related invariant tests are `tests/backend/invariant.*.test.ts`: api-key, bind, csrf, singletons, traversal). If you touch code that does anything filesystem-y near `project.path`, your PR is suspect.
+The agent NEVER writes to, deletes from, or modifies the target project's source tree. The code graph build has a dedicated guard (`tests/backend/graph/invariant.readonly.test.ts`); the related invariant tests are `tests/backend/invariant.*.test.ts` (api-key, bind, csrf, singletons, traversal). If you touch code that does anything filesystem-y near `project.path`, your PR is suspect.
 
 ### 2. Cache-first, lazy AI
 Every view reads its cached envelope first. LLM calls fire only on explicit user clicks ("Generate", "Regenerate", "Analyze"). Never silently auto-trigger an LLM call from a GET handler or a `useEffect` mount.
@@ -81,9 +97,9 @@ function getMyThing(): MyThing {
 
 If you `grep "^const [A-Z_]*\s*=\s*new (Map|Set)\(" src/lib/` and find a non-readonly hit in `src/lib/`, that's a flag. Same for `^let \w+` at module top level (read-only `let env = …` after first call is OK; mutable singletons are not).
 
-Currently-pinned singletons: `JobQueue`, CSRF token, logger state, project locks, orphan cache, LLM client cache + its config signature (`__DEP_AGENT_LLM_SIGNATURE__`, `llm/factory.ts`), LLM concurrency limiters (`__DEP_AGENT_LLM_LIMITS__`), canonical-writer STATES.
+Currently-pinned singletons: `JobQueue`, CSRF token, logger state, project locks, orphan cache, graph readers (`__DEP_AGENT_GRAPH_READERS__`, `lib/graph/readerCache.ts`), LLM client cache + its config signature (`__DEP_AGENT_LLM_SIGNATURE__`, `llm/factory.ts`), LLM concurrency limiters (`__DEP_AGENT_LLM_LIMITS__`), canonical-writer STATES.
 
-Guards: `tests/backend/invariant.singletons.test.ts` (in `npm test`) fails on any top-level `let`/`var` or `const X = new Map|Set|…` in `src/lib/**` (minus `src/lib/client/`) that is not in its allowlist with a reason. `tests/e2e/invariant.cross-route-singleton.spec.ts` checks at runtime that the CSRF token from `/api/csrf` is accepted by `PATCH /api/config`. Measured on Next 16.4: only webpack dev splits modules per route; Turbopack dev and production builds share one instance. So the rule still holds (`--webpack` is one flag away), but the e2e spec can only catch a regression under `next dev --webpack`. The static guard catches it with any bundler.
+Guards: `tests/backend/invariant.singletons.test.ts` (in `npm test`) fails on any top-level `let`/`var` or `const X = new Map|Set|…` in `src/lib/**` (minus `src/lib/client/`) and `src/core/**` (no allowlist entries allowed there) that is not in its allowlist with a reason. `tests/e2e/invariant.cross-route-singleton.spec.ts` checks at runtime that the CSRF token from `/api/csrf` is accepted by `PATCH /api/config`. Measured on Next 16.4: only webpack dev splits modules per route; Turbopack dev and production builds share one instance. So the rule still holds (`--webpack` is one flag away), but the e2e spec can only catch a regression under `next dev --webpack`. The static guard catches it with any bundler.
 
 ### 5. Test isolation
 Every test that touches the library or a fixture project gets its own tempdir via `createSandbox(name)` (`tests/backend/helpers/sandbox.ts`). NEVER write to the developer's real `library/` from a test.
@@ -235,7 +251,7 @@ These are the bugs that have actually shipped in this repo. Each one is here bec
 ```bash
 npm run typecheck   # tsc --noEmit — must be clean
 npm run lint        # ESLint — must be clean
-npm test            # Full Vitest suite — must match current baseline (686 pass / 1 skipped)
+npm test            # Full Vitest suite — must match current baseline (879 pass / 5 skipped)
 ```
 
 ### When you change a route

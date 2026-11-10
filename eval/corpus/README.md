@@ -55,3 +55,36 @@ old path.
 Private (employer/client) cases live only in `corpus.local.json`, and their
 results only in `eval/results/private/`. Both are gitignored. Never put a
 private case's id, repo, paths or findings in a tracked file.
+
+## Graph measurement (`npm run eval -- graph`)
+
+Measures the v2 code graph's answer to "which files use package X" against
+an independent ground truth, plus the share of unresolved import edges.
+
+```bash
+npm run eval -- graph --label <label> [--cases a,b] [--packages declared|phase] [--offline] [--refresh-truth]
+npm run eval -- run --label <label> --predictor v2-graph   # Stage 0 impacted-file metric, graph predictor
+```
+
+- **Truth** (`eval/lib/graph-truth.ts`): TypeScript 6 `preProcessFile` +
+  `resolveModuleName` with the nearest `tsconfig.json`/`jsconfig.json`
+  (`extends`, solution-style `references`), `allowJs` forced. Re-export
+  users come from one `ts.createProgram` per projectDir (checker alias
+  chains, 120 s time box). Cached at `<cache>/_graph-truth/<caseId>@<sha>.json`.
+- **Graph** (`eval/lib/predict-graph.ts`): full build into
+  `<cache>/_graph/<caseId>/<projectDir>.db` (never inside the clone), then
+  `filesUsingPackage(pkg, { transitive: true, wrapperDepth: 1 })`.
+- **Scored set**: `direct ∪ reexport`, JS/TS files only, for each package
+  declared in the projectDir's `package.json` (or the phase packages with
+  `--packages phase`). Reported but not scored: wrapper hits, hits only
+  through a bundler alias to another name, config-ref-only hits, and
+  workspace packages (the graph links them as packages; TS resolves them to
+  source files).
+- **Known truth limits**: TS cannot see bundler aliases, style imports or
+  config references; without `node_modules` bare specifiers are attributed by
+  name. The list is written into every result file.
+- **Output**: `eval/results/<date>-<label>-graph.json` (public cases, with up
+  to 20 graph-only/truth-only sample paths and the top unresolved
+  specifiers per case); private cases go to `eval/results/private/` with
+  numbers only. Targets (`recall ≥ 0.95`, `precision ≥ 0.9`, median
+  unresolved ≤ 2 %) are flags in the file, never a test gate.

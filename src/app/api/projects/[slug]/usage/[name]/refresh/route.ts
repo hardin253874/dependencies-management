@@ -1,14 +1,12 @@
 /**
  * POST /api/projects/:slug/usage/:name/refresh — view [C] regenerate.
  *
- * Runs a full code scan against the target project, slices the result down to
- * the requested dep, and writes `library/<slug>/usage/<file-slug>.json`.
- *
- * Optimisation: when multiple usage refreshes are requested for the same
- * project in quick succession, we share a single scan via the resourceKey
- * (`usage-scan:<slug>`) and post-process per-dep writes.
+ * Refreshes the project's code graph (`library/<slug>/graph.db`; incremental
+ * after the first build), reads the requested dep's usage from it through the
+ * v1-shaped compatibility layer, and writes `library/<slug>/usage/<file-slug>.json`.
+ * Concurrent refreshes for different deps share the graph build via the
+ * `graph:<slug>` lock: the second one waits and then finds nothing to re-parse.
  */
-import path from 'path';
 import { NextResponse } from 'next/server';
 import { withCsrf, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
@@ -19,9 +17,11 @@ import { projectJsonPath, usageFilePath } from '@/lib/paths';
 import { readJson } from '@/lib/storage/atomic';
 import { writeEnvelope } from '@/lib/storage/envelope';
 import { getJobQueue } from '@/lib/jobs/queue';
-import { scanCode } from '@/lib/scanners/code';
+import { refreshProjectGraph } from '@/lib/graph/graphService';
+import { getGraphReader } from '@/lib/graph/readerCache';
+import { usageFromGraph } from '@/lib/graph/usageFromGraph';
 import type { ProjectJson } from '@/lib/projects/add';
-import type { UsageDetail, ScanEnqueueResponse } from '@/lib/api-types';
+import type { ScanEnqueueResponse } from '@/lib/api-types';
 
 export const POST = withCsrf<RouteCtx<{ slug: string; name: string }>>(async (_req, ctx) => {
   const params = await ctx.params;
@@ -48,29 +48,11 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string }>>(async (_r
     // (`usage-scan:<slug>`) when multiple deps need rescanning. For now we
     // keep per-dep keys so the SSE progress stream stays per-view.
     resourceKey: `usage:${slug}:${name}`,
-    run: async (report) => {
+    run: async (report, signal) => {
       report({ current: 0, total: 1, label: name, phase: 'scan' });
-      const scan = await scanCode({
-        projectRoot: project.path,
-        onProgress: (current, total, label) =>
-          report({ current, total, label, phase: 'scan' })
-      });
-
-      const filesForName = scan.imports.get(name) ?? [];
-      const dynamicImports = scan.dynamicImports;
-      const detail: UsageDetail = {
-        files: filesForName.map((f) => ({
-          path: f.path,
-          pathHash: f.pathHash,
-          category: f.category,
-          importStatements: f.importStatements,
-          importCount: f.importStatements.length
-        })),
-        dynamicImports,
-        totalFiles: filesForName.length,
-        declaredButUnused: filesForName.length === 0,
-        oversizedSkipped: scan.oversizedSkipped
-      };
+      await refreshProjectGraph({ slug, projectRoot: project.path, report, signal });
+      if (signal.aborted) return;
+      const detail = usageFromGraph(getGraphReader(slug), name);
       await writeEnvelope(usageFilePath(slug, name), {
         source: 'deterministic',
         ttlHours: null, // manual trigger only in v1 (§8.5)
@@ -85,6 +67,3 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string }>>(async (_r
     { status: result.alreadyRunning ? 200 : 202 }
   );
 });
-
-// Used only by type checking — keep path import alive.
-void path;

@@ -16,6 +16,9 @@ import { compareResults, CompareError } from './lib/compare';
 import { isLocalPath, loadCorpus, summarise } from './lib/corpus';
 import { FindingsSheetError, parseFindingsSheet, scoreFindings } from './lib/findings';
 import { createExecGitRunner, GIT_TIMEOUT_MS } from './lib/git';
+import { readDeclaredPackages, runGraphEval } from './lib/graph-score';
+import { loadOrBuildCaseTruth } from './lib/graph-truth';
+import { graphForCase, predictV2Graph } from './lib/predict-graph';
 import { predictV1 } from './lib/predict-v1';
 import { findingsSheetPath, LabelCollisionError, runEval } from './lib/results';
 import { RESULT_SCHEMA_VERSION, type LoadedCase, type ResultFile, type ToolInfo } from './lib/types';
@@ -101,8 +104,22 @@ function printTruth(c: LoadedCase, phases: PhaseTruth[]): void {
   }
 }
 
+function selectCases(all: LoadedCase[], ids: string[] | undefined): LoadedCase[] {
+  let selected = all;
+  if (ids !== undefined) {
+    const unknown = ids.filter((id) => !all.some((c) => c.id === id));
+    if (unknown.length > 0) throw new UsageError(`unknown case id(s): ${unknown.join(', ')}`);
+    selected = all.filter((c) => ids.includes(c.id));
+  }
+  if (selected.length === 0) throw new UsageError('no cases to run');
+  return selected;
+}
+
 async function readResultFile(p: string): Promise<ResultFile> {
   const parsed = JSON.parse(await fs.readFile(p, 'utf8')) as ResultFile;
+  if ((parsed as { kind?: unknown }).kind === 'graph-usage') {
+    throw new ValidationFailure(`${p} is a graph-usage result (\`eval -- graph\`), not a \`run\` result`);
+  }
   if (parsed.schemaVersion !== RESULT_SCHEMA_VERSION) {
     throw new ValidationFailure(`${p}: schemaVersion ${String(parsed.schemaVersion)} is not ${RESULT_SCHEMA_VERSION}`);
   }
@@ -137,13 +154,7 @@ async function execute(cmd: ParsedCommand): Promise<number> {
 
     case 'run': {
       const all = await loadValidCorpus(cmd);
-      let selected = all;
-      if (cmd.cases !== undefined) {
-        const unknown = cmd.cases.filter((id) => !all.some((c) => c.id === id));
-        if (unknown.length > 0) throw new UsageError(`unknown case id(s): ${unknown.join(', ')}`);
-        selected = all.filter((c) => (cmd.cases as string[]).includes(c.id));
-      }
-      if (selected.length === 0) throw new UsageError('no cases to run');
+      const selected = selectCases(all, cmd.cases);
       const cache = makeCache(all, cmd.cacheDir, cmd.offline);
       const outcome = await runEval({
         cases: selected,
@@ -156,7 +167,39 @@ async function execute(cmd: ParsedCommand): Promise<number> {
           prepare: (c) => cache.prepare(c, { offline: cmd.offline }),
           truth: async (c, dir) =>
             (await cache.truthForPhases(c, dir)).map((p) => ({ phaseId: p.phaseId, truth: p.truth })),
-          predict: (c, dir) => predictV1(c, dir),
+          predict: (c, dir) => (cmd.predictor === 'v2-graph' ? predictV2Graph(c, dir, cache.cacheDir) : predictV1(c, dir)),
+          log: out
+        }
+      });
+      for (const w of outcome.written) out(`wrote ${path.relative(TOOL_ROOT, w)}`);
+      return outcome.exitCode;
+    }
+
+    case 'graph': {
+      const all = await loadValidCorpus(cmd);
+      const selected = selectCases(all, cmd.cases);
+      const cache = makeCache(all, cmd.cacheDir, cmd.offline);
+      const outcome = await runGraphEval({
+        cases: selected,
+        label: cmd.label,
+        packages: cmd.packages,
+        tool: await toolInfo(),
+        resultsDir: RESULTS_DIR,
+        now: new Date(),
+        deps: {
+          prepare: (c) => cache.prepare(c, { offline: cmd.offline }),
+          truth: (c, dir) =>
+            loadOrBuildCaseTruth({
+              cacheDir: cache.cacheDir,
+              cloneDir: dir,
+              caseId: c.id,
+              baseCommit: c.baseCommit,
+              projectDirs: c.projectDirs,
+              refresh: cmd.refreshTruth
+            }),
+          graph: (c, dir, packagesFor) =>
+            graphForCase({ cacheDir: cache.cacheDir, cloneDir: dir, caseId: c.id, projectDirs: c.projectDirs, packagesFor }),
+          declared: readDeclaredPackages,
           log: out
         }
       });

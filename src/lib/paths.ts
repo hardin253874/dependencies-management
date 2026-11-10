@@ -42,6 +42,14 @@ export function projectJsonPath(slug: string): string {
   return path.join(projectDir(slug), 'project.json');
 }
 
+/**
+ * Per-project code graph (v2 D2). Derived data: deleting it only costs a
+ * rebuild. Lives in the library, never under the target project path.
+ */
+export function graphDbPath(slug: string): string {
+  return path.join(projectDir(slug), 'graph.db');
+}
+
 export function projectJobsDir(slug: string): string {
   return path.join(projectDir(slug), '_jobs');
 }

@@ -3,11 +3,10 @@
  * for every related dep of `:name`.
  *
  * Why a batch endpoint instead of fanning out per-dep refreshes from the
- * client: each individual `POST /usage/:n/refresh` runs a full `scanCode` of
- * the target project (every parseable file walked, parsed, and import-graphed)
- * and writes ONE envelope. With 5–15 related deps that would re-parse the
- * entire project 5–15 times. This route runs `scanCode` once and writes a
- * usage envelope for every related dep in one pass.
+ * client: one job refreshes the project's code graph once (incremental after
+ * the first build) and writes a usage envelope for every related dep from the
+ * same graph snapshot, instead of 5–15 jobs each queuing on the
+ * `graph:<slug>` lock.
  *
  * Inputs:
  *   - :slug = project slug
@@ -28,7 +27,9 @@ import { projectJsonPath, depFilePath, usageFilePath } from '@/lib/paths';
 import { readJson } from '@/lib/storage/atomic';
 import { readEnvelope, writeEnvelope } from '@/lib/storage/envelope';
 import { getJobQueue } from '@/lib/jobs/queue';
-import { scanCode } from '@/lib/scanners/code';
+import { refreshProjectGraph } from '@/lib/graph/graphService';
+import { getGraphReader } from '@/lib/graph/readerCache';
+import { usageFromGraph } from '@/lib/graph/usageFromGraph';
 import { getLogger } from '@/lib/logger';
 import type { ProjectJson } from '@/lib/projects/add';
 import type { DepDetail, UsageDetail, RelatedUsageEnqueueResponse } from '@/lib/api-types';
@@ -92,36 +93,22 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string }>>(async (_r
       log.info({ targets }, `usage-related scan start — ${targets.length} deps`);
       report({ current: 0, total: Math.max(targets.length, 1), label: 'scanning project', phase: 'scan' });
 
-      const scan = await scanCode({
-        projectRoot: project.path,
-        onProgress: (current, total, label) =>
-          report({ current, total, label, phase: 'scan' })
-      });
+      await refreshProjectGraph({ slug, projectRoot: project.path, report, signal });
       if (signal.aborted) {
         log.info({}, 'usage-related scan aborted before envelope writes');
         return;
       }
+      // Compute every payload synchronously from one reader before the first
+      // await, so all N envelopes describe the same graph snapshot.
+      const reader = getGraphReader(slug);
+      const details = new Map<string, UsageDetail>(targets.map((t) => [t, usageFromGraph(reader, t)]));
 
       // Write one usage envelope per related dep. Independent paths — safe
       // to parallelise.
       const writeTasks: Promise<void>[] = [];
       let writeIndex = 0;
-      for (const targetName of targets) {
+      for (const [targetName, detail] of details) {
         writeIndex += 1;
-        const filesForName = scan.imports.get(targetName) ?? [];
-        const detail: UsageDetail = {
-          files: filesForName.map((f) => ({
-            path: f.path,
-            pathHash: f.pathHash,
-            category: f.category,
-            importStatements: f.importStatements,
-            importCount: f.importStatements.length
-          })),
-          dynamicImports: scan.dynamicImports,
-          totalFiles: filesForName.length,
-          declaredButUnused: filesForName.length === 0,
-          oversizedSkipped: scan.oversizedSkipped
-        };
         report({
           current: writeIndex,
           total: targets.length,

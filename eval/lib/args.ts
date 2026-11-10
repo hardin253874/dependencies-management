@@ -2,7 +2,7 @@
  * Pure argv parser for `npm run eval -- <subcommand> …`. No I/O, so every
  * usage rule is unit-testable; the CLI maps UsageError to exit code 1.
  */
-import type { PredictorId } from './types';
+import type { GraphPackageSource, PredictorId } from './types';
 
 export class UsageError extends Error {
   constructor(message: string) {
@@ -12,7 +12,8 @@ export class UsageError extends Error {
 }
 
 export const LABEL_RE = /^[a-z0-9][a-z0-9-]{0,40}$/;
-export const PREDICTORS: readonly PredictorId[] = ['v1-code-scan'];
+export const PREDICTORS: readonly PredictorId[] = ['v1-code-scan', 'v2-graph'];
+export const GRAPH_PACKAGE_SOURCES: readonly GraphPackageSource[] = ['declared', 'phase'];
 
 export interface CorpusPaths {
   /** Directory holding public case files (default eval/corpus/cases). */
@@ -39,6 +40,15 @@ export type ParsedCommand =
       offline: boolean;
       predictor: PredictorId;
     } & CorpusPaths)
+  | ({
+      command: 'graph';
+      label: string;
+      cases?: string[];
+      cacheDir?: string;
+      offline: boolean;
+      packages: GraphPackageSource;
+      refreshTruth: boolean;
+    } & CorpusPaths)
   | ({ command: 'score-findings'; resultsPath: string } & CorpusPaths)
   | { command: 'compare'; a: string; b: string };
 
@@ -50,8 +60,12 @@ Commands:
   truth           --case <id> [--phase <id>] [--cache-dir <dir>] [--offline]
                   Prepare the pinned clone; print the truth set and package.json diff.
   run             --label <label> [--cases id,id] [--cache-dir <dir>] [--offline]
-                  [--predictor v1-code-scan]
+                  [--predictor v1-code-scan|v2-graph]
                   Score every case; write eval/results/<date>-<label>.json.
+  graph           --label <label> [--cases id,id] [--packages declared|phase]
+                  [--cache-dir <dir>] [--offline] [--refresh-truth]
+                  Graph "files that use package X" vs TypeScript truth + unresolved %;
+                  write eval/results/<date>-<label>-graph.json (private cases: results/private/).
   score-findings  <results.json>
                   Merge the hand-filled findings sheet into the results file.
   compare         <a.json> <b.json>
@@ -65,6 +79,7 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
   validate: ['corpus', 'local'],
   truth: ['case', 'phase', 'cache-dir', 'corpus', 'local'],
   run: ['label', 'cases', 'cache-dir', 'predictor', 'corpus', 'local'],
+  graph: ['label', 'cases', 'cache-dir', 'packages', 'corpus', 'local'],
   'score-findings': ['corpus', 'local'],
   compare: []
 };
@@ -72,6 +87,7 @@ const BOOL_FLAGS: Record<string, readonly string[]> = {
   validate: [],
   truth: ['offline'],
   run: ['offline'],
+  graph: ['offline', 'refresh-truth'],
   'score-findings': [],
   compare: []
 };
@@ -138,6 +154,22 @@ function corpusPaths(raw: RawArgs): CorpusPaths {
   return out;
 }
 
+function labelOf(raw: RawArgs, command: string): string {
+  const label = required(raw, 'label', command);
+  if (!LABEL_RE.test(label)) {
+    throw new UsageError(`invalid --label "${label}" (must match ${LABEL_RE.source})`);
+  }
+  return label;
+}
+
+function caseIds(raw: RawArgs): string[] | undefined {
+  const cases = str(raw, 'cases');
+  if (cases === undefined) return undefined;
+  const ids = cases.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+  if (ids.length === 0) throw new UsageError('--cases needs at least one id');
+  return ids;
+}
+
 function noPositionals(raw: RawArgs, command: string): void {
   if (raw.positionals.length > 0) {
     throw new UsageError(`unexpected argument "${raw.positionals[0]}" for "${command}"`);
@@ -173,10 +205,7 @@ export function parseArgs(argv: string[]): ParsedCommand {
     }
     case 'run': {
       noPositionals(raw, command);
-      const label = required(raw, 'label', command);
-      if (!LABEL_RE.test(label)) {
-        throw new UsageError(`invalid --label "${label}" (must match ${LABEL_RE.source})`);
-      }
+      const label = labelOf(raw, command);
       const predictor = str(raw, 'predictor') ?? 'v1-code-scan';
       if (!(PREDICTORS as readonly string[]).includes(predictor)) {
         throw new UsageError(`unknown --predictor "${predictor}" (known: ${PREDICTORS.join(', ')})`);
@@ -188,12 +217,29 @@ export function parseArgs(argv: string[]): ParsedCommand {
         predictor: predictor as PredictorId,
         ...corpusPaths(raw)
       };
-      const cases = str(raw, 'cases');
-      if (cases !== undefined) {
-        const ids = cases.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
-        if (ids.length === 0) throw new UsageError('--cases needs at least one id');
-        out.cases = ids;
+      const cases = caseIds(raw);
+      if (cases !== undefined) out.cases = cases;
+      const cacheDir = str(raw, 'cache-dir');
+      if (cacheDir !== undefined) out.cacheDir = cacheDir;
+      return out;
+    }
+    case 'graph': {
+      noPositionals(raw, command);
+      const label = labelOf(raw, command);
+      const packages = str(raw, 'packages') ?? 'declared';
+      if (!(GRAPH_PACKAGE_SOURCES as readonly string[]).includes(packages)) {
+        throw new UsageError(`unknown --packages "${packages}" (known: ${GRAPH_PACKAGE_SOURCES.join(', ')})`);
       }
+      const out: ParsedCommand = {
+        command,
+        label,
+        offline: raw.flags.get('offline') === true,
+        packages: packages as GraphPackageSource,
+        refreshTruth: raw.flags.get('refresh-truth') === true,
+        ...corpusPaths(raw)
+      };
+      const cases = caseIds(raw);
+      if (cases !== undefined) out.cases = cases;
       const cacheDir = str(raw, 'cache-dir');
       if (cacheDir !== undefined) out.cacheDir = cacheDir;
       return out;
