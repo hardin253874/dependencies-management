@@ -126,6 +126,15 @@ export class AnthropicAdapter implements LLMClient {
         `Anthropic response truncated at max_tokens (${req.maxOutputTokens}); structured output incomplete.`
       );
     }
+    // Same failure shape as max_tokens (output cut short), but the cause is the
+    // prompt size, not the output budget — say so, or it would fall through to
+    // LLM_TOOL_USE_MISSING and hide the real reason.
+    if (response.stop_reason === 'model_context_window_exceeded') {
+      throw new LLMError(
+        'LLM_TRUNCATED',
+        `Anthropic stopped at the model's context window (stop_reason: model_context_window_exceeded); the prompt is too large for ${model}.`
+      );
+    }
 
     const tool = response.content.find(
       (c): c is Anthropic.ToolUseBlock => c.type === 'tool_use' && c.name === req.tool.name

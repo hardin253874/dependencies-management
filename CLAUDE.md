@@ -6,7 +6,7 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 **The functional spec is the single source of truth.** It lives OUTSIDE this repo, in the Obsidian vault: `../working/dependencies-management/Plans/FUNCTIONAL_SPEC.md` (alongside `IMPLEMENTATION_PLAN.md`, stage reviews and `V1_CLOSURE_REPORT.md`). Every `Plans/…` reference below means that folder.
 
-**v2 is in planning/progress (2026-11).** Before any v2 work read `Plans/V2_UPGRADE_PLAN.md` (goals, confirmed decisions D1–D11, stage status), then the stage doc you're working on: `V2_EVAL_HARNESS.md` (Stage 0), `V2_STACK_UPGRADE.md` (Stages 1–2), `V2_CODE_GRAPH_DESIGN.md` (Stage 3), `V2_AI_OVER_GRAPH.md` (Stage 4). For v2 work the V2 docs override the v1 spec where they disagree; update the spec when a v2 stage lands. Headline v2 changes: `src/core/` split (no Next/React imports; not created yet — code still lives in `src/lib/`), per-project SQLite code graph, Claude Agent SDK read-only investigator with MCP-first tools, OpenAI removed. Project subagents (`pm`, `developer`, `qa`) live in `.claude/agents/`. This file captures patterns and gotchas; the spec captures the design contract. When the two disagree, the spec wins — update this file to match.
+**v2 is in planning/progress (2026-11).** Before any v2 work read `Plans/V2_UPGRADE_PLAN.md` (goals, confirmed decisions D1–D11 + D14 ESLint 9 + D16 stay on Node 24.13, stage status), then the stage doc you're working on: `V2_EVAL_HARNESS.md` (Stage 0), `V2_STACK_UPGRADE.md` (Stages 1–2), `V2_CODE_GRAPH_DESIGN.md` (Stage 3), `V2_AI_OVER_GRAPH.md` (Stage 4). For v2 work the V2 docs override the v1 spec where they disagree; update the spec when a v2 stage lands. Headline v2 changes: `src/core/` split (no Next/React imports; not created yet — code still lives in `src/lib/`), per-project SQLite code graph, Claude Agent SDK read-only investigator with MCP-first tools, OpenAI removed. Project subagents (`pm`, `developer`, `qa`) live in `.claude/agents/`. This file captures patterns and gotchas; the spec captures the design contract. When the two disagree, the spec wins — update this file to match.
 
 ---
 
@@ -14,7 +14,7 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 A locally-run AI-augmented agent that scans, analyses, and reviews dependencies of legacy JS/TS projects. Next.js 14.2 App Router (Route Handlers, not Server Actions). Server binds 127.0.0.1 only. Six right-panel views per dep ([A]–[E] + [D-Deep]). Cache-first design: every view reads its persisted envelope first; LLM calls happen only on explicit user action. The agent is **read-only against target projects** — all writes go to `library/`.
 
-Test baseline (2026-11-09, after v2 Stage 1): 662 passed / 1 skipped across 116 files (~8 s wall). Typecheck + lint must be clean before any commit.
+Test baseline (2026-11-10, after the v2 round-1 QA cleanup): 683 passed / 1 skipped across 116 files (~8 s wall). Typecheck + lint must be clean before any commit.
 
 ## Commands
 
@@ -226,7 +226,7 @@ These are the bugs that have actually shipped in this repo. Each one is here bec
 ```bash
 npm run typecheck   # tsc --noEmit — must be clean
 npm run lint        # ESLint — must be clean
-npm test            # Full Vitest suite — must match current baseline (662 pass / 1 skipped)
+npm test            # Full Vitest suite — must match current baseline (683 pass / 1 skipped)
 ```
 
 ### When you change a route

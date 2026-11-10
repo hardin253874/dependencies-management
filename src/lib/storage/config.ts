@@ -46,32 +46,46 @@ export interface MigratedConfig {
  * - provider other than `anthropic` (v1 `openai`) → anthropic + default model.
  * - a model id no longer in the picker (`MODEL_OPTIONS`) → default model.
  *
- * Never throws on a legacy provider; it throws only on an unsupported
- * schemaVersion (same as before).
+ * - no usable `llm` section (hand-edited / partial file) → default llm, with
+ *   a notice, like the other llm fallbacks.
+ *
+ * Never throws on a legacy provider; it throws only on a file that is not a
+ * JSON object or has an unsupported schemaVersion.
  */
 export function migrateConfig(raw: unknown): MigratedConfig {
-  const stored = raw as Omit<AppConfig, 'llm'> & { llm: { provider: StoredLlmProvider; model: string } };
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error('_config.json must be a JSON object.');
+  }
+  const stored = raw as Omit<AppConfig, 'llm'> & { llm?: { provider: StoredLlmProvider; model: string } };
   if (stored.schemaVersion !== 1) {
     throw new Error(`Unsupported _config.json schemaVersion: ${String(stored.schemaVersion)}`);
   }
   const notices: ConfigNotice[] = [];
   let llm: AppConfig['llm'];
-  if (stored.llm.provider !== 'anthropic') {
+  const storedLlm = stored.llm;
+  if (typeof storedLlm !== 'object' || storedLlm === null || typeof storedLlm.provider !== 'string') {
+    const model = defaultModel('anthropic');
+    llm = { provider: 'anthropic', model };
+    notices.push({
+      code: 'MODEL_MIGRATED',
+      message: `_config.json had no LLM settings; using Anthropic ${model}.`
+    });
+  } else if (storedLlm.provider !== 'anthropic') {
     const model = defaultModel('anthropic');
     llm = { provider: 'anthropic', model };
     notices.push({
       code: 'PROVIDER_MIGRATED',
       message: `OpenAI support was removed in v2; switched to Anthropic ${model}.`
     });
-  } else if (!MODEL_OPTIONS.anthropic.includes(stored.llm.model)) {
+  } else if (!MODEL_OPTIONS.anthropic.includes(storedLlm.model)) {
     const model = defaultModel('anthropic');
     llm = { provider: 'anthropic', model };
     notices.push({
       code: 'MODEL_MIGRATED',
-      message: `Model ${stored.llm.model} is no longer offered; switched to ${model}.`
+      message: `Model ${storedLlm.model} is no longer offered; switched to ${model}.`
     });
   } else {
-    llm = { provider: stored.llm.provider, model: stored.llm.model };
+    llm = { provider: storedLlm.provider, model: storedLlm.model };
   }
   return { config: { ...stored, llm }, notices };
 }
@@ -87,8 +101,10 @@ export async function readConfig(): Promise<AppConfig> {
 /**
  * Read `_config.json`; when a migration happened and `persist` is true, write
  * the migrated config back once (to `library/`, never a target project) and
- * return the notices. Only `GET /api/config` persists, so the notice reaches
- * the UI exactly once: the next read finds nothing left to migrate.
+ * return the notices. `GET /api/config` persists here; `patchConfig` also
+ * writes the migrated config and hands the notices back on the PATCH response
+ * (so a PATCH before the first GET does not drop them). Either way the notice
+ * reaches the UI exactly once: the next read finds nothing left to migrate.
  */
 export async function readConfigWithNotices(
   opts: { persist: boolean } = { persist: true }
@@ -111,9 +127,12 @@ export async function writeConfig(cfg: AppConfig): Promise<void> {
 /**
  * Deep-merge patch into config. Only known top-level sections are accepted;
  * unknown fields are silently dropped to prevent UI typos from corrupting state.
+ *
+ * The write persists any pending `_config.json` migration, so the migration
+ * notices are returned with the result for the caller to surface.
  */
-export async function patchConfig(patch: PatchInput): Promise<AppConfig> {
-  const cur = await readConfig();
+export async function patchConfig(patch: PatchInput): Promise<MigratedConfig> {
+  const { config: cur, notices } = await readConfigWithNotices({ persist: false });
   const next: AppConfig = {
     schemaVersion: 1,
     llm: {
@@ -130,7 +149,7 @@ export async function patchConfig(patch: PatchInput): Promise<AppConfig> {
     }
   };
   await writeConfig(next);
-  return next;
+  return { config: next, notices };
 }
 
 export interface PatchInput {

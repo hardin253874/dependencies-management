@@ -8,7 +8,13 @@ import { execFileSync } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { createSandbox, disposeAllSandboxes, type Sandbox } from '../helpers/sandbox';
-import { CacheGuardError, PinnedCache, isSameOrInside, resolveCacheDir } from '../../../eval/lib/cache';
+import {
+  CacheGuardError,
+  PinnedCache,
+  isSameOrInside,
+  redactLocalPaths,
+  resolveCacheDir
+} from '../../../eval/lib/cache';
 import { createExecGitRunner, type GitRunner, type GitRunOptions } from '../../../eval/lib/git';
 import type { CorpusCase } from '../../../eval/lib/types';
 
@@ -19,6 +25,7 @@ const TO = '2'.repeat(40);
 interface Call {
   args: string[];
   cwd: string;
+  env: Readonly<Record<string, string>> | undefined;
 }
 
 const WRITE_COMMANDS = new Set(['clone', 'checkout', 'fetch']);
@@ -30,14 +37,30 @@ function subcommand(args: readonly string[]): string {
   return args[i] ?? '';
 }
 
-function fakeGit(opts: { origin?: string; missing?: Set<string> } = {}): GitRunner & { calls: Call[] } {
+interface FakeGitOptions {
+  origin?: string;
+  missing?: Set<string>;
+  /** Answer for `git show <sha>:<path>`; a thrown Error simulates a git failure. */
+  show?: (spec: string) => string;
+  /** Throw this from `clone` instead of creating the clone dir. */
+  cloneError?: (target: string) => Error;
+}
+
+function fakeGit(opts: FakeGitOptions = {}): GitRunner & { calls: Call[] } {
   const calls: Call[] = [];
   const missing = opts.missing ?? new Set<string>();
   return {
     calls,
     async run(args: readonly string[], o: GitRunOptions): Promise<string> {
-      calls.push({ args: [...args], cwd: o.cwd });
+      calls.push({ args: [...args], cwd: o.cwd, env: o.env });
       const sub = subcommand(args);
+      if (sub === 'show') {
+        if (opts.show === undefined) throw new Error('fatal: no show handler');
+        return opts.show(args[args.length - 1] as string);
+      }
+      if (sub === 'clone' && opts.cloneError !== undefined) {
+        throw opts.cloneError(args[args.length - 1] as string);
+      }
       if (sub === 'clone') {
         await fs.mkdir(path.join(args[args.length - 1] as string, '.git'), { recursive: true });
         return '';
@@ -166,6 +189,131 @@ describe('PinnedCache.prepare with a fake git', () => {
       /different repo/
     );
     await expect(fs.stat(path.join(cacheDir, 'demo-case', '.git'))).resolves.toBeDefined();
+  });
+});
+
+describe('PinnedCache --offline git environment (QA N1)', () => {
+  it('sets GIT_NO_LAZY_FETCH=1 on every git call when offline', async () => {
+    sandbox = await createSandbox('eval-cache');
+    const cacheDir = await sandbox.scratch('cache');
+    const git = fakeGit({ origin: 'https://example.com/r.git' });
+    const cache = new PinnedCache({ git, cacheDir, toolRoot: TOOL_ROOT, localRepos: [], offline: true });
+    await fs.mkdir(path.join(cacheDir, 'demo-case', '.git'), { recursive: true });
+    await cache.prepare(caseOf('https://example.com/r.git'), { offline: true });
+    expect(git.calls.length).toBeGreaterThan(0);
+    for (const c of git.calls) expect(c.env?.GIT_NO_LAZY_FETCH).toBe('1');
+  });
+
+  it('does not set GIT_NO_LAZY_FETCH when online', async () => {
+    sandbox = await createSandbox('eval-cache');
+    const cacheDir = await sandbox.scratch('cache');
+    const git = fakeGit({ origin: 'https://example.com/r.git' });
+    const cache = new PinnedCache({ git, cacheDir, toolRoot: TOOL_ROOT, localRepos: [] });
+    await cache.prepare(caseOf('https://example.com/r.git'), { offline: false });
+    for (const c of git.calls) expect(c.env?.GIT_NO_LAZY_FETCH).toBeUndefined();
+  });
+});
+
+describe('PinnedCache error messages carry no absolute local path (QA m6)', () => {
+  async function setup(git: ReturnType<typeof fakeGit>): Promise<{ cache: PinnedCache; cacheDir: string }> {
+    sandbox = await createSandbox('eval-cache');
+    const cacheDir = await sandbox.scratch('cache');
+    return { cache: new PinnedCache({ git, cacheDir, toolRoot: TOOL_ROOT, localRepos: [] }), cacheDir };
+  }
+
+  async function messageOf(p: Promise<unknown>): Promise<string> {
+    const err = await p.then(
+      () => null,
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(Error);
+    return (err as Error).message;
+  }
+
+  it('--offline without a cached clone names <cache>/<caseId>, not the absolute dir', async () => {
+    const { cache, cacheDir } = await setup(fakeGit());
+    const msg = await messageOf(cache.prepare(caseOf('https://example.com/r.git'), { offline: true }));
+    expect(msg).toContain('<cache>/demo-case');
+    expect(msg).not.toContain(cacheDir);
+  });
+
+  it('a clone of a different repo names <cache>/<caseId>', async () => {
+    const { cache, cacheDir } = await setup(fakeGit({ origin: 'https://example.com/other.git' }));
+    await fs.mkdir(path.join(cacheDir, 'demo-case', '.git'), { recursive: true });
+    const msg = await messageOf(cache.prepare(caseOf('https://example.com/r.git'), { offline: false }));
+    expect(msg).toContain('<cache>/demo-case');
+    expect(msg).not.toContain(cacheDir);
+  });
+
+  it('a dir that is not a git clone names <cache>/<caseId>', async () => {
+    const { cache, cacheDir } = await setup(fakeGit());
+    await fs.mkdir(path.join(cacheDir, 'demo-case'), { recursive: true });
+    const msg = await messageOf(cache.prepare(caseOf('https://example.com/r.git'), { offline: false }));
+    expect(msg).toContain('<cache>/demo-case');
+    expect(msg).not.toContain(cacheDir);
+  });
+
+  it('redacts the cache dir out of a git failure message', async () => {
+    const { cache, cacheDir } = await setup(
+      fakeGit({ cloneError: (target) => new Error(`fatal: could not create work tree dir '${target}'`) })
+    );
+    const msg = await messageOf(cache.prepare(caseOf('https://example.com/r.git'), { offline: false }));
+    expect(msg).toContain('<cache>');
+    expect(msg).not.toContain(cacheDir);
+  });
+
+  it('redactLocalPaths replaces the cache dir and the home dir in either slash style', () => {
+    const home = path.join(path.parse(TOOL_ROOT).root, 'Users', 'someone');
+    const cacheDir = path.join(home, 'AppData', 'Local', 'dep-agent-eval');
+    const fwd = (p: string): string => p.split(path.sep).join('/');
+    const text = `a ${path.join(cacheDir, 'x')} b ${fwd(cacheDir)}/y c ${path.join(home, 'repo')}`;
+    const out = redactLocalPaths(text, { cacheDir, home });
+    expect(out).not.toContain(home);
+    expect(out).not.toContain(fwd(home));
+    expect(out).toContain('<cache>');
+    expect(out).toContain('~');
+  });
+});
+
+describe('PinnedCache.truthForPhases package.json lookup (QA m4)', () => {
+  const PKG = JSON.stringify({ dependencies: { react: '17.0.0' } });
+
+  async function truthWith(show: (spec: string) => string): ReturnType<PinnedCache['truthForPhases']> {
+    sandbox = await createSandbox('eval-cache');
+    const cacheDir = await sandbox.scratch('cache');
+    const git = fakeGit({ show });
+    const cache = new PinnedCache({ git, cacheDir, toolRoot: TOOL_ROOT, localRepos: [] });
+    return cache.truthForPhases(caseOf('https://example.com/r.git'), path.join(cacheDir, 'demo-case'));
+  }
+
+  it('treats "does not exist in" as no package.json', async () => {
+    const phases = await truthWith((spec) => {
+      const [sha, rel] = spec.split(':');
+      throw new Error(`fatal: path '${rel ?? ''}' does not exist in '${sha ?? ''}'`);
+    });
+    expect(phases[0]?.dependencyDiff[0]?.changes).toBeNull();
+  });
+
+  it('treats "exists on disk, but not in" as no package.json at that commit', async () => {
+    const phases = await truthWith((spec) => {
+      if (spec.startsWith(BASE)) throw new Error(`fatal: path 'package.json' exists on disk, but not in '${BASE}'`);
+      return PKG;
+    });
+    expect(phases[0]?.dependencyDiff[0]?.changes).not.toBeNull();
+  });
+
+  it('rethrows any other git error with the sha and path', async () => {
+    await expect(
+      truthWith(() => {
+        throw new Error('git show failed: timed out after 60000 ms');
+      })
+    ).rejects.toThrow(new RegExp(`package\\.json at ${BASE}.*timed out`));
+  });
+
+  it('rethrows a JSON parse error with the sha and path', async () => {
+    await expect(truthWith(() => '{ not json')).rejects.toThrow(
+      new RegExp(`package\\.json at ${BASE} is not valid JSON`)
+    );
   });
 });
 

@@ -135,4 +135,32 @@ describe('runEval', () => {
     const sheet = outcome.written.find((w) => w.endsWith('.findings.md'));
     expect(sheet).toBe(path.join(dir, 'private', `${localDate(NOW)}-unit-run.findings.md`));
   });
+
+  it('refuses to start when a leftover findings sheet exists, and writes nothing (QA m5)', async () => {
+    const dir = await resultsDir();
+    const c = loaded('private-fixture', 'private', {
+      goldenFindings: [{ id: 'G01', phase: 'main', title: 't', category: 'c', expected: 'yes', verified: false }]
+    });
+    const privDir = path.join(dir, 'private');
+    await fs.mkdir(privDir, { recursive: true });
+    const leftover = path.join(privDir, `${localDate(NOW)}-unit-run.findings.md`);
+    await fs.writeFile(leftover, 'verdicts a person typed', 'utf8');
+
+    let prepared = 0;
+    const run = runEval({
+      ...base,
+      resultsDir: dir,
+      cases: [c],
+      deps: deps({
+        prepare: async (x) => {
+          prepared += 1;
+          return `/cache/${x.id}`;
+        }
+      })
+    });
+    await expect(run).rejects.toBeInstanceOf(LabelCollisionError);
+    expect(prepared).toBe(0);
+    await expect(fs.access(path.join(privDir, `${localDate(NOW)}-unit-run.json`))).rejects.toThrow();
+    expect(await fs.readFile(leftover, 'utf8')).toBe('verdicts a person typed');
+  });
 });

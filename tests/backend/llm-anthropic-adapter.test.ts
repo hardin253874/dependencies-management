@@ -128,6 +128,14 @@ describe('3–4. truncation and text-only answers', () => {
     });
   });
 
+  it('model_context_window_exceeded → LLM_TRUNCATED naming the context window', async () => {
+    const { sdk } = fakeSdk(() => makeMessage({ stop_reason: 'model_context_window_exceeded', content: [] }));
+    const err = await new AnthropicAdapter({ apiKey: 'k', client: sdk }).call(req()).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LLMError);
+    expect((err as LLMError).code).toBe('LLM_TRUNCATED');
+    expect((err as LLMError).message).toMatch(/context window/);
+  });
+
   it('end_turn with only a text block → LLM_TOOL_USE_MISSING', async () => {
     const { sdk } = fakeSdk(() =>
       makeMessage({ stop_reason: 'end_turn', content: [textBlock('Here is my analysis in prose…')] })

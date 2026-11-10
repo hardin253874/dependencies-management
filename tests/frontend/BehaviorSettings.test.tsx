@@ -14,6 +14,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from './helpers/renderWithProviders';
 import { BehaviorSettings } from '@/components/modals/settings/BehaviorSettings';
+import { ToastContainer } from '@/components/ToastContainer';
 import type { ConfigResponse } from '@/lib/api-types';
 
 const CONFIG_ON: ConfigResponse = {
@@ -84,6 +85,31 @@ describe('BehaviorSettings', () => {
     await userEvent.click(toggle);
     await waitFor(() => expect(patches).toHaveLength(1));
     expect(patches[0]).toEqual({ ui: { showDeepAnalyzeWarning: false } });
+  });
+
+  it('toasts a migration notice that arrives on the PATCH response (PATCH before first GET)', async () => {
+    const notice = 'OpenAI support was removed in v2; switched to Anthropic claude-opus-5-5.';
+    const route = (init: RequestInit): Response => {
+      const body =
+        init.method === 'PATCH'
+          ? { ...CONFIG_ON, notices: [{ code: 'PROVIDER_MIGRATED', message: notice }] }
+          : CONFIG_ON;
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    renderWithProviders(
+      <>
+        <BehaviorSettings />
+        <ToastContainer />
+      </>,
+      { backend: { config: CONFIG_ON, custom: { '/api/config': vi.fn(route) } } }
+    );
+
+    const toggle = await screen.findByTestId('toggle-resolver-enabled');
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(screen.queryByText(notice)).toBeNull();
+
+    await userEvent.click(toggle);
+    expect(await screen.findByText(notice)).toBeInTheDocument();
   });
 
   it('reflects the disabled state when resolverCheckEnabled is false in config', async () => {

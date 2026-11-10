@@ -8,6 +8,8 @@ import { execFile } from 'child_process';
 export interface GitRunOptions {
   cwd: string;
   timeoutMs: number;
+  /** Extra environment variables for this one call (merged over process.env). */
+  env?: Readonly<Record<string, string>>;
 }
 
 export interface GitRunner {
@@ -42,7 +44,7 @@ export function createExecGitRunner(): GitRunner {
             windowsHide: true,
             encoding: 'utf8',
             // Never prompt for credentials: a prompt would hang until timeout.
-            env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' }
+            env: { ...process.env, ...opts.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' }
           },
           (error, stdout, stderr) => {
             if (error !== null) {

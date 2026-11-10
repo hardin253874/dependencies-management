@@ -42,9 +42,9 @@ export function LlmSetupStep({ onContinue }: Props): JSX.Element {
     setSubmitting(true);
     setError(null);
     try {
-      await getApiClient().patchConfig({ llm: { provider, model } });
+      const patched = await getApiClient().patchConfig({ llm: { provider, model } });
       await getApiClient().setApiKey({ provider, apiKey });
-      await refreshConfig();
+      await refreshConfig(patched.notices);
       onContinue();
     } catch (err) {
       const message =

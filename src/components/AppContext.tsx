@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { ApiError, getApiClient } from '@/lib/client/api-client';
 import type {
+  ConfigNotice,
   ConfigResponse,
   JobOrphan,
   JobRecord,
@@ -166,7 +167,12 @@ interface AppContextValue extends UiState {
   openAddProject: () => void;
   closeAddProject: () => void;
 
-  refreshConfig: () => Promise<void>;
+  /**
+   * Re-GET the config. Pass the `notices` of a PATCH response: a PATCH that
+   * persisted a `_config.json` migration is the only place they appear, so
+   * they would never be toasted otherwise.
+   */
+  refreshConfig: (pendingNotices?: ConfigNotice[]) => Promise<void>;
   refreshProjects: () => Promise<void>;
   refreshActiveProject: () => Promise<void>;
   refreshActiveProjectFromDisk: () => Promise<void>;
@@ -246,12 +252,13 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
 
   const bootedRef = useRef(false);
 
-  const refreshConfig = useCallback(async () => {
+  const refreshConfig = useCallback(async (pendingNotices?: ConfigNotice[]) => {
     setConfigLoading(true);
     setConfigError(null);
     try {
       const result = await getApiClient().getConfig();
-      setConfig(result);
+      const notices = [...(pendingNotices ?? []), ...(result.notices ?? [])];
+      setConfig(notices.length > 0 ? { ...result, notices } : result);
     } catch (err) {
       setConfigError(err instanceof Error ? err.message : 'Failed to load config');
     } finally {

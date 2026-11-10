@@ -25,8 +25,8 @@ export function BehaviorSettings(): JSX.Element {
     setPending('show-warning');
     setError(null);
     try {
-      await getApiClient().patchConfig({ ui: { showDeepAnalyzeWarning: next } });
-      await refreshConfig();
+      const patched = await getApiClient().patchConfig({ ui: { showDeepAnalyzeWarning: next } });
+      await refreshConfig(patched.notices);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update setting');
     } finally {
@@ -38,8 +38,8 @@ export function BehaviorSettings(): JSX.Element {
     setPending('resolver');
     setError(null);
     try {
-      await getApiClient().patchConfig({ features: { resolverCheckEnabled: next } });
-      await refreshConfig();
+      const patched = await getApiClient().patchConfig({ features: { resolverCheckEnabled: next } });
+      await refreshConfig(patched.notices);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update setting');
     } finally {

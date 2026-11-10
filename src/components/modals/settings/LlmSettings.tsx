@@ -33,8 +33,8 @@ export function LlmSettings(): JSX.Element {
   const onModelChange = async (next: string) => {
     setModel(next);
     try {
-      await getApiClient().patchConfig({ llm: { provider, model: next } });
-      await refreshConfig();
+      const patched = await getApiClient().patchConfig({ llm: { provider, model: next } });
+      await refreshConfig(patched.notices);
     } catch (err) {
       setSaveState('error');
       console.error(err);

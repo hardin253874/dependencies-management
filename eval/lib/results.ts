@@ -157,9 +157,15 @@ async function exists(p: string): Promise<boolean> {
 export async function runEval(opts: RunOptions): Promise<RunOutcome> {
   const date = localDate(opts.now);
   const visibilities = (['public', 'private'] as const).filter((v) => opts.cases.some((c) => c.visibility === v));
+  // Check every file this run may write, sheet included, before running any
+  // case: a collision found after the JSON is written would leave a half run
+  // behind while the exit code says "nothing written".
   for (const v of visibilities) {
     const target = resultFilePath(opts.resultsDir, v, date, opts.label);
     if (await exists(target)) throw new LabelCollisionError(target);
+    const mayWriteSheet = opts.cases.some((c) => c.visibility === v && (c.goldenFindings ?? []).length > 0);
+    const sheet = findingsSheetPath(target);
+    if (mayWriteSheet && (await exists(sheet))) throw new LabelCollisionError(sheet);
   }
 
   const done: Array<{ c: LoadedCase; result: CaseResult; prediction: CasePrediction | null }> = [];

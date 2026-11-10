@@ -74,6 +74,27 @@ describe('migrateConfig (pure)', () => {
   it('still rejects an unsupported schemaVersion', () => {
     expect(() => migrateConfig({ ...DEFAULT_CONFIG, schemaVersion: 2 })).toThrow(/schemaVersion/);
   });
+
+  it('a config with no llm section → default llm + MODEL_MIGRATED notice, other sections kept', () => {
+    const raw = { schemaVersion: 1, ui: { ...DEFAULT_CONFIG.ui, theme: 'dark' }, features: DEFAULT_CONFIG.features };
+    const { config, notices } = migrateConfig(raw);
+    expect(config.llm).toEqual({ provider: 'anthropic', model: defaultModel('anthropic') });
+    expect(config.ui.theme).toBe('dark');
+    expect(notices.map((n) => n.code)).toEqual(['MODEL_MIGRATED']);
+    expect(notices[0]!.message).toContain(defaultModel('anthropic'));
+  });
+
+  it('an llm section that is not an object is treated as missing', () => {
+    const raw = { ...JSON.parse(JSON.stringify(DEFAULT_CONFIG)), llm: 'claude' };
+    const { config, notices } = migrateConfig(raw);
+    expect(config.llm).toEqual({ provider: 'anthropic', model: defaultModel('anthropic') });
+    expect(notices.map((n) => n.code)).toEqual(['MODEL_MIGRATED']);
+  });
+
+  it('a non-object _config.json throws a descriptive error, not a TypeError', () => {
+    expect(() => migrateConfig(null)).toThrow(/_config\.json must be a JSON object/);
+    expect(() => migrateConfig([1])).toThrow(/_config\.json must be a JSON object/);
+  });
 });
 
 describe('readConfigWithNotices / readConfig (sandboxed library)', () => {
@@ -137,5 +158,55 @@ describe('GET/PATCH /api/config — migration notices + provider validation', ()
     );
     expect(res.status).toBe(400);
     expect(JSON.stringify(await res.json())).toContain('INVALID_BODY');
+  });
+
+  function patchRequest(body: unknown): Request {
+    return new Request('http://127.0.0.1:3000/api/config', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: getCsrfToken() },
+      body: JSON.stringify(body)
+    });
+  }
+
+  it('PATCH with an llm.model not offered in the picker → 400 INVALID_BODY naming the model; nothing written', async () => {
+    sandbox = await createSandbox('config-route-patch-model');
+    await writeRawConfig(DEFAULT_CONFIG);
+    const res = await PATCH(patchRequest({ llm: { model: 'claude-opus-4-7' } }), undefined);
+    expect(res.status).toBe(400);
+    const text = JSON.stringify(await res.json());
+    expect(text).toContain('INVALID_BODY');
+    expect(text).toContain('claude-opus-4-7');
+    expect((await readRawConfig()).llm.model).toBe(DEFAULT_CONFIG.llm.model);
+  });
+
+  it('PATCH with a picker model is accepted', async () => {
+    sandbox = await createSandbox('config-route-patch-model-ok');
+    await writeRawConfig(DEFAULT_CONFIG);
+    const res = await PATCH(patchRequest({ llm: { provider: 'anthropic', model: defaultModel('anthropic') } }), undefined);
+    expect(res.status).toBe(200);
+  });
+
+  it('a PATCH before the first GET returns the migration notice instead of dropping it', async () => {
+    sandbox = await createSandbox('config-route-patch-first');
+    await writeRawConfig(legacyOpenAiConfig());
+
+    const res = await PATCH(patchRequest({ ui: { theme: 'dark' } }), undefined);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ConfigResponse;
+    expect(body.llm.provider).toBe('anthropic');
+    expect(body.ui.theme).toBe('dark');
+    expect(body.notices?.map((n) => n.code)).toEqual(['PROVIDER_MIGRATED']);
+
+    // The migrated config is persisted, so the next GET has nothing left to say.
+    expect((await readRawConfig()).llm.provider).toBe('anthropic');
+    const r2 = (await (await GET(new Request('http://127.0.0.1:3000/api/config'), undefined)).json()) as ConfigResponse;
+    expect(r2.notices).toBeUndefined();
+  });
+
+  it('a PATCH on an already-current config has no notices', async () => {
+    sandbox = await createSandbox('config-route-patch-current');
+    await writeRawConfig(DEFAULT_CONFIG);
+    const body = (await (await PATCH(patchRequest({ ui: { theme: 'dark' } }), undefined)).json()) as ConfigResponse;
+    expect(body.notices).toBeUndefined();
   });
 });

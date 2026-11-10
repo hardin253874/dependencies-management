@@ -47,7 +47,7 @@ async function loadValidCorpus(cmd: { corpus?: string; local?: string }): Promis
   return cases;
 }
 
-function makeCache(cases: readonly LoadedCase[], cacheDirFlag: string | undefined): PinnedCache {
+function makeCache(cases: readonly LoadedCase[], cacheDirFlag: string | undefined, offline: boolean): PinnedCache {
   const cacheDir = resolveCacheDir({
     ...(cacheDirFlag !== undefined ? { flag: cacheDirFlag } : {}),
     ...(process.env.DEP_AGENT_EVAL_CACHE !== undefined ? { env: process.env.DEP_AGENT_EVAL_CACHE } : {}),
@@ -59,7 +59,8 @@ function makeCache(cases: readonly LoadedCase[], cacheDirFlag: string | undefine
     toolRoot: TOOL_ROOT,
     // Every local repo in the corpus is protected, not only the selected
     // cases, so no cache layout can overlap any source repo.
-    localRepos: cases.filter((c) => isLocalPath(c.repo)).map((c) => c.repo)
+    localRepos: cases.filter((c) => isLocalPath(c.repo)).map((c) => c.repo),
+    offline
   });
 }
 
@@ -127,7 +128,7 @@ async function execute(cmd: ParsedCommand): Promise<number> {
       if (cmd.phase !== undefined && !c.phases.some((p) => p.id === cmd.phase)) {
         throw new UsageError(`case "${c.id}" has no phase "${cmd.phase}"`);
       }
-      const cache = makeCache(all, cmd.cacheDir);
+      const cache = makeCache(all, cmd.cacheDir, cmd.offline);
       const dir = await cache.prepare(c, { offline: cmd.offline });
       const phases = await cache.truthForPhases(c, dir);
       printTruth(c, cmd.phase === undefined ? phases : phases.filter((p) => p.phaseId === cmd.phase));
@@ -143,7 +144,7 @@ async function execute(cmd: ParsedCommand): Promise<number> {
         selected = all.filter((c) => (cmd.cases as string[]).includes(c.id));
       }
       if (selected.length === 0) throw new UsageError('no cases to run');
-      const cache = makeCache(all, cmd.cacheDir);
+      const cache = makeCache(all, cmd.cacheDir, cmd.offline);
       const outcome = await runEval({
         cases: selected,
         label: cmd.label,
