@@ -32,6 +32,7 @@ import type { TokenUsage } from '../../lib/llm/cost';
 import type { AgentModel, AgentTurnRequest } from './model';
 import { toAnthropicTools, type ToolRegistry } from './registry';
 import { validateInput } from './schema';
+import { normalizeRelPath } from './pathGuard';
 import type { TerminalToolDef, ToolContext } from './types';
 
 export interface AgentBudgets {
@@ -49,6 +50,9 @@ export interface AgentBudgets {
 export const MIN_TURN_OUTPUT_TOKENS = 1_024;
 export const WALL_FINAL_FRACTION = 0.8;
 export const INPUT_SUMMARY_MAX_CHARS = 300;
+/** Cap on `readPaths` (5a.3): evidence for exclusions, not a full read log. */
+export const READ_PATHS_MAX = 500;
+const READ_TOOL = 'read_file';
 
 export type AgentRunStatus = 'submitted' | 'budget-exhausted' | 'no-submit' | 'cancelled' | 'error';
 
@@ -101,6 +105,12 @@ export interface AgentRunResult<T = unknown> {
   stopDetail: StopDetail;
   /** Final turn was entered because of this budget (null when never entered). */
   finalTurnReason: BudgetName | null;
+  /**
+   * Normalized POSIX paths of every successful `read_file` call, in first-read
+   * order, deduplicated, at most READ_PATHS_MAX (5a.3). Checked in code when the
+   * agent excludes a base-set file; refused / failed reads are not in it.
+   */
+  readPaths: string[];
 }
 
 export interface RequestEstimate {
@@ -202,6 +212,7 @@ export async function runAgent<T = unknown>(opts: RunAgentOptions): Promise<Agen
   let noSubmitNudged = false;
   let prevRequestTokens = 0;
   let cachingSeen = false;
+  const readPaths = new Set<string>();
   const outputReserve = Math.min(budgets.perTurnMaxTokens, Math.floor(budgets.maxOutputTokens / 4));
 
   const startedAt = now();
@@ -217,7 +228,8 @@ export async function runAgent<T = unknown>(opts: RunAgentOptions): Promise<Agen
     usage: { ...usage },
     costUsd: round6(costUsd),
     stopDetail,
-    finalTurnReason
+    finalTurnReason,
+    readPaths: [...readPaths]
   });
   const cancelledOrWall = (): AgentRunResult<T> | null => {
     if (opts.signal?.aborted === true) return finish('cancelled', { reason: 'cancelled', message: 'Run cancelled.' });
@@ -374,6 +386,7 @@ export async function runAgent<T = unknown>(opts: RunAgentOptions): Promise<Agen
         const r = await opts.registry.call(block.name, block.input, ctx);
         const durationMs = Math.max(0, now() - t0);
         usage.toolCalls += 1;
+        if (block.name === READ_TOOL && !r.isError && readPaths.size < READ_PATHS_MAX) recordRead(readPaths, block.input);
         results.push({ type: 'tool_result', tool_use_id: block.id, content: r.content, ...(r.isError ? { is_error: true } : {}) });
         const entry: TraceCall = {
           turn,
@@ -394,6 +407,16 @@ export async function runAgent<T = unknown>(opts: RunAgentOptions): Promise<Agen
     }
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/** Same normalisation `pathGuard` applied before the read succeeded, so the stored path is the graph's. */
+function recordRead(readPaths: Set<string>, input: unknown): void {
+  const raw = input !== null && typeof input === 'object' ? (input as { path?: unknown }).path : undefined;
+  try {
+    readPaths.add(normalizeRelPath(raw));
+  } catch {
+    // Unreachable after a successful read (the guard normalised the same string); nothing to record.
   }
 }
 

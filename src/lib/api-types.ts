@@ -588,6 +588,45 @@ export interface UpdateReportDetail {
   cost?: AiCostFields;
   /** v2 Stage 4a: set when the agent loop produced (or tried to produce) this report. Renderers default it. */
   agentRun?: AgentRunSummary;
+  /**
+   * v2 Stage 5a.5: the graph's usage set for the phase packages with the
+   * agent's ranking / additions / exclusions on top. Also present on a
+   * `deterministic-partial` agent report (base set only). Older envelopes and
+   * v1 reports lack it — renderers default it (`?? []`).
+   */
+  impactedFiles?: ImpactedFile[];
+  /** v2 Stage 5a.5: counts behind `impactedFiles`. */
+  impactSummary?: ImpactSummary;
+}
+
+/** v2 Stage 5a.5: one file of the [D] impacted-file list. */
+export interface ImpactedFile {
+  path: string;
+  /** `graph` = in the base set; `agent` = added by the agent (not in the base set). */
+  origin: 'graph' | 'agent';
+  /** Graph via; absent for agent-added files. */
+  via?: 'direct' | 'reexport' | 'wrapper';
+  kind: 'js' | 'style' | 'config';
+  /** Graph confidence; absent for agent-added files. */
+  confidence?: 'high' | 'medium' | 'low';
+  /** `confirmed` = base file the agent listed; `added` = agent-only; `excluded` = agent excluded it with read evidence; null = untouched by the agent. */
+  agent: 'confirmed' | 'added' | 'excluded' | null;
+  /** 1 = most likely to change (order in `filesToModify`); null when the agent did not rank it. */
+  rank: number | null;
+  /** Exclusion evidence (agent: 'excluded'), else null. */
+  evidence: string | null;
+  brief: string | null;
+  estimatedChangeSize: FileToModify['estimatedChangeSize'] | null;
+}
+
+/** v2 Stage 5a.5: base-set size and the agent overlay counts. */
+export interface ImpactSummary {
+  base: number;
+  confirmed: number;
+  added: number;
+  excluded: number;
+  /** Exclusions refused because the file is outside the base set or was not read in the run (file kept). */
+  rejectedExclusions: number;
 }
 
 /** v2 Stage 4a: one tool call of an agent run's exploration trace. */

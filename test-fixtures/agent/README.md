@@ -30,5 +30,9 @@ tool result changes by one byte.
 - `usage` defaults to 1,000 input / 200 output tokens. Costs are computed from it with
   `src/lib/llm/cost.ts`, exactly like real usage.
 - A script that runs out throws `MOCK_LLM_NO_FIXTURE` (never a silent default).
+- Since Stage 5a the [D] terminal tool requires `excludeFiles` (may be `[]`); a
+  `submit_update_report` input without it fails validation and the run never submits.
+- `eval-submit-empty.json` / `eval-submit-unread-exclusions.json`: the Stage 5a.8
+  offline recall check (`run --predictor v2-agent --mock-script …`).
 - Fixtures must be synthetic: never paste data from a private case
   (`visibility: 'private'` / `corpus.local.json`) or real API output here.

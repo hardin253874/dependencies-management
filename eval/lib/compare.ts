@@ -109,6 +109,31 @@ export function compareResults(a: ResultFile, b: ResultFile): string {
   rows.push({ label: 'aggregate (micro)', a: a.aggregate.micro, b: b.aggregate.micro });
   rows.push({ label: 'aggregate (macro)', a: a.aggregate.macro, b: b.aggregate.macro });
 
+  // v2-agent:subset (Stage 5a.7). Older files have no aggregateSubset: their side shows "—".
+  const sa = a.aggregateSubset;
+  const sb = b.aggregateSubset;
+  if (sa !== undefined || sb !== undefined) {
+    for (const tag of sorted([...Object.keys(sa?.byTag ?? {}), ...Object.keys(sb?.byTag ?? {})])) {
+      const row: Row = { label: `subset tag:${tag} (micro)` };
+      const ta = sa?.byTag[tag];
+      const tb = sb?.byTag[tag];
+      if (ta !== undefined) row.a = ta.micro;
+      if (tb !== undefined) row.b = tb.micro;
+      rows.push(row);
+    }
+    const micro: Row = { label: 'subset aggregate (micro)' };
+    const macro: Row = { label: 'subset aggregate (macro)' };
+    if (sa !== undefined) {
+      micro.a = sa.micro;
+      macro.a = sa.macro;
+    }
+    if (sb !== undefined) {
+      micro.b = sb.micro;
+      macro.b = sb.macro;
+    }
+    rows.push(micro, macro);
+  }
+
   const header = ['row', 'P_a', 'P_b', 'ΔP', 'R_a', 'R_b', 'ΔR'];
   if (showFindings) header.push('findings recall Δ');
   return [

@@ -1,14 +1,18 @@
 /**
  * Bounded agent loop (V2_STAGE4_SPEC 4a.7). ScriptedAgentModel only — no network.
  */
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll, afterAll, vi } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
 import { createToolRegistry } from '@/core/agent/registry';
 import { ScriptedAgentModel, type ScriptStep, type AgentTurnRequest } from '@/core/agent/model';
-import { runAgent, budgetNudge, noSubmitNudge, requestTokenUpperBound, type AgentBudgets, type RunAgentOptions, type RequestEstimate } from '@/core/agent/loop';
+import { runAgent, READ_PATHS_MAX, budgetNudge, noSubmitNudge, requestTokenUpperBound, type AgentBudgets, type RunAgentOptions, type RequestEstimate } from '@/core/agent/loop';
 import { DEFAULT_TOOL_LIMITS, type AgentToolDef, type TerminalToolDef } from '@/core/agent/types';
 import { costEstimateUsd } from '@/lib/llm/cost';
 import type { GraphDriver } from '@/core/graph/store';
+import { fileTools } from '@/core/agent/tools/files';
+import { createSandbox, type Sandbox } from '../helpers/sandbox';
+import { buildAgentFixture, type BuiltFixture } from '../helpers/agentFixture';
+import { writeProjectFile } from '../helpers/graphFixture';
 
 const MODEL = 'claude-sonnet-5-5';
 
@@ -396,5 +400,57 @@ describe('runAgent — property: usage never exceeds any budget (4a.7)', () => {
       expect(['submitted', 'budget-exhausted', 'no-submit', 'error'], ctx).toContain(r.status);
       expect(model.remaining, ctx).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('runAgent — readPaths (5a.3)', () => {
+  let sandbox: Sandbox;
+  let fx: BuiltFixture;
+
+  beforeAll(async () => {
+    sandbox = await createSandbox('agent-loop-readpaths');
+    fx = await buildAgentFixture(sandbox, 'wrapper-module', { prepare: (root) => writeProjectFile(root, '.env', 'SENTINEL_SECRET=1\n') });
+  }, 60_000);
+
+  afterAll(async () => {
+    fx.graph.close();
+    await sandbox.dispose();
+  });
+
+  it('records successful read_file paths only (normalized, insertion order, deduped); refused reads and search_code are not added', async () => {
+    const model = new ScriptedAgentModel([
+      {
+        content: [
+          tool('read_file', { path: './src/lib/http.ts', start_line: 1, end_line: 3 }),
+          tool('read_file', { path: '.env' }),
+          tool('search_code', { query: 'axios' })
+        ]
+      },
+      { content: [tool('read_file', { path: 'src/features/users.ts' }), tool('read_file', { path: 'src/lib/http.ts' }), tool('read_file', { path: 'src/nope.ts' })] },
+      submit()
+    ]);
+    const r = await runAgent(
+      options(model, { registry: createToolRegistry(fileTools()), ctx: { workspaceRoot: fx.projectRoot, graph: fx.graph, intel: {}, limits: { ...DEFAULT_TOOL_LIMITS } } })
+    );
+    expect(r.status).toBe('submitted');
+    expect(r.trace.calls.map((c) => [c.tool, c.isError])).toEqual([
+      ['read_file', false],
+      ['read_file', true],
+      ['search_code', false],
+      ['read_file', false],
+      ['read_file', false],
+      ['read_file', true]
+    ]);
+    expect(r.readPaths).toEqual(['src/lib/http.ts', 'src/features/users.ts']);
+  });
+
+  it('is empty when nothing was read, and capped at READ_PATHS_MAX', async () => {
+    const none = await runAgent(options(new ScriptedAgentModel([call('a'), submit()])));
+    expect(none.readPaths).toEqual([]);
+    const reads: AgentToolDef = { name: 'read_file', description: 'fake read', capability: 'read', inputSchema: { type: 'object', additionalProperties: false, required: ['path'], properties: { path: { type: 'string' } } }, handler: () => ({ ok: true }) };
+    const many = Array.from({ length: READ_PATHS_MAX + 20 }, (_, i) => tool('read_file', { path: `src/f${i}.ts` }));
+    const r = await runAgent(options(new ScriptedAgentModel([{ content: many }, submit()]), { budgets: { ...BIG, maxToolCalls: READ_PATHS_MAX + 50 }, registry: createToolRegistry([reads]) }));
+    expect(r.readPaths).toHaveLength(READ_PATHS_MAX);
+    expect(r.readPaths[0]).toBe('src/f0.ts');
   });
 });

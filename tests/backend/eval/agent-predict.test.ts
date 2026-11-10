@@ -39,7 +39,7 @@ function snapshot(root: string): string[] {
 }
 
 const explore: ScriptedTurn = { content: [{ type: 'tool_use', name: 'usage_sites', input: { pkg: 'axios' } }], usage: { inputTokens: 4000, outputTokens: 150 } };
-function submit(paths: string[]): ScriptedTurn {
+function submit(paths: string[], excludeFiles: Array<{ path: string; evidence: string }> = []): ScriptedTurn {
   return {
     content: [
       {
@@ -51,13 +51,25 @@ function submit(paths: string[]): ScriptedTurn {
           breakingChanges: [],
           coUpgradeDeps: [],
           filesToModify: paths.map((p) => ({ path: p, brief: 'b', estimatedChangeSize: 'small' })),
-          recommendations: []
+          recommendations: [],
+          excludeFiles
         }
       }
     ],
     usage: { inputTokens: 500, outputTokens: 800, cacheReadInputTokens: 4000 }
   };
 }
+/** wrapper-module base set for axios (impactBaseSet): 1 direct + 3 wrapper users. */
+const WM_BASE = ['src/components/Avatar.tsx', 'src/features/posts.ts', 'src/features/users.ts', 'src/lib/http.ts'];
+const readPosts: ScriptedTurn = { content: [{ type: 'tool_use', name: 'read_file', input: { path: 'src/features/posts.ts' } }] };
+const excludeScript = (): ScriptedAgentModel =>
+  new ScriptedAgentModel([
+    readPosts,
+    submit(['src/lib/http.ts', 'src/features/__tests__/users.test.ts'], [
+      { path: 'src/features/posts.ts', evidence: 'type-only use' },
+      { path: 'src/components/Avatar.tsx', evidence: 'never read' }
+    ])
+  ]);
 const prose: ScriptedTurn = { content: [{ type: 'text', text: 'done thinking' }], usage: { inputTokens: 100, outputTokens: 20 } };
 
 const CASE: Pick<CorpusCase, 'id' | 'projectDirs' | 'phases'> = {
@@ -103,8 +115,14 @@ describe('predictV2Agent (4a.14)', () => {
     const drop = new ScriptedAgentModel([prose, prose]);
     const pred = await predictV2Agent(CASE, cloneDir, opts({ upgrade: up, drop }));
 
-    expect(pred.byPhase.get('upgrade')).toEqual(['src/features/users.ts', 'src/lib/http.ts']);
-    expect(pred.byPhase.get('drop')).toEqual([]);
+    // 5a.7: full set = base ∪ added − valid excluded; the agent's pick is the subset
+    expect(pred.byPhase.get('upgrade')).toEqual(WM_BASE);
+    expect(pred.subsetByPhase!.get('upgrade')).toEqual(['src/features/users.ts', 'src/lib/http.ts']);
+    // a run that does not submit predicts the base set (same as the app's partial envelope)
+    expect(pred.byPhase.get('drop')).toEqual(WM_BASE);
+    expect(pred.subsetByPhase!.get('drop')).toEqual([]);
+    expect(pred.agentByPhase!.get('upgrade')!.impact).toEqual({ base: 4, confirmed: 2, added: 0, excluded: 0, rejectedExclusions: 0, excludedTruePositives: 0 });
+    expect(pred.agentByPhase!.get('drop')!.impact).toEqual({ base: 4, confirmed: 0, added: 0, excluded: 0, rejectedExclusions: 0, excludedTruePositives: 0 });
     const a = pred.agentByPhase!.get('upgrade')!;
     expect(a).toMatchObject({ status: 'submitted', runs: 1, toolCalls: 1, hallucinatedPaths: 1, inputTokens: 4500, outputTokens: 950, cacheReadTokens: 4000 });
     expect(pred.agentByPhase!.get('drop')).toMatchObject({ status: 'no-submit', runs: 1, toolCalls: 0 });
@@ -136,7 +154,9 @@ describe('predictV2Agent (4a.14)', () => {
         'upgrade:apps/b': new ScriptedAgentModel([submit(['src/components/Avatar.tsx'])])
       })
     );
-    expect(pred.byPhase.get('upgrade')).toEqual(['apps/a/src/lib/http.ts', 'apps/b/src/components/Avatar.tsx']);
+    expect(pred.byPhase.get('upgrade')).toEqual([...WM_BASE.map((p) => `apps/a/${p}`), ...WM_BASE.map((p) => `apps/b/${p}`)]);
+    expect(pred.subsetByPhase!.get('upgrade')).toEqual(['apps/a/src/lib/http.ts', 'apps/b/src/components/Avatar.tsx']);
+    expect(pred.agentByPhase!.get('upgrade')!.impact).toMatchObject({ base: 8, confirmed: 2 });
     expect(pred.agentByPhase!.get('upgrade')!.runs).toBe(2);
     expect(existsSync(runRecordPath(cacheDir, 'agent-test', twoDirs.id, 'upgrade', 'apps/a', true))).toBe(true);
   }, 60_000);
@@ -195,5 +215,63 @@ describe('v2-agent privacy routing (4a.14, mirrors graph-privacy.test.ts)', () =
     expect(readFileSync(priv, 'utf8')).toContain(PRIVATE_ID);
     // run records live in the cache dir (outside the repo)
     expect(existsSync(path.join(cacheDir, '_runs', 'agent-test', `${PRIVATE_ID}-upgrade.json`))).toBe(true);
+  }, 60_000);
+});
+
+describe('predictV2Agent — full set vs subset (5a.7)', () => {
+  it('full = base ∪ added − valid excluded; rejected exclusions keep the file; clone unchanged', async () => {
+    const one = { ...CASE, id: 'wm-excl', phases: [CASE.phases[0]!] };
+    const cloneDir = await clone(one.id);
+    const before = snapshot(cloneDir);
+    const pred = await predictV2Agent(one, cloneDir, opts({ upgrade: excludeScript() }));
+    expect(pred.byPhase.get('upgrade')).toEqual(['src/components/Avatar.tsx', 'src/features/__tests__/users.test.ts', 'src/features/users.ts', 'src/lib/http.ts']);
+    expect(pred.subsetByPhase!.get('upgrade')).toEqual(['src/features/__tests__/users.test.ts', 'src/lib/http.ts']);
+    expect(pred.excludedByPhase!.get('upgrade')).toEqual(['src/features/posts.ts']);
+    expect(pred.agentByPhase!.get('upgrade')!.impact).toEqual({ base: 4, confirmed: 1, added: 1, excluded: 1, rejectedExclusions: 1, excludedTruePositives: 0 });
+    expect(snapshot(cloneDir)).toEqual(before);
+  }, 60_000);
+
+  it('runEval: subset scored per phase, excludedTruePositives counted against truth, aggregateSubset in the file', async () => {
+    const cloneDir = await clone('wm-score');
+    const resultsDir = await sandbox.scratch('results-subset');
+    const c: LoadedCase = {
+      id: 'wm-score',
+      repo: 'https://example.invalid/wm-score',
+      baseCommit: 'a'.repeat(40),
+      projectDirs: ['.'],
+      phases: [CASE.phases[0]!],
+      tags: ['complex'],
+      visibility: 'public',
+      sourceFile: 'x.json'
+    };
+    const truth = { kept: [
+      { path: 'src/features/posts.ts', kind: 'source' as const, status: 'M' },
+      { path: 'src/lib/http.ts', kind: 'source' as const, status: 'M' },
+      { path: 'src/features/users.ts', kind: 'source' as const, status: 'M' }
+    ], dropped: [], addedCount: 0, outOfScope: [] };
+    const outcome = await runEval({
+      cases: [c],
+      label: 'agent-subset',
+      predictor: 'v2-agent',
+      tool: { commit: 'x', dirty: false },
+      resultsDir,
+      now: new Date(2026, 10, 10, 12, 0, 0),
+      deps: {
+        prepare: async () => cloneDir,
+        truth: async () => [{ phaseId: 'upgrade', truth }],
+        predict: (cc, dir) => predictV2Agent(cc, dir, opts({ upgrade: excludeScript() })),
+        log: () => undefined
+      }
+    });
+    const file = outcome.results[0]!;
+    const phase = file.cases[0]!.phases[0]!;
+    // full: Avatar, users.test, users, http → tp 2 (users, http) of 3 truth
+    expect(phase).toMatchObject({ predictedCount: 4, tp: 2 });
+    expect(phase.recall).toBeCloseTo(2 / 3, 6);
+    expect(phase.agent!.subset).toEqual({ predictedCount: 2, tp: 1, precision: 0.5, recall: 1 / 3 });
+    expect(phase.agent!.impact!.excludedTruePositives).toBe(1);
+    expect(file.aggregateSubset!.micro).toEqual({ precision: 0.5, recall: 1 / 3 });
+    expect(file.aggregateSubset!.byTag.complex!.micro).toEqual({ precision: 0.5, recall: 1 / 3 });
+    expect(file.aggregate.micro.recall).toBeCloseTo(2 / 3, 6);
   }, 60_000);
 });

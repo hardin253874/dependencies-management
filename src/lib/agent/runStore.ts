@@ -15,6 +15,7 @@ import { runFilePath } from '../paths';
 import { readEnvelope, writeEnvelope, type Envelope } from '../storage/envelope';
 import type { AgentBudgets, AgentRunStatus, AgentTrace, AgentUsage, BudgetName, StopDetail } from '../../core/agent/loop';
 import type { LlmEffort } from '../llm/effort';
+import type { ImpactSummary } from '../api-types';
 
 export const RUN_TRIGGERS = ['user'] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
@@ -44,6 +45,10 @@ export interface AgentRunRecord {
   resultRef: string | null;
   /** `filesToModify` entries dropped because the path is not in the graph. */
   droppedPaths: number;
+  /** v2 Stage 5a.3: paths of successful `read_file` calls (evidence for exclusions). Optional: older records lack it. */
+  readPaths?: string[];
+  /** v2 Stage 5a.5: base impacted set + agent overlay counts ([D] only). Optional: older records lack it. */
+  impactSummary?: ImpactSummary;
 }
 
 const RUN_ID_RE = /^[a-z0-9][a-z0-9-]{5,63}$/;

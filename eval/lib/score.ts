@@ -112,3 +112,22 @@ export function aggregate(cases: readonly CaseResult[]): Aggregate {
 
   return { micro: overall.micro, macro: overall.macro, byTag, errors: cases.length - ok.length };
 }
+
+/**
+ * `v2-agent:subset` (5a.7): the same aggregate over each phase's
+ * `agent.subset` score. Phases without a subset (other predictors, older
+ * files) are left out; null when no phase has one.
+ */
+export function aggregateSubset(cases: readonly CaseResult[]): Aggregate | null {
+  let any = false;
+  const mapped = cases.map((c) => ({
+    ...c,
+    phases: c.phases.flatMap((p) => {
+      const s = p.agent?.subset;
+      if (s === undefined) return [];
+      any = true;
+      return [{ ...p, predictedCount: s.predictedCount, tp: s.tp, precision: s.precision, recall: s.recall }];
+    })
+  }));
+  return any ? aggregate(mapped) : null;
+}

@@ -8,6 +8,7 @@ import { filesUsingPackage, graphInfo } from '../graph/query';
 import type { ApiDiffResult } from '../intel/apiDiff';
 import { graphFileSet } from './pathGuard';
 import type { GraphDriver } from '../graph/store';
+import type { ImpactBaseItem } from './impactBase';
 
 const API_DIFF_NAMES_IN_SEED = 30;
 
@@ -33,6 +34,29 @@ export function usageLines(graph: GraphDriver, packages: readonly string[]): str
     };
     return `${pkg}: ${hits.length} files (${count('via')}; ${count('category')})`;
   });
+}
+
+function countsBy(items: readonly ImpactBaseItem[], key: 'via' | 'kind', order: readonly string[]): string {
+  const m = new Map<string, number>();
+  for (const it of items) m.set(it[key], (m.get(it[key]) ?? 0) + 1);
+  return order.filter((k) => m.has(k)).map((k) => `${k} ${m.get(k)}`).join(', ');
+}
+
+/**
+ * Base impacted set for the seed (5a.4): counts only, never the file list
+ * (superset has 1,352 files). First line = totals by via and kind, then one
+ * line per package in the given order.
+ */
+export function impactBaseLines(base: readonly ImpactBaseItem[], packages: readonly string[]): string[] {
+  const via = ['direct', 'reexport', 'wrapper'];
+  const kind = ['js', 'style', 'config'];
+  if (base.length === 0) return ['0 files: the graph links no file to these packages'];
+  const total = `${base.length} files (${countsBy(base, 'via', via)}; ${countsBy(base, 'kind', kind)})`;
+  const perPkg = [...new Set(packages)].map((pkg) => {
+    const mine = base.filter((b) => b.packages.includes(pkg));
+    return mine.length === 0 ? `${pkg}: 0 files` : `${pkg}: ${mine.length} files (${countsBy(mine, 'via', via)}; ${countsBy(mine, 'kind', kind)})`;
+  });
+  return [total, ...perPkg];
 }
 
 export function apiDiffSeedLines(diff: ApiDiffResult | null): string[] {

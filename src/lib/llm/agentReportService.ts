@@ -21,7 +21,13 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { buildDeterministicSkeleton, runUpdateReport } from './reportService';
 import { UPDATE_REPORT_TOOL_SCHEMA, type UpdateReportPromptInput, type UpdateReportToolOutput } from './prompts/update-report';
-import { AGENT_PROMPT_VERSION, AGENT_SYSTEM_PROMPT, renderAgentUpdateSeed, type AgentSeedPackage } from './prompts/agent-update-report';
+import {
+  AGENT_PROMPT_VERSION,
+  AGENT_SYSTEM_PROMPT,
+  AGENT_UPDATE_REPORT_TOOL_SCHEMA,
+  renderAgentUpdateSeed,
+  type AgentSeedPackage
+} from './prompts/agent-update-report';
 import { canonicalJsonStringify, computeCacheKey } from './cacheKey';
 import { LLMError, type LLMClient, type LlmCallResult, type ToolSchema } from './client';
 import { VIEW_EFFORT, type LlmEffort } from './effort';
@@ -31,7 +37,10 @@ import type { AgentRunRecord } from '../agent/runStore';
 import type { AgentBudgets, AgentEvent, AgentRunResult, SpendGate } from '../../core/agent/loop';
 import type { AgentModel } from '../../core/agent/model';
 import { createReadToolRegistry } from '../../core/agent/tools';
-import { apiDiffSeedLines, filterToGraphFiles, graphSummaryLines, usageLines } from '../../core/agent/seedFacts';
+import { apiDiffSeedLines, filterToGraphFiles, graphSummaryLines, impactBaseLines, normalizeReportedPath, usageLines } from '../../core/agent/seedFacts';
+import { impactBaseSet, impactOverlay, type ImpactBaseItem } from '../../core/agent/impactBase';
+import { graphFileSet } from '../../core/agent/pathGuard';
+import type { AgentExcludeFile } from './prompts/agent-update-report';
 import { playbookBlock, type Playbook, matchPlaybooks } from '../../core/agent/playbooks';
 import { computeApiDiff, type ApiDiffResult } from '../../core/intel/apiDiff';
 import type { IntelContext, TerminalToolDef } from '../../core/agent/types';
@@ -82,10 +91,11 @@ export interface AgentUpdateReportRun {
   seedPrompt: string;
 }
 
+/** Agent [D] terminal tool: the v1 schema + `excludeFiles` (5a.4). */
 export const UPDATE_REPORT_TERMINAL: TerminalToolDef = {
-  name: UPDATE_REPORT_TOOL_SCHEMA.name,
-  description: UPDATE_REPORT_TOOL_SCHEMA.description,
-  inputSchema: UPDATE_REPORT_TOOL_SCHEMA.inputSchema
+  name: AGENT_UPDATE_REPORT_TOOL_SCHEMA.name,
+  description: AGENT_UPDATE_REPORT_TOOL_SCHEMA.description,
+  inputSchema: AGENT_UPDATE_REPORT_TOOL_SCHEMA.inputSchema
 };
 
 export function resolverLines(promptInput: { resolverCheck: UpdateReportPromptInput['resolverCheck'] }): string[] {
@@ -123,8 +133,18 @@ export function seedMessage(seed: string, input: AgentReportCommonInput, package
   return { messages: [{ role: 'user', content }], playbookText };
 }
 
-export function agentCacheKey(opts: { system: string; seed: string; playbookText: string | null; tool: ToolSchema; model: string; graph: GraphDriver; budgets: AgentBudgets }): string {
-  const suffix = canonicalJsonStringify({ graphBuiltAt: completedBuildAt(opts.graph), agentPromptVersion: AGENT_PROMPT_VERSION, budgets: opts.budgets });
+export function agentCacheKey(opts: {
+  system: string;
+  seed: string;
+  playbookText: string | null;
+  tool: ToolSchema;
+  model: string;
+  graph: GraphDriver;
+  budgets: AgentBudgets;
+  /** Defaults to AGENT_PROMPT_VERSION (parameter only so a test can prove the version is in the key). */
+  promptVersion?: number;
+}): string {
+  const suffix = canonicalJsonStringify({ graphBuiltAt: completedBuildAt(opts.graph), agentPromptVersion: opts.promptVersion ?? AGENT_PROMPT_VERSION, budgets: opts.budgets });
   return computeCacheKey({
     systemPrompt: opts.system,
     userPrompt: `${opts.seed}\n${opts.playbookText ?? ''}\n${suffix}`,
@@ -171,11 +191,34 @@ export function runFailureError(result: AgentRunResult): LLMError {
   return new LLMError('LLM_TOOL_USE_MISSING', `agent run ${result.status}: ${result.stopDetail.message}`);
 }
 
+/** Raw `excludeFiles` of a submitted tool input (validated by the loop; read defensively anyway). */
+function submittedExcludes(output: unknown, workspaceRoot: string): Array<{ path: string | null; evidence: string }> {
+  const raw = output !== null && typeof output === 'object' ? (output as { excludeFiles?: unknown }).excludeFiles : undefined;
+  if (!Array.isArray(raw)) return [];
+  return (raw as Array<Partial<AgentExcludeFile> | null>).map((e) => ({
+    path: typeof e?.path === 'string' ? normalizeReportedPath(e.path, workspaceRoot) : null,
+    evidence: typeof e?.evidence === 'string' ? e.evidence : ''
+  }));
+}
+
+/** 5a.5: base impacted set + agent overlay → `impactedFiles` / `impactSummary` (also the run record's summary). */
+export function buildImpactedFiles(
+  graph: GraphDriver,
+  base: readonly ImpactBaseItem[],
+  overlay: { ranked: UpdateReportDetail['filesToModify']; excludes: Array<{ path: string | null; evidence: string }>; readPaths: readonly string[] }
+): Pick<Required<UpdateReportDetail>, 'impactedFiles' | 'impactSummary'> {
+  const files = graphFileSet(graph);
+  const { rows, counts } = impactOverlay({ base, ...overlay, kindOf: (p) => files.get(p)?.kind ?? 'js' });
+  return { impactedFiles: rows, impactSummary: counts };
+}
+
 export async function runAgentUpdateReport(input: RunAgentUpdateReportInput): Promise<AgentUpdateReportRun> {
   const dep = input.promptInput.dep;
   const packages = input.packages ?? [{ name: dep.name, from: dep.fromVersion, to: dep.toVersion }];
   const primary = packages[0]!;
   const apiDiff = input.apiDiff !== undefined ? input.apiDiff : await seedApiDiff(input.intel, primary.name, primary.from, primary.to, input.signal);
+  const packageNames = packages.map((p) => p.name);
+  const base = impactBaseSet(input.graph, packageNames);
   const seed = renderAgentUpdateSeed({
     packages,
     resolverLines: resolverLines(input.promptInput),
@@ -183,11 +226,12 @@ export async function runAgentUpdateReport(input: RunAgentUpdateReportInput): Pr
     graphSummaryLines: graphSummaryLines(input.graph),
     usageLines: usageLines(input.graph, packages.map((p) => p.name)),
     apiDiffLines: apiDiffSeedLines(apiDiff),
+    impactBaseLines: impactBaseLines(base, packageNames),
     maxToolCalls: input.budgets.maxToolCalls,
     submitTool: UPDATE_REPORT_TERMINAL.name
   });
   const { messages, playbookText } = seedMessage(seed, input, packages);
-  const cacheKey = agentCacheKey({ system: AGENT_SYSTEM_PROMPT, seed, playbookText, tool: UPDATE_REPORT_TOOL_SCHEMA, model: input.modelId, graph: input.graph, budgets: input.budgets });
+  const cacheKey = agentCacheKey({ system: AGENT_SYSTEM_PROMPT, seed, playbookText, tool: AGENT_UPDATE_REPORT_TOOL_SCHEMA, model: input.modelId, graph: input.graph, budgets: input.budgets });
 
   const { result, record } = await executeAgentRun<UpdateReportToolOutput>({
     view: 'update-report',
@@ -224,9 +268,12 @@ export async function runAgentUpdateReport(input: RunAgentUpdateReportInput): Pr
     const v1 = await runUpdateReport(replayClient(result.output, result, input.modelId), v1Input);
     const { kept, dropped } = filterToGraphFiles(v1.detail.filesToModify, input.graph, input.workspaceRoot);
     record.droppedPaths = dropped.length;
+    const impact = buildImpactedFiles(input.graph, base, { ranked: kept, excludes: submittedExcludes(result.output, input.workspaceRoot), readPaths: result.readPaths });
+    record.impactSummary = impact.impactSummary;
     const detail: UpdateReportDetail = {
       ...v1.detail,
       filesToModify: kept,
+      ...impact,
       cost: {
         inputTokens: result.usage.inputTokens,
         outputTokens: result.usage.outputTokens,
@@ -245,6 +292,9 @@ export async function runAgentUpdateReport(input: RunAgentUpdateReportInput): Pr
   log.warn({ err: llmError.message, code: llmError.code, status: result.status, runId: record.runId }, 'Agent update report did not submit; deterministic-partial');
   const skeleton = buildDeterministicSkeleton(v1Input);
   const graphUsers = filesUsingPackage(input.graph, primary.name, { wrapperDepth: 0 }).slice(0, SKELETON_GRAPH_FILES);
+  // Graph facts need no AI: the partial envelope still lists the whole base set.
+  const impact = buildImpactedFiles(input.graph, base, { ranked: [], excludes: [], readPaths: [] });
+  record.impactSummary = impact.impactSummary;
   const detail: UpdateReportDetail = {
     ...skeleton,
     filesToModify: graphUsers.map((h) => ({
@@ -252,6 +302,7 @@ export async function runAgentUpdateReport(input: RunAgentUpdateReportInput): Pr
       brief: `Uses ${primary.name} (${h.via}, from the code graph; not analysed — the agent run ended with "${result.status}").`,
       estimatedChangeSize: 'small'
     })),
+    ...impact,
     agentRun: agentRunSummary(record)
   };
   return { cacheKey, detail, source: 'deterministic-partial', llmError, record, droppedPaths: [], seedPrompt: seed };

@@ -95,7 +95,8 @@ export async function executeAgentRun<T>(input: ExecuteAgentRunInput): Promise<E
     trace: result.trace,
     graphBuiltAt: completedBuildAt(input.graph),
     resultRef: null,
-    droppedPaths: 0
+    droppedPaths: 0,
+    readPaths: result.readPaths
   };
   return { result, record };
 }

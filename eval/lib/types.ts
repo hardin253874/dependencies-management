@@ -125,6 +125,27 @@ export interface PhaseAgentInfo {
   /** Reported filesToModify paths that are not graph files (reported, not scored). */
   hallucinatedPaths: number;
   durationMs: number;
+  /** v2 Stage 5a.7 (v2-agent): the agent's own pick (confirmed ∪ added), scored separately. Older files lack it. */
+  subset?: SubsetScore;
+  /** v2 Stage 5a.7 (v2-agent): base set + overlay counts, summed over the phase's runs. Older files lack it. */
+  impact?: PhaseImpactInfo;
+}
+
+export interface SubsetScore {
+  predictedCount: number;
+  tp: number;
+  precision: number | null;
+  recall: number | null;
+}
+
+export interface PhaseImpactInfo {
+  base: number;
+  confirmed: number;
+  added: number;
+  excluded: number;
+  rejectedExclusions: number;
+  /** Valid exclusions that are truth files (the recall the exclusions cost). Set when scored. */
+  excludedTruePositives: number;
 }
 
 export interface CasePrediction {
@@ -138,6 +159,10 @@ export interface CasePrediction {
   agentByPhase?: Map<string, PhaseAgentInfo>;
   /** Phases the predictor did not predict (excluded from aggregates), with the reason. */
   skippedPhases?: Map<string, string>;
+  /** v2-agent (5a.7): phase id → the agent's own pick (confirmed ∪ added), prefixed like byPhase. */
+  subsetByPhase?: Map<string, string[]>;
+  /** v2-agent (5a.7): phase id → valid exclusions (removed from byPhase), prefixed like byPhase. */
+  excludedByPhase?: Map<string, string[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +285,8 @@ export interface ResultFile {
   visibility: Visibility;
   cases: CaseResult[];
   aggregate: Aggregate;
+  /** v2 Stage 5a.7 (v2-agent): aggregate of the `agent.subset` scores ("v2-agent:subset"). Older files lack it. */
+  aggregateSubset?: Aggregate;
   /** Stage 4c `--real` runs only. */
   spend?: SpendInfo;
 }

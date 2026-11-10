@@ -94,7 +94,8 @@ const submit = {
         breakingChanges: [],
         coUpgradeDeps: [],
         filesToModify: [{ path: 'src/index.tsx', brief: 'Uses React.createElement.', estimatedChangeSize: 'small' }],
-        recommendations: []
+        recommendations: [],
+        excludeFiles: []
       }
     }
   ]

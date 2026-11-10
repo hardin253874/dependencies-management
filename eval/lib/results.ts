@@ -12,10 +12,13 @@ import path from 'path';
 import { atomicWriteJson } from '../../src/lib/storage/atomic';
 import { phaseTags } from './corpus';
 import { renderFindingsSheet, type SheetCase } from './findings';
-import { aggregate, scorePhase } from './score';
+import { aggregate, aggregateSubset, scorePhase, type PhaseMeta } from './score';
+import { normalizeRepoPath } from './truth';
 import {
   RESULT_SCHEMA_VERSION,
+  type Aggregate,
   type CasePrediction,
+  type PhaseAgentInfo,
   type CaseResult,
   type LoadedCase,
   type PredictorId,
@@ -92,6 +95,25 @@ function errorCase(c: LoadedCase, message: string): CaseResult {
   };
 }
 
+/** v2-agent (5a.7): scores the agent's subset and counts excluded truth files, on a copy of the phase info. */
+function withSubsetScore(
+  agent: PhaseAgentInfo | undefined,
+  meta: PhaseMeta,
+  truth: TruthSet,
+  subset: readonly string[] | undefined,
+  excluded: readonly string[] | undefined
+): PhaseAgentInfo | undefined {
+  if (agent === undefined || subset === undefined) return agent;
+  const s = scorePhase(meta, truth, subset);
+  const truthPaths = new Set(truth.kept.map((k) => normalizeRepoPath(k.path)));
+  const excludedTruePositives = (excluded ?? []).filter((p) => truthPaths.has(normalizeRepoPath(p))).length;
+  return {
+    ...agent,
+    subset: { predictedCount: s.predictedCount, tp: s.tp, precision: s.precision, recall: s.recall },
+    ...(agent.impact !== undefined ? { impact: { ...agent.impact, excludedTruePositives } } : {})
+  };
+}
+
 export async function runCase(
   c: LoadedCase,
   deps: RunDeps
@@ -109,7 +131,13 @@ export async function runCase(
         prediction.byPhase.get(phase.id) ?? []
       );
       const skipped = prediction.skippedPhases?.get(phase.id);
-      const agent = prediction.agentByPhase?.get(phase.id);
+      const agent = withSubsetScore(
+        prediction.agentByPhase?.get(phase.id),
+        { id: phase.id, packages: phase.packages.map((p) => p.name), tags: phaseTags(c, phase) },
+        t.truth,
+        prediction.subsetByPhase?.get(phase.id),
+        prediction.excludedByPhase?.get(phase.id)
+      );
       return {
         ...scored,
         ...(skipped !== undefined ? { status: 'skipped' as const, reason: skipped } : {}),
@@ -151,8 +179,21 @@ export function buildResultFile(args: {
     tool: args.tool,
     visibility: args.visibility,
     cases: args.cases,
-    aggregate: aggregate(args.cases)
+    aggregate: aggregate(args.cases),
+    ...withAggregateSubset(args.cases)
   };
+}
+
+function withAggregateSubset(cases: readonly CaseResult[]): { aggregateSubset?: Aggregate } {
+  const sub = aggregateSubset(cases);
+  return sub === null ? {} : { aggregateSubset: sub };
+}
+
+function prLine(name: string, a: Aggregate): string {
+  const tags = Object.entries(a.byTag)
+    .map(([tag, t]) => `${tag} P=${fmt(t.micro.precision)} R=${fmt(t.micro.recall)}`)
+    .join(' · ');
+  return `${name}: micro P=${fmt(a.micro.precision)} R=${fmt(a.micro.recall)} · macro P=${fmt(a.macro.precision)} R=${fmt(a.macro.recall)}${tags === '' ? '' : ` · ${tags}`}`;
 }
 
 async function exists(p: string): Promise<boolean> {
@@ -203,6 +244,8 @@ export async function runEval(opts: RunOptions): Promise<RunOutcome> {
       cases: mine.map((d) => d.result)
     });
     if (opts.spend !== undefined) file.spend = opts.spend();
+    opts.deps.log(`[${v}] ${prLine(opts.predictor, file.aggregate)}`);
+    if (file.aggregateSubset !== undefined) opts.deps.log(`[${v}] ${prLine(`${opts.predictor}:subset`, file.aggregateSubset)}`);
     const target = resultFilePath(opts.resultsDir, v, date, opts.label);
     await atomicWriteJson(target, file);
     written.push(target);

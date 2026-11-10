@@ -23,6 +23,7 @@ import { Button } from '../modals/Button';
 import { DeepAnalyzeConfirmModal } from '../modals/DeepAnalyzeConfirmModal';
 import { AgentRunConfirmModal } from '../modals/AgentRunConfirmModal';
 import { ExplorationTrace } from './ExplorationTrace';
+import { ImpactedFilesList } from './ImpactedFilesList';
 import {
   RelatedUpgradeTable,
   type RelatedUpgradeTableClassNames
@@ -418,6 +419,9 @@ export function UpdateReportView({ slug, depName, fromVersion, toVersion }: Prop
           </ul>
         )}
       </section>
+
+      {/* v2 Stage 5a.6: older envelopes have no impactedFiles → nothing rendered. */}
+      <ImpactedFilesList files={detail.impactedFiles ?? []} packageLabel={depName} />
 
       {detail.recommendations.length > 0 && (
         <section className={styles.section} aria-label="Recommendations">

@@ -17,7 +17,8 @@
             "breakingChanges": [],
             "coUpgradeDeps": [],
             "filesToModify": [],
-            "recommendations": ["MOCK_LLM is on; set MOCK_LLM=false for a real analysis."]
+            "recommendations": ["MOCK_LLM is on; set MOCK_LLM=false for a real analysis."],
+            "excludeFiles": []
           }
         }
       ],

@@ -1,0 +1,28 @@
+{
+  "scenario": "eval-submit-empty",
+  "description": "Stage 5a.8 offline recall check: one graph_summary call, then a submit with empty filesToModify and excludeFiles. The v2-agent full set is then exactly the graph base set.",
+  "turns": [
+    {
+      "content": [{ "type": "tool_use", "name": "graph_summary", "input": {} }],
+      "usage": { "inputTokens": 3200, "outputTokens": 150 }
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "name": "submit_update_report",
+          "input": {
+            "summary": "MOCK eval run: graph summary only, no file claims.",
+            "riskLevel": "medium",
+            "breakingChanges": [],
+            "coUpgradeDeps": [],
+            "filesToModify": [],
+            "recommendations": [],
+            "excludeFiles": []
+          }
+        }
+      ],
+      "usage": { "inputTokens": 400, "outputTokens": 300, "cacheReadInputTokens": 3200 }
+    }
+  ]
+}

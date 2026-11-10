@@ -9,9 +9,13 @@
  * - the [D] agent is seeded with ALL phase packages (`to: null` = removal,
  *   `from: null` = addition, both stated in the prompt);
  * - `workspaceRoot` = the clone's projectDir (read-only, never installed);
- * - predicted set = the submitted report's `filesToModify` paths, already
- *   normalized and filtered to the graph file set by the service, prefixed
- *   with the projectDir. A run that does not submit predicts nothing.
+ * - predicted set (Stage 5a.7, proposed D29) = the report's `impactedFiles`
+ *   full set: the graph base set of ALL phase packages ∪ agent-added files −
+ *   exclusions backed by a `read_file` in the same run, prefixed with the
+ *   projectDir. A run that does not submit predicts the base set (its
+ *   deterministic-partial envelope carries it), like the app.
+ * - subset = the agent's own pick (`confirmed ∪ added`, = `filesToModify`),
+ *   scored separately as `agent.subset` / `v2-agent:subset`.
  *   Dropped paths are counted as `hallucinatedPaths` (reported, not scored).
  * - run records go to `<cache>/_runs/<label>/<caseId>-<phaseId>[-<dir>].json`
  *   (the cache is outside the repo, so private cases never reach a tracked file).
@@ -31,7 +35,7 @@ import { runAgentUpdateReport } from '../../src/lib/llm/agentReportService';
 import { atomicWriteJson } from '../../src/lib/storage/atomic';
 import type { LlmEffort } from '../../src/lib/llm/effort';
 import { graphDbPath, prefixed, projectDirSlug } from './predict-graph';
-import type { CasePrediction, CorpusCase, CorpusPhase, PhaseAgentInfo } from './types';
+import type { CasePrediction, CorpusCase, CorpusPhase, PhaseAgentInfo, PhaseImpactInfo } from './types';
 
 const trivialLock: GraphLock = (_key, fn) => fn();
 
@@ -61,8 +65,16 @@ export interface AgentPredictOptions {
 
 const STATUS_RANK: Readonly<Record<string, number>> = { submitted: 0, 'no-submit': 1, 'budget-exhausted': 2, cancelled: 3, error: 4 };
 
+function emptyImpact(): PhaseImpactInfo {
+  return { base: 0, confirmed: 0, added: 0, excluded: 0, rejectedExclusions: 0, excludedTruePositives: 0 };
+}
+
 function emptyInfo(): PhaseAgentInfo {
-  return { status: 'submitted', runs: 0, toolCalls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0, hallucinatedPaths: 0, durationMs: 0 };
+  return { status: 'submitted', runs: 0, toolCalls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0, hallucinatedPaths: 0, durationMs: 0, impact: emptyImpact() };
+}
+
+function addTo(map: Map<string, string[]>, phaseId: string, paths: Iterable<string>): void {
+  map.set(phaseId, [...new Set([...(map.get(phaseId) ?? []), ...paths])].sort());
 }
 
 export function runRecordPath(cacheDir: string, label: string, caseId: string, phaseId: string, projectDir: string, multiDir: boolean): string {
@@ -84,6 +96,8 @@ export async function predictV2Agent(
   let filesScanned = 0;
   let costUsd = 0;
   const byPhase = new Map<string, string[]>();
+  const subsetByPhase = new Map<string, string[]>();
+  const excludedByPhase = new Map<string, string[]>();
   const agentByPhase = new Map<string, PhaseAgentInfo>();
   const multiDir = c.projectDirs.length > 1;
 
@@ -122,9 +136,12 @@ export async function predictV2Agent(
         const record = run.record;
         await atomicWriteJson(runRecordPath(opts.cacheDir, opts.label, c.id, phase.id, projectDir, multiDir), record);
 
-        const predicted = new Set(byPhase.get(phase.id) ?? []);
-        if (record.status === 'submitted') for (const f of run.detail.filesToModify) predicted.add(prefixed(projectDir, f.path));
-        byPhase.set(phase.id, [...predicted].sort());
+        // Submitted or not, the detail carries impactedFiles (partial = base set only).
+        const rows = run.detail.impactedFiles ?? [];
+        const at = (keep: (r: (typeof rows)[number]) => boolean) => rows.filter(keep).map((r) => prefixed(projectDir, r.path));
+        addTo(byPhase, phase.id, at((r) => r.agent !== 'excluded'));
+        addTo(subsetByPhase, phase.id, at((r) => r.agent === 'confirmed' || r.agent === 'added'));
+        addTo(excludedByPhase, phase.id, at((r) => r.agent === 'excluded'));
 
         const info = agentByPhase.get(phase.id) ?? emptyInfo();
         info.runs += 1;
@@ -136,6 +153,16 @@ export async function predictV2Agent(
         info.costUsd = round6(info.costUsd + record.costUsd);
         info.hallucinatedPaths += run.droppedPaths.length;
         info.durationMs += record.durationMs;
+        const sum = run.detail.impactSummary;
+        if (sum !== undefined) {
+          const imp = info.impact ?? emptyImpact();
+          imp.base += sum.base;
+          imp.confirmed += sum.confirmed;
+          imp.added += sum.added;
+          imp.excluded += sum.excluded;
+          imp.rejectedExclusions += sum.rejectedExclusions;
+          info.impact = imp;
+        }
         agentByPhase.set(phase.id, info);
         costUsd += record.costUsd;
       }
@@ -143,7 +170,7 @@ export async function predictV2Agent(
       graph.close();
     }
   }
-  return { filesScanned, durationMs: Date.now() - started, byPhase, costUsd: round6(costUsd), agentByPhase };
+  return { filesScanned, durationMs: Date.now() - started, byPhase, subsetByPhase, excludedByPhase, costUsd: round6(costUsd), agentByPhase };
 }
 
 function round6(n: number): number {

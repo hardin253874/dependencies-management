@@ -39,7 +39,8 @@ MCP server and a later Agent SDK runtime (D9) reuse them unchanged.
 | `model.ts` | `AgentModel` seam (SDK types), `ScriptedAgentModel`, script file shape |
 | `loop.ts` | `runAgent`: budgets, projection, final turn, cancel, trace, spend-gate seam |
 | `budgets.ts` | Default budgets per view, derived `maxUsd`, config normalization |
-| `seedFacts.ts` | Seed facts (graph summary, usage counts, api_diff lines) + reported-path normalization / graph filter |
+| `seedFacts.ts` | Seed facts (graph summary, usage counts, base-set counts, api_diff lines) + reported-path normalization / graph filter |
+| `impactBase.ts` | Stage 5a: `impactBaseSet` (graph base impacted set, the v2-graph rule) + `impactOverlay` (agent rank / add / exclude on top) |
 | `playbooks.ts` | Playbook front matter, matching, seed block, loader for `playbooks/*.md` |
 
 App wiring lives in `src/lib/agent/` (run records, factory, registry intel,
@@ -97,6 +98,40 @@ allowed, then `budget-exhausted`. Text-only answers get one nudge, then
 wall-time limit aborts an in-flight request. Known limit: a cache miss after
 caching was seen can make one request cost more than projected; the 4c spend
 gate prices every request at the uncached price, so its cap still holds.
+
+## Impacted files: base set + agent overlay (Stage 5a, proposed D29)
+
+The [D] report's impacted files start from the graph, not from what the agent
+happened to inspect (Stage 4c measured the agent at complex recall 0.068 vs
+v2-graph 0.713 because only `filesToModify` was scored).
+
+- **Base set** = `impactBaseSet(graph, packages)`: every
+  `filesUsingPackage(…, { transitive: true, wrapperDepth: 1 })` hit except a
+  non-JS file reached via `reexport` — the `eval/lib/predict-graph.ts` rule, no
+  new SQL. Deduplicated over packages (best via wins), path ascending, each item
+  with `via`, `kind`, `confidence`, `packages[]`. `impact-base.test.ts` proves
+  it equals `predictV2Graph` on fixtures.
+- **Seed**: only the counts (`impactBaseLines`: totals by via/kind, one line per
+  package), never the list (superset has 1,352 files). The agent is told the set
+  is already in the report and asked to rank, add, and exclude with evidence.
+- **Terminal tool** (`AGENT_UPDATE_REPORT_TOOL_SCHEMA`): the v1
+  `UPDATE_REPORT_TOOL_SCHEMA` spread (v1 object untouched) + a REQUIRED
+  `excludeFiles: [{ path, evidence }]` (required, so the strict-schema optional
+  param count does not grow; may be empty).
+- **`readPaths`** (`AgentRunResult`, run record): normalized paths of every
+  successful `read_file` call (insertion order, deduped, cap `READ_PATHS_MAX` =
+  500). Refused / failed reads are not in it. No effect on budgets or requests.
+- **Overlay** (`impactOverlay`): `filesToModify` (after the graph-file filter)
+  in the agent's order gives the rank; a ranked base file is `confirmed`, a
+  ranked non-base graph file is `added` (`origin: 'agent'`); hallucinated paths
+  are dropped and counted as before. An exclusion is valid only for a base file
+  that is in `readPaths` and not also ranked; any other exclusion is rejected
+  (file kept, `rejectedExclusions`). Excluded files stay in the list with
+  `agent: 'excluded'` + evidence.
+- **Full set** = base ∪ added − valid excluded (what the eval `v2-agent`
+  predictor scores); **subset** = confirmed ∪ added (`v2-agent:subset`). A run
+  that does not submit gives the base set (the deterministic-partial envelope
+  carries it).
 
 ## Tests
 

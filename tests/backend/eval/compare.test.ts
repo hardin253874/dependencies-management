@@ -2,6 +2,8 @@
  * Compare tool (v2 Stage 0.9).
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import path from 'path';
 import { compareResults } from '../../../eval/lib/compare';
 import { buildResultFile } from '../../../eval/lib/results';
 import { scorePhase } from '../../../eval/lib/score';
@@ -78,5 +80,35 @@ describe('compareResults', () => {
       'aggregate (micro)',
       'aggregate (macro)'
     ]);
+  });
+});
+
+describe('compareResults — v2-agent:subset (5a.7)', () => {
+  function withSubset(label: string, subset: { predictedCount: number; tp: number }): ResultFile {
+    const c = okCase('x-case', ['a.ts', 'b.ts', 'z.ts']);
+    c.tags = ['complex'];
+    c.phases[0]!.tags = ['complex'];
+    c.phases[0]!.agent = {
+      status: 'submitted', runs: 1, toolCalls: 1, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, costUsd: 0, hallucinatedPaths: 0, durationMs: 1,
+      subset: { ...subset, precision: subset.tp / subset.predictedCount, recall: subset.tp / 4 }
+    };
+    return file(label, [c]);
+  }
+
+  it('prints subset rows per tag and for the aggregate when a file has aggregateSubset', () => {
+    const md = compareResults(withSubset('a', { predictedCount: 1, tp: 1 }), withSubset('b', { predictedCount: 2, tp: 2 }));
+    expect(md).toContain('| subset tag:complex (micro) | 1.000 | 1.000 | 0.000 | 0.250 | 0.500 | +0.250 |');
+    expect(md).toContain('| subset aggregate (micro) | 1.000 | 1.000 | 0.000 | 0.250 | 0.500 | +0.250 |');
+    expect(md).toContain('| subset aggregate (macro) |');
+  });
+
+  it('an older result file without the subset fields still loads (the committed Stage 4c r2 file)', () => {
+    const r2 = JSON.parse(readFileSync(path.join(process.cwd(), 'eval', 'results', '2026-11-10-v2-stage4-agent-r2.json'), 'utf8')) as ResultFile;
+    expect(r2.aggregateSubset).toBeUndefined();
+    const md = compareResults(r2, withSubset('b', { predictedCount: 2, tp: 2 }));
+    expect(md).toContain('| subset aggregate (micro) | — | 1.000 | — | — | 0.500 | — |');
+    expect(md).toContain('| aggregate (micro) |');
+    // no subset section when neither side has one
+    expect(compareResults(r2, r2)).not.toContain('subset');
   });
 });

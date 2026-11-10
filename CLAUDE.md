@@ -14,7 +14,7 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 A locally-run AI-augmented agent that scans, analyses, and reviews dependencies of legacy JS/TS projects. Next.js 16.4 App Router + React 19.3 (Route Handlers, not Server Actions; Turbopack for dev and build since v2 Stage 2). Server binds 127.0.0.1 only. Six right-panel views per dep ([A]–[E] + [D-Deep]). Cache-first design: every view reads its persisted envelope first; LLM calls happen only on explicit user action. The agent is **read-only against target projects** — all writes go to `library/`.
 
-Test baseline (2026-11-10, after v2 Stage 4c): 1148 passed / 5 skipped across 159 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
+Test baseline (2026-11-10, after v2 Stage 5a): 1214 passed / 5 skipped across 163 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
 
 ## Commands
 
@@ -71,6 +71,7 @@ Design contract: `Plans/V2_STAGE4_SPEC.md` §2–§3 + `Plans/V2_AI_OVER_GRAPH.m
 - **Agent graph handle**: the job opens its own `openGraphReader` for the run and closes it in `finally` (`lib/agent/reportJobs.ts`); the shared reader cache must not be held across awaits.
 - **Scripted mock**: `MOCK_LLM=true` → `ScriptedAgentModel` from `test-fixtures/agent/<scenario>.json` (`MOCK_AGENT_SCENARIO` or the view id), keyed by scenario, not prompt hash. Tests pin models/intel with `setAgentModelOverride` / `setAgentIntelOverride` (globalThis, reset to `null` in `afterEach`); never let a test reach the npm registry.
 - **Eval-importable**: files the eval imports (`agentReportService`, `agentRun`, `runStore`, `storage/config`, the prompts) use relative imports — vite-node has no `@/` alias.
+- **Impacted files = graph base set + agent overlay (5a)**: the [D] detail's `impactedFiles` start from `core/agent/impactBase.ts` `impactBaseSet` (the v2-graph rule; also on the `deterministic-partial` envelope); the agent ranks/adds via `filesToModify` and excludes via the required `excludeFiles` terminal field, valid only for base files it `read_file`d in the run (`readPaths` on the run result/record). The agent terminal schema is `AGENT_UPDATE_REPORT_TOOL_SCHEMA` (v1 schema spread + `excludeFiles`); never edit v1 `UPDATE_REPORT_TOOL_SCHEMA` for agent needs. Scripted `submit_update_report` inputs must include `excludeFiles` (may be `[]`). Eval `v2-agent` scores the full set, `v2-agent:subset` the agent's pick. Details: `src/core/agent/README.md`.
 - **Confirm before every run**: `AgentRunConfirmModal` (GET `…/reports|deep-reports/…/cost-estimate`: expected + `maxUsd`) gates every [D] / [D-Deep] Generate/Regenerate.
 
 ## MCP server (v2 Stage 4b) — `src/mcp`
@@ -279,7 +280,7 @@ These are the bugs that have actually shipped in this repo. Each one is here bec
 ```bash
 npm run typecheck   # tsc --noEmit — must be clean
 npm run lint        # ESLint — must be clean
-npm test            # Full Vitest suite — must match current baseline (1148 pass / 5 skipped)
+npm test            # Full Vitest suite — must match current baseline (1214 pass / 5 skipped)
 ```
 
 ### When you change a route

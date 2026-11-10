@@ -16,6 +16,7 @@
 import pLimit from 'p-limit';
 import pRetry, { AbortError } from 'p-retry';
 import type { CveRecord, CveSeverity } from '../api-types';
+import { cvss3BaseScore } from './cvss';
 
 const OSV_ENDPOINT = 'https://api.osv.dev/v1/querybatch';
 const OSV_CONCURRENCY = 5;
@@ -301,9 +302,10 @@ export function deriveSeverity(v: OsvVuln): CveSeverity {
 }
 
 function extractCvssBaseScore(cvssVector: string): number | null {
-  // CVSS vectors don't carry the base score; this is best-effort. If the
-  // string is a plain number we parse it directly.
-  const num = Number.parseFloat(cvssVector);
-  if (!Number.isNaN(num)) return num;
-  return null;
+  // OSV puts the vector (`CVSS:3.1/AV:N/…`) here; the base score is computed
+  // from it (Stage 5a.1). A plain number string keeps the pre-5a behaviour.
+  const trimmed = cvssVector.trim();
+  if (trimmed.startsWith('CVSS:')) return cvss3BaseScore(trimmed);
+  const num = Number.parseFloat(trimmed);
+  return Number.isNaN(num) ? null : num;
 }

@@ -12,6 +12,7 @@ import { DEFAULT_AGENT_BUDGETS, resolveBudgets } from '@/core/agent/budgets';
 import { costEstimateUsd } from '@/lib/llm/cost';
 import { buildAgentFixture as rebuild } from '../helpers/agentFixture';
 import { writeProjectFile } from '../helpers/graphFixture';
+import { impactBaseSet } from '@/core/agent/impactBase';
 
 const MODEL = 'claude-sonnet-5-5';
 let sandbox: Sandbox;
@@ -29,7 +30,8 @@ const submitted = {
     { path: './src/lib/http.ts', brief: 'duplicate', estimatedChangeSize: 'small' },
     { path: 'src/does/not/exist.ts', brief: 'hallucinated', estimatedChangeSize: 'large' }
   ],
-  recommendations: ['Run the tests.']
+  recommendations: ['Run the tests.'],
+  excludeFiles: [] as Array<{ path: string; evidence: string }>
 };
 
 function input(model: ScriptedAgentModel, over: Partial<RunAgentUpdateReportInput> = {}): RunAgentUpdateReportInput {
@@ -140,3 +142,60 @@ describe('runAgentUpdateReport (4a.9)', () => {
     expect(blocks[1]!.text).toContain('Axios notes.');
   });
 });
+
+describe('runAgentUpdateReport — impactedFiles (5a.5)', () => {
+  const overlay = {
+    ...submitted,
+    filesToModify: [
+      { path: 'src/features/users.ts', brief: 'Calls http.get.', estimatedChangeSize: 'small' },
+      { path: 'src/lib/http.ts', brief: 'Wrapper calls axios.', estimatedChangeSize: 'medium' },
+      { path: 'src/features/__tests__/users.test.ts', brief: 'Mocks axios responses.', estimatedChangeSize: 'small' },
+      { path: 'src/hallucinated.ts', brief: 'not a file', estimatedChangeSize: 'large' }
+    ],
+    excludeFiles: [
+      { path: 'src/features/posts.ts', evidence: 'Only re-exports a type from http.ts; no call changes.' },
+      { path: 'src/components/Avatar.tsx', evidence: 'Not read, should be rejected.' },
+      { path: 'src/features/__tests__/users.test.ts', evidence: 'Not in the base set.' }
+    ]
+  };
+  const readPosts: ScriptedTurn = { content: [{ type: 'tool_use', name: 'read_file', input: { path: 'src/features/posts.ts' } }] };
+  const submitOverlay: ScriptedTurn = { content: [{ type: 'tool_use', name: 'submit_update_report', input: overlay }] };
+
+  it('submitted: base ∪ added − valid excluded, ranked by filesToModify order; exact table and summary', async () => {
+    const run = await runAgentUpdateReport(input(new ScriptedAgentModel([readPosts, submitOverlay])));
+    expect(run.source).toBe(`anthropic:${MODEL}`);
+    expect(run.detail.impactedFiles).toEqual([
+      { path: 'src/features/users.ts', origin: 'graph', via: 'wrapper', kind: 'js', confidence: expect.any(String), agent: 'confirmed', rank: 1, evidence: null, brief: 'Calls http.get.', estimatedChangeSize: 'small' },
+      { path: 'src/lib/http.ts', origin: 'graph', via: 'direct', kind: 'js', confidence: expect.any(String), agent: 'confirmed', rank: 2, evidence: null, brief: 'Wrapper calls axios.', estimatedChangeSize: 'medium' },
+      { path: 'src/features/__tests__/users.test.ts', origin: 'agent', kind: 'js', agent: 'added', rank: 3, evidence: null, brief: 'Mocks axios responses.', estimatedChangeSize: 'small' },
+      { path: 'src/components/Avatar.tsx', origin: 'graph', via: 'wrapper', kind: 'js', confidence: expect.any(String), agent: null, rank: null, evidence: null, brief: null, estimatedChangeSize: null },
+      { path: 'src/features/posts.ts', origin: 'graph', via: 'wrapper', kind: 'js', confidence: expect.any(String), agent: 'excluded', rank: null, evidence: 'Only re-exports a type from http.ts; no call changes.', brief: null, estimatedChangeSize: null }
+    ]);
+    const summary = { base: 4, confirmed: 2, added: 1, excluded: 1, rejectedExclusions: 2 };
+    expect(run.detail.impactSummary).toEqual(summary);
+    expect(run.record.impactSummary).toEqual(summary);
+    expect(run.record.readPaths).toEqual(['src/features/posts.ts']);
+    // filesToModify is unchanged: the confirmed subset in v1 shape, hallucinated path dropped
+    expect(run.detail.filesToModify.map((f) => f.path)).toEqual(['src/features/users.ts', 'src/lib/http.ts', 'src/features/__tests__/users.test.ts']);
+    expect(run.droppedPaths).toEqual(['src/hallucinated.ts']);
+    expect(run.record.droppedPaths).toBe(1);
+  });
+
+  it('the base part equals impactBaseSet for all packages passed', async () => {
+    const run = await runAgentUpdateReport(input(new ScriptedAgentModel([submit])));
+    const graphPaths = (run.detail.impactedFiles ?? []).filter((f) => f.origin === 'graph').map((f) => f.path).sort();
+    expect(graphPaths).toEqual(impactBaseSet(fx.graph, ['axios']).map((b) => b.path));
+  });
+
+  it('budget-exhausted → deterministic-partial still carries the base set (no agent overlay)', async () => {
+    const loop: ScriptedTurn = { content: [{ type: 'tool_use', name: 'graph_summary', input: {} }] };
+    const run = await runAgentUpdateReport(input(new ScriptedAgentModel([loop, loop, loop, loop]), { budgets: { ...budgets, maxToolCalls: 2 } }));
+    expect(run.source).toBe('deterministic-partial');
+    const files = run.detail.impactedFiles ?? [];
+    expect(files.map((f) => f.path)).toEqual(impactBaseSet(fx.graph, ['axios']).map((b) => b.path));
+    expect(files.every((f) => f.origin === 'graph' && f.agent === null && f.rank === null)).toBe(true);
+    expect(run.detail.impactSummary).toEqual({ base: 4, confirmed: 0, added: 0, excluded: 0, rejectedExclusions: 0 });
+    expect(run.record.impactSummary).toEqual(run.detail.impactSummary);
+  });
+});
+

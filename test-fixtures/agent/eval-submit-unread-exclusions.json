@@ -1,0 +1,37 @@
+{
+  "scenario": "eval-submit-unread-exclusions",
+  "description": "Stage 5a.8 offline recall check: one graph_summary call (no read_file), then a submit that tries to exclude common entry files it never read. Every exclusion must be rejected, so recall equals the submit-empty run.",
+  "turns": [
+    {
+      "content": [{ "type": "tool_use", "name": "graph_summary", "input": {} }],
+      "usage": { "inputTokens": 3200, "outputTokens": 150 }
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "name": "submit_update_report",
+          "input": {
+            "summary": "MOCK eval run: exclusions without read evidence.",
+            "riskLevel": "medium",
+            "breakingChanges": [],
+            "coUpgradeDeps": [],
+            "filesToModify": [],
+            "recommendations": [],
+            "excludeFiles": [
+              { "path": "src/index.js", "evidence": "never read" },
+              { "path": "src/index.ts", "evidence": "never read" },
+              { "path": "src/index.tsx", "evidence": "never read" },
+              { "path": "src/App.tsx", "evidence": "never read" },
+              { "path": "src/App.jsx", "evidence": "never read" },
+              { "path": "src/main.tsx", "evidence": "never read" },
+              { "path": "pages/_app.tsx", "evidence": "never read" },
+              { "path": "package.json", "evidence": "never read" }
+            ]
+          }
+        }
+      ],
+      "usage": { "inputTokens": 400, "outputTokens": 300, "cacheReadInputTokens": 3200 }
+    }
+  ]
+}
