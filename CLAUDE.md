@@ -14,7 +14,7 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 A locally-run AI-augmented agent that scans, analyses, and reviews dependencies of legacy JS/TS projects. Next.js 16.4 App Router + React 19.3 (Route Handlers, not Server Actions; Turbopack for dev and build since v2 Stage 2). Server binds 127.0.0.1 only. Six right-panel views per dep ([A]–[E] + [D-Deep]). Cache-first design: every view reads its persisted envelope first; LLM calls happen only on explicit user action. The agent is **read-only against target projects** — all writes go to `library/`.
 
-Test baseline (2026-11-10, after v2 Stage 4a): 1090 passed / 5 skipped across 154 files (~12 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
+Test baseline (2026-11-10, after v2 Stage 4b): 1118 passed / 5 skipped across 157 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
 
 ## Commands
 
@@ -23,6 +23,7 @@ npm run dev                 # next dev (Turbopack) on 127.0.0.1:3000; `next dev 
 npm run setup               # interactive: writes .env + library/_config.json
 npm run typecheck && npm run lint && npm test   # lint = `eslint .` (ESLint 9 flat config, eslint.config.mjs; `next lint` was removed in Next 16 and `next build` no longer lints)
 npm run eval -- help        # Stage 0 eval harness (vite-node eval/cli.ts; corpus in eval/corpus, output in eval/results)
+npm run -s mcp              # read-only MCP server on stdio (vite-node src/mcp/server.ts); clients use the direct node command in README
 npm run build && npm start  # production build (Turbopack), also bound to 127.0.0.1:3000
 npx vitest run tests/backend/resolver.test.ts          # single file
 npx vitest run tests/backend/resolver.test.ts -t "name" # single test
@@ -70,6 +71,16 @@ Design contract: `Plans/V2_STAGE4_SPEC.md` §2–§3 + `Plans/V2_AI_OVER_GRAPH.m
 - **Scripted mock**: `MOCK_LLM=true` → `ScriptedAgentModel` from `test-fixtures/agent/<scenario>.json` (`MOCK_AGENT_SCENARIO` or the view id), keyed by scenario, not prompt hash. Tests pin models/intel with `setAgentModelOverride` / `setAgentIntelOverride` (globalThis, reset to `null` in `afterEach`); never let a test reach the npm registry.
 - **Eval-importable**: files the eval imports (`agentReportService`, `agentRun`, `runStore`, `storage/config`, the prompts) use relative imports — vite-node has no `@/` alias.
 - **Confirm before every run**: `AgentRunConfirmModal` (GET `…/reports|deep-reports/…/cost-estimate`: expected + `maxUsd`) gates every [D] / [D-Deep] Generate/Regenerate.
+
+## MCP server (v2 Stage 4b) — `src/mcp`
+
+Design contract: `Plans/V2_STAGE4_SPEC.md` §4 + `Plans/V2_AI_OVER_GRAPH.md` §5; user setup in `README.md` ("MCP server"). The rules that bite:
+
+- **Thin adapter, no features.** `src/mcp/tools.ts` maps `createReadToolRegistry()` 1:1 (name, description, JSON Schema + a required `project` slug) plus `list_projects`. No `submit_*`, no graph build, no write/execute tool (the adapter re-checks `capability === 'read'`). A new registry tool shows up over MCP automatically; add it to `CALLS` in `tests/backend/mcp/protocol.test.ts` too.
+- **SDK:** `@modelcontextprotocol/server` 2.4.0 (`McpServer.registerTool` + `StdioServerTransport`), `@modelcontextprotocol/client` 2.4.0 dev-only for tests. The low-level `Server` class is `@deprecated` in 2.4. Our JSON Schema is wrapped as a Standard Schema that calls core `validateInput`, so MCP and the agent loop accept the same inputs (not the SDK's AJV `fromJsonSchema`). Invalid input → `isError` result; unknown tool → JSON-RPC `-32602`.
+- **stdout is protocol only.** `server.ts` routes `console.log/info/debug` to stderr before anything logs (the app logger prints to `console.log` outside production). Never `process.stdout.write` in code the server reaches. `npm run mcp` without `-s` is NOT a valid client command: npm's banner goes to stdout.
+- **Relative imports only** in `src/mcp` (vite-node has no `@/` alias); ESLint block + `adapter.test.ts` enforce it, like `src/core`.
+- **Library + graph:** library = `DEP_AGENT_LIBRARY_DIR` (absolute) or `<repo>/library` derived from the file location (clients start the server from their own cwd). Slugs resolve only via `_projects.json`, `workspaceRoot` = `project.json` `path`, and each call opens its own core `openGraphReader` and closes it (no web-app reader cache). Missing graph → `isError` "Graph not built …".
 
 ---
 
@@ -267,7 +278,7 @@ These are the bugs that have actually shipped in this repo. Each one is here bec
 ```bash
 npm run typecheck   # tsc --noEmit — must be clean
 npm run lint        # ESLint — must be clean
-npm test            # Full Vitest suite — must match current baseline (1090 pass / 5 skipped)
+npm test            # Full Vitest suite — must match current baseline (1118 pass / 5 skipped)
 ```
 
 ### When you change a route

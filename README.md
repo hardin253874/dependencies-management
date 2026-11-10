@@ -71,6 +71,7 @@ npm run typecheck   # tsc --noEmit
 npm test            # Vitest (unit + integration)
 npm run test:watch  # Vitest watch mode
 npm run test:e2e    # Playwright (UI smoke tests)
+npm run -s mcp      # Read-only MCP server on stdio (see "MCP server" below)
 ```
 
 ## Adding a project
@@ -121,6 +122,32 @@ Everything is JSON, atomic-written (temp-then-rename), wrapped in a versioned en
 | [D] | Update Report | "Analyze report" button in [B] |
 | [D-Deep] | Deep Update Report | "Deep Analyze" button in [D] |
 | [E] | File-Level AI Review | Click a file inside [C] |
+
+## MCP server (use the code graph from Claude Code)
+
+The same read-only tools the [D] agent uses (`graph_summary`, `files_using_package`, `usage_sites`, `read_file`, `api_diff`, … plus `list_projects`) are served over stdio, so your own agent (Claude Code, Cursor, …) can explore a project's code graph. It needs no API key and reads the same `library/` as the web UI. Every tool except `list_projects` takes a `project` slug. Tools never write to a project and never run its code.
+
+1. Add the project in the web UI and open **[C] Usage** once, so its graph is built. The MCP server does not build graphs.
+2. Register the server with Claude Code. Replace `<repo>` with the absolute path of this checkout (forward slashes work on Windows):
+
+```bash
+claude mcp add dep-agent -- node <repo>/node_modules/vite-node/dist/cli.mjs --root <repo> <repo>/src/mcp/server.ts
+```
+
+Or put the same command in a project's `.mcp.json` (`claude mcp add -s project …` writes it for you):
+
+```json
+{
+  "mcpServers": {
+    "dep-agent": {
+      "command": "node",
+      "args": ["<repo>/node_modules/vite-node/dist/cli.mjs", "--root", "<repo>", "<repo>/src/mcp/server.ts"]
+    }
+  }
+}
+```
+
+Use the direct `node …` command, not `npm run mcp`: npm prints its script banner to stdout, which corrupts the protocol stream (`npm run -s mcp` is fine for a manual run from the repo). `--root <repo>` keeps Vite's working files in this checkout, whatever directory the client starts the server from. The library defaults to `<repo>/library`; set `DEP_AGENT_LIBRARY_DIR` (absolute path, e.g. `claude mcp add dep-agent -e DEP_AGENT_LIBRARY_DIR=… -- node …`) to use another one. Tool calls are logged to `library/_logs/server.log` (scope `mcp`).
 
 
 ## Configuration

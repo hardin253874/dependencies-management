@@ -115,6 +115,34 @@ const config = [
         }
       ]
     }
+  },
+  // V2 Stage 4b: the MCP server (src/mcp) is a thin adapter over core that
+  // `npm run mcp` runs under vite-node, so the same rules apply: no Next/React,
+  // no app/UI/http code, relative imports only. tests/backend/mcp/adapter.test.ts
+  // checks the same thing.
+  {
+    files: ['src/mcp/**/*.{ts,tsx,js,mjs,cjs}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'next', message: 'src/mcp must not import Next.js' },
+            { name: 'react', message: 'src/mcp must not import React' },
+            { name: 'react-dom', message: 'src/mcp must not import React' }
+          ],
+          patterns: [
+            { group: ['next/*'], message: 'src/mcp must not import Next.js' },
+            { group: ['react/*', 'react-dom/*'], message: 'src/mcp must not import React' },
+            {
+              group: ['../app/*', '../components/*', '../lib/client/*', '../lib/http/*'],
+              message: 'src/mcp must not import app/UI/HTTP-route code'
+            },
+            { group: ['@/*'], message: 'src/mcp uses relative imports — `npm run mcp` runs under vite-node without the @/ alias' }
+          ]
+        }
+      ]
+    }
   }
 ];
 

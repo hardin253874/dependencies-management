@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "eval": "vite-node eval/cli.ts",
+    "mcp": "vite-node --root . src/mcp/server.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -23,6 +24,7 @@
     "@babel/parser": "7.24.7",
     "@babel/traverse": "7.24.7",
     "@babel/types": "7.24.7",
+    "@modelcontextprotocol/server": "2.4.0",
     "@npmcli/arborist": "10.0.4",
     "@yarnpkg/lockfile": "1.1.0",
     "@yarnpkg/parsers": "3.0.0",
@@ -38,6 +40,7 @@
     "semver": "7.6.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
     "@next/eslint-plugin-next": "16.4.6",
     "@playwright/test": "1.65.0",
     "@testing-library/dom": "10.4.2",
