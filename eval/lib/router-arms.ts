@@ -27,7 +27,8 @@ import { judgeCacheKey, type CachedJudgeAnswer } from '../../src/core/judge/cach
 import { metadataPayload } from '../../src/core/judge/payload';
 import { JEV_MODEL } from '../../src/core/judge/constants';
 import { JEV_PRICES } from '../../src/core/judge/ledger';
-import type { LoadedCase, PhaseResult, PrecisionRecall, ResultFile } from './types';
+import type { LoadedCase, PhaseResult, PrecisionRecall, ResultFile, SpendInfo } from './types';
+import { publicCachePath } from './jev-report';
 
 export type ArmId = 'always-opus' | 'always-sonnet' | 'rules-only' | 'rules+jev';
 export const ARMS: readonly ArmId[] = ['always-opus', 'always-sonnet', 'rules-only', 'rules+jev'];
@@ -196,6 +197,8 @@ export async function computeRouterArms(opts: {
   inputNames: { opus: string; sonnet: string; haiku: string; jevCache: string | null };
   configuredModel?: string;
   jev?: JevLookup;
+  /** For `publicCachePath` (default `process.env.LOCALAPPDATA`). */
+  localAppData?: string;
 }): Promise<RouterArmsResult> {
   const configured = opts.configuredModel ?? OPUS;
   const { phases, idx } = routerPhases({ cases: opts.cases, files: opts.files, configuredModel: configured });
@@ -260,7 +263,7 @@ export async function computeRouterArms(opts: {
     label: opts.label,
     generatedAt: opts.now.toISOString(),
     visibility: 'public',
-    inputs: { ...opts.inputNames, configuredModel: configured },
+    inputs: { ...opts.inputNames, jevCache: publicCachePath(opts.inputNames.jevCache, { localAppData: opts.localAppData ?? process.env.LOCALAPPDATA }), configuredModel: configured },
     notes: ['facts offline: apiDiff = null and cveCount = 0 (not in the result files); graphFileCount = Sonnet agent.impact.base', 'n = 1 run per case × model: arm differences under ~10 points on one case are noise'],
     arms,
     shipCheck: shipChecks(arms)
@@ -311,7 +314,7 @@ export interface RouterJevResult {
   generatedAt: string;
   visibility: 'public';
   client: 'mock' | 'typesafe';
-  /** The `--jev-cache` dir for `router-arms`. */
+  /** The `--jev-cache` dir for `router-arms`, as `publicCachePath` writes it (never the absolute profile path). */
   jevCache: string;
   inputs: { opus: string; sonnet: string; haiku: string; configuredModel: string };
   maxRequests: number;
@@ -319,6 +322,8 @@ export interface RouterJevResult {
   rulesDecided: number;
   asked: RouterJevAsk[];
   skipped: Array<{ caseId: string; phaseId: string; reason: string }>;
+  /** `--real` only: Jev ledger state around the run (`jevSpendSession`), set by the CLI. */
+  spend?: SpendInfo;
 }
 
 /**
@@ -340,6 +345,8 @@ export async function askRouterJev(opts: {
   client: 'mock' | 'typesafe';
   jevCache: string;
   maxRequests?: number;
+  /** For `publicCachePath` (default `process.env.LOCALAPPDATA`). */
+  localAppData?: string;
 }): Promise<RouterJevResult> {
   const configured = opts.configuredModel ?? OPUS;
   const max = opts.maxRequests ?? ROUTER_JEV_MAX_REQUESTS;
@@ -368,7 +375,7 @@ export async function askRouterJev(opts: {
     generatedAt: opts.now.toISOString(),
     visibility: 'public',
     client: opts.client,
-    jevCache: opts.jevCache,
+    jevCache: publicCachePath(opts.jevCache, { localAppData: opts.localAppData ?? process.env.LOCALAPPDATA }) ?? opts.jevCache,
     inputs: { ...opts.inputNames, configuredModel: configured },
     maxRequests: max,
     rulesDecided,

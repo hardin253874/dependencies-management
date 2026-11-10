@@ -1,0 +1,318 @@
+{
+  "kind": "router-arms",
+  "label": "v2-stage5-router",
+  "generatedAt": "2026-11-10T12:01:19.793Z",
+  "visibility": "public",
+  "inputs": {
+    "opus": "2026-11-10-v2-stage5-agent-opus.json",
+    "sonnet": "2026-11-10-v2-stage5-agent-sonnet.json",
+    "haiku": "2026-11-10-v2-stage5-agent-haiku.json",
+    "jevCache": "%LOCALAPPDATA%/dep-agent-eval/_judge",
+    "configuredModel": "claude-opus-5-5"
+  },
+  "notes": [
+    "facts offline: apiDiff = null and cveCount = 0 (not in the result files); graphFileCount = Sonnet agent.impact.base",
+    "n = 1 run per case × model: arm differences under ~10 points on one case are noise"
+  ],
+  "arms": [
+    {
+      "arm": "always-opus",
+      "phases": 5,
+      "models": {
+        "claude-opus-5-5": 5
+      },
+      "full": {
+        "overall": {
+          "precision": 0.16545454545454547,
+          "recall": 0.741042345276873
+        },
+        "complex": {
+          "precision": 0.1674062121823316,
+          "recall": 0.7229965156794426
+        }
+      },
+      "subset": {
+        "overall": {
+          "precision": 0.6453900709219859,
+          "recall": 0.1482084690553746
+        },
+        "complex": {
+          "precision": 0.6551724137931034,
+          "recall": 0.09930313588850175
+        }
+      },
+      "costUsd": 1.925479,
+      "jevCostUsd": 0,
+      "jevRequests": 0,
+      "decisions": [
+        {
+          "caseId": "excalidraw-react18",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "always Opus"
+        },
+        {
+          "caseId": "hash-next13",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "always Opus"
+        },
+        {
+          "caseId": "openedx-lpe-dayjs",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "always Opus"
+        },
+        {
+          "caseId": "superset-react17",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "always Opus"
+        },
+        {
+          "caseId": "yakit-antd5",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "always Opus"
+        }
+      ]
+    },
+    {
+      "arm": "always-sonnet",
+      "phases": 5,
+      "models": {
+        "claude-sonnet-5-5": 5
+      },
+      "full": {
+        "overall": {
+          "precision": 0.16581259150805272,
+          "recall": 0.737785016286645
+        },
+        "complex": {
+          "precision": 0.16829268292682928,
+          "recall": 0.7212543554006968
+        }
+      },
+      "subset": {
+        "overall": {
+          "precision": 0.7314814814814815,
+          "recall": 0.12866449511400652
+        },
+        "complex": {
+          "precision": 0.7833333333333333,
+          "recall": 0.08188153310104529
+        }
+      },
+      "costUsd": 0.369884,
+      "jevCostUsd": 0,
+      "jevRequests": 0,
+      "decisions": [
+        {
+          "caseId": "excalidraw-react18",
+          "phaseId": "main",
+          "model": "claude-sonnet-5-5",
+          "via": "rule",
+          "reason": "always Sonnet"
+        },
+        {
+          "caseId": "hash-next13",
+          "phaseId": "main",
+          "model": "claude-sonnet-5-5",
+          "via": "rule",
+          "reason": "always Sonnet"
+        },
+        {
+          "caseId": "openedx-lpe-dayjs",
+          "phaseId": "main",
+          "model": "claude-sonnet-5-5",
+          "via": "rule",
+          "reason": "always Sonnet"
+        },
+        {
+          "caseId": "superset-react17",
+          "phaseId": "main",
+          "model": "claude-sonnet-5-5",
+          "via": "rule",
+          "reason": "always Sonnet"
+        },
+        {
+          "caseId": "yakit-antd5",
+          "phaseId": "main",
+          "model": "claude-sonnet-5-5",
+          "via": "rule",
+          "reason": "always Sonnet"
+        }
+      ]
+    },
+    {
+      "arm": "rules-only",
+      "phases": 5,
+      "models": {
+        "claude-opus-5-5": 5
+      },
+      "full": {
+        "overall": {
+          "precision": 0.16545454545454547,
+          "recall": 0.741042345276873
+        },
+        "complex": {
+          "precision": 0.1674062121823316,
+          "recall": 0.7229965156794426
+        }
+      },
+      "subset": {
+        "overall": {
+          "precision": 0.6453900709219859,
+          "recall": 0.1482084690553746
+        },
+        "complex": {
+          "precision": 0.6551724137931034,
+          "recall": 0.09930313588850175
+        }
+      },
+      "costUsd": 1.925479,
+      "jevCostUsd": 0,
+      "jevRequests": 0,
+      "decisions": [
+        {
+          "caseId": "excalidraw-react18",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "major jump, 4 packages → Opus 5.5"
+        },
+        {
+          "caseId": "hash-next13",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "major jump, 3 packages → Opus 5.5"
+        },
+        {
+          "caseId": "openedx-lpe-dayjs",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "default",
+          "reason": "unclear by rules (rules-only arm)"
+        },
+        {
+          "caseId": "superset-react17",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "major jump, 1,352 files, 11 packages → Opus 5.5"
+        },
+        {
+          "caseId": "yakit-antd5",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "major jump, 997 files, 6 packages → Opus 5.5"
+        }
+      ]
+    },
+    {
+      "arm": "rules+jev",
+      "phases": 5,
+      "models": {
+        "claude-opus-5-5": 4,
+        "claude-sonnet-5-5": 1
+      },
+      "full": {
+        "overall": {
+          "precision": 0.16545454545454547,
+          "recall": 0.741042345276873
+        },
+        "complex": {
+          "precision": 0.1674062121823316,
+          "recall": 0.7229965156794426
+        }
+      },
+      "subset": {
+        "overall": {
+          "precision": 0.6453900709219859,
+          "recall": 0.1482084690553746
+        },
+        "complex": {
+          "precision": 0.6551724137931034,
+          "recall": 0.09930313588850175
+        }
+      },
+      "costUsd": 1.71633348,
+      "jevCostUsd": 0.00001848,
+      "jevRequests": 1,
+      "decisions": [
+        {
+          "caseId": "excalidraw-react18",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "major jump, 4 packages → Opus 5.5"
+        },
+        {
+          "caseId": "hash-next13",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "major jump, 3 packages → Opus 5.5"
+        },
+        {
+          "caseId": "openedx-lpe-dayjs",
+          "phaseId": "main",
+          "model": "claude-sonnet-5-5",
+          "via": "jev",
+          "reason": "Jev: easy (confidence 0.28, p 0.52, low → one step up) → Sonnet 5.5"
+        },
+        {
+          "caseId": "superset-react17",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "major jump, 1,352 files, 11 packages → Opus 5.5"
+        },
+        {
+          "caseId": "yakit-antd5",
+          "phaseId": "main",
+          "model": "claude-opus-5-5",
+          "via": "rule",
+          "reason": "major jump, 997 files, 6 packages → Opus 5.5"
+        }
+      ]
+    }
+  ],
+  "shipCheck": [
+    {
+      "arm": "rules-only",
+      "set": "full",
+      "recallDeltaPoints": 0,
+      "costSaving": 0,
+      "met": false
+    },
+    {
+      "arm": "rules-only",
+      "set": "subset",
+      "recallDeltaPoints": 0,
+      "costSaving": 0,
+      "met": false
+    },
+    {
+      "arm": "rules+jev",
+      "set": "full",
+      "recallDeltaPoints": 0,
+      "costSaving": 0.10862,
+      "met": false
+    },
+    {
+      "arm": "rules+jev",
+      "set": "subset",
+      "recallDeltaPoints": 0,
+      "costSaving": 0.10862,
+      "met": false
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "kind": "judge-eval",
+  "use": "J1",
+  "label": "v2-stage5-j1",
+  "generatedAt": "2026-11-10T12:01:30.634Z",
+  "visibility": "public",
+  "client": "typesafe",
+  "notes": [
+    "graph order = input order here (the base set is path-sorted)",
+    "Annotated after the run (review 5c r1 M1, 2026-11-10; no re-run): the spend block was reconstructed read-only from the Jev ledger jev-round1, step judge:J1:v2-stage5-j1 (42 reserve / 42 settle). The Jev ledger is authoritative.",
+    "Per-phase requests: not recorded (pre-fix): the counter only saw MockJudgeClient requests, so this real run wrote 0; set to null. Only the run total in spend.requests is known."
+  ],
+  "status": "measured",
+  "phases": [
+    {
+      "caseId": "excalidraw-react18",
+      "phaseId": "main",
+      "use": "J1",
+      "metrics": {
+        "truth": 9,
+        "candidates": 141,
+        "input@20": 0,
+        "jev@20": 0.2222222222222222,
+        "input@50": 0.4444444444444444,
+        "jev@50": 0.6666666666666666,
+        "input@truth": 0,
+        "jev@truth": 0.1111111111111111
+      },
+      "requests": null
+    },
+    {
+      "caseId": "hash-next13",
+      "phaseId": "main",
+      "use": "J1",
+      "metrics": {
+        "truth": 12,
+        "candidates": 102,
+        "input@20": 0.6666666666666666,
+        "jev@20": 0.25,
+        "input@50": 0.8333333333333334,
+        "jev@50": 0.25,
+        "input@truth": 0.5,
+        "jev@truth": 0.25
+      },
+      "requests": null
+    },
+    {
+      "caseId": "openedx-lpe-dayjs",
+      "phaseId": "main",
+      "use": "J1",
+      "metrics": {
+        "truth": 31,
+        "candidates": 129,
+        "input@20": 0.3,
+        "jev@20": 1,
+        "input@50": 0.5483870967741935,
+        "jev@50": 0.9032258064516129,
+        "input@truth": 0.25806451612903225,
+        "jev@truth": 0.9032258064516129
+      },
+      "requests": null
+    },
+    {
+      "caseId": "superset-react17",
+      "phaseId": "main",
+      "use": "J1",
+      "metrics": {
+        "truth": 74,
+        "candidates": 1352,
+        "input@20": 0.15,
+        "jev@20": 0.1,
+        "input@50": 0.18,
+        "jev@50": 0.14,
+        "input@truth": 0.12162162162162163,
+        "jev@truth": 0.10810810810810811
+      },
+      "requests": null
+    },
+    {
+      "caseId": "yakit-antd5",
+      "phaseId": "main",
+      "use": "J1",
+      "metrics": {
+        "truth": 488,
+        "candidates": 997,
+        "input@20": 0.3,
+        "jev@20": 0.85,
+        "input@50": 0.36,
+        "jev@50": 0.74,
+        "input@truth": 0.3422131147540984,
+        "jev@truth": 0.555327868852459
+      },
+      "requests": null
+    }
+  ],
+  "spend": {
+    "roundId": "jev-round1",
+    "capUsd": 0.5,
+    "spentBefore": 0.00001848,
+    "spentAfter": 0.023122512,
+    "reservedAfter": 0,
+    "refusals": 0,
+    "requests": 42
+  }
+}

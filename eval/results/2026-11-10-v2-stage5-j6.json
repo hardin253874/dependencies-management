@@ -1,0 +1,120 @@
+{
+  "kind": "judge-eval",
+  "use": "J6",
+  "label": "v2-stage5-j6",
+  "generatedAt": "2026-11-10T12:02:32.302Z",
+  "visibility": "public",
+  "client": "typesafe",
+  "notes": [
+    "Annotated after the run (review 5c r1 M1, 2026-11-10; no re-run): the spend block was reconstructed read-only from the Jev ledger jev-round1, step judge:J6:v2-stage5-j6 (4 reserve / 4 settle). The Jev ledger is authoritative.",
+    "Per-phase requests: not recorded (pre-fix): the counter only saw MockJudgeClient requests, so this real run wrote 0; set to null. Only the run total in spend.requests is known."
+  ],
+  "status": "measured",
+  "phases": [
+    {
+      "caseId": "excalidraw-react18",
+      "phaseId": "main",
+      "use": "J6",
+      "metrics": {
+        "deps": 47,
+        "scored": 47,
+        "jev.accuracy": 1,
+        "investigate.accuracy": 0
+      },
+      "requests": null
+    },
+    {
+      "caseId": "hash-next13",
+      "phaseId": "main",
+      "use": "J6",
+      "metrics": {
+        "deps": 115,
+        "scored": 115,
+        "jev.accuracy": 1,
+        "investigate.accuracy": 0
+      },
+      "requests": null
+    },
+    {
+      "caseId": "inspirehep-dayjs",
+      "phaseId": "main",
+      "use": "J6",
+      "metrics": {
+        "deps": 80,
+        "scored": 80,
+        "jev.accuracy": 1,
+        "investigate.accuracy": 0
+      },
+      "requests": null
+    },
+    {
+      "caseId": "mastodon-eslint9",
+      "phaseId": "main",
+      "use": "J6",
+      "metrics": {
+        "deps": 160,
+        "scored": 0,
+        "jev.accuracy": null,
+        "investigate.accuracy": 0
+      },
+      "requests": null
+    },
+    {
+      "caseId": "openedx-lpe-dayjs",
+      "phaseId": "main",
+      "use": "J6",
+      "metrics": {
+        "deps": 71,
+        "scored": 0,
+        "jev.accuracy": null,
+        "investigate.accuracy": 0
+      },
+      "requests": null
+    },
+    {
+      "caseId": "superset-react17",
+      "phaseId": "main",
+      "use": "J6",
+      "metrics": {
+        "deps": 267,
+        "scored": 0,
+        "jev.accuracy": null,
+        "investigate.accuracy": 0
+      },
+      "requests": null
+    },
+    {
+      "caseId": "xrpl-hooks-ide-next13",
+      "phaseId": "main",
+      "use": "J6",
+      "metrics": {
+        "deps": 45,
+        "scored": 0,
+        "jev.accuracy": null,
+        "investigate.accuracy": 0
+      },
+      "requests": null
+    },
+    {
+      "caseId": "yakit-antd5",
+      "phaseId": "main",
+      "use": "J6",
+      "metrics": {
+        "deps": 126,
+        "scored": 126,
+        "jev.accuracy": 1,
+        "investigate.accuracy": 0
+      },
+      "requests": null
+    }
+  ],
+  "spend": {
+    "roundId": "jev-round1",
+    "capUsd": 0.5,
+    "spentBefore": 0.023974104,
+    "spentAfter": 0.026546646,
+    "reservedAfter": 0,
+    "refusals": 0,
+    "requests": 4
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "kind": "router-jev",
+  "label": "v2-stage5-router-jev",
+  "generatedAt": "2026-11-10T12:01:11.108Z",
+  "visibility": "public",
+  "client": "typesafe",
+  "jevCache": "%LOCALAPPDATA%\\dep-agent-eval\\_judge",
+  "inputs": {
+    "opus": "2026-11-10-v2-stage5-agent-opus.json",
+    "sonnet": "2026-11-10-v2-stage5-agent-sonnet.json",
+    "haiku": "2026-11-10-v2-stage5-agent-haiku.json",
+    "configuredModel": "claude-opus-5-5"
+  },
+  "maxRequests": 5,
+  "rulesDecided": 4,
+  "asked": [
+    {
+      "caseId": "openedx-lpe-dayjs",
+      "phaseId": "main",
+      "key": "2d4606d10f48b33bdfb5abba6fc9715939528d3a3f29dafe3c8f0e63b9364e53",
+      "model": "claude-sonnet-5-5",
+      "via": "jev",
+      "reason": "Jev: easy (confidence 0.28, p 0.52, low → one step up) → Sonnet 5.5",
+      "cached": false,
+      "latencyMs": 366
+    }
+  ],
+  "skipped": [],
+  "notes": [
+    "Annotated after the run (review 5c r1 M1, 2026-11-10; no re-run): the spend block was reconstructed read-only from the Jev ledger jev-round1, step judge:router:v2-stage5-router-jev (1 reserve / 1 settle). The Jev ledger is authoritative."
+  ],
+  "spend": {
+    "roundId": "jev-round1",
+    "capUsd": 0.5,
+    "spentBefore": 0,
+    "spentAfter": 0.00001848,
+    "reservedAfter": 0,
+    "refusals": 0,
+    "requests": 1
+  }
+}

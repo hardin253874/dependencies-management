@@ -1,0 +1,128 @@
+{
+  "kind": "judge-eval",
+  "use": "J5",
+  "label": "v2-stage5-j5",
+  "generatedAt": "2026-11-10T12:02:25.923Z",
+  "visibility": "public",
+  "client": "typesafe",
+  "notes": [
+    "Annotated after the run (review 5c r1 M1, 2026-11-10; no re-run): the spend block was reconstructed read-only from the Jev ledger jev-round1, step judge:J5:v2-stage5-j5 (4 reserve / 4 settle). The Jev ledger is authoritative.",
+    "Per-phase requests: not recorded (pre-fix): the counter only saw MockJudgeClient requests, so this real run wrote 0; set to null. Only the run total in spend.requests is known."
+  ],
+  "status": "measured",
+  "phases": [
+    {
+      "caseId": "excalidraw-react18",
+      "phaseId": "main",
+      "use": "J5",
+      "metrics": {
+        "truth": 0,
+        "jev.f1": null,
+        "jev.precision": 0,
+        "jev.recall": null,
+        "pairing.f1": null
+      },
+      "requests": null
+    },
+    {
+      "caseId": "hash-next13",
+      "phaseId": "main",
+      "use": "J5",
+      "metrics": {
+        "truth": 0,
+        "jev.f1": null,
+        "jev.precision": null,
+        "jev.recall": null,
+        "pairing.f1": null
+      },
+      "requests": null
+    },
+    {
+      "caseId": "inspirehep-dayjs",
+      "phaseId": "main",
+      "use": "J5",
+      "metrics": {
+        "truth": 0,
+        "jev.f1": null,
+        "jev.precision": null,
+        "jev.recall": null,
+        "pairing.f1": null
+      },
+      "requests": null
+    },
+    {
+      "caseId": "mastodon-eslint9",
+      "phaseId": "main",
+      "use": "J5",
+      "metrics": {
+        "truth": 13,
+        "jev.f1": null,
+        "jev.precision": null,
+        "jev.recall": 0,
+        "pairing.f1": null
+      },
+      "requests": null
+    },
+    {
+      "caseId": "openedx-lpe-dayjs",
+      "phaseId": "main",
+      "use": "J5",
+      "metrics": {
+        "truth": 0,
+        "jev.f1": null,
+        "jev.precision": null,
+        "jev.recall": null,
+        "pairing.f1": null
+      },
+      "requests": null
+    },
+    {
+      "caseId": "superset-react17",
+      "phaseId": "main",
+      "use": "J5",
+      "metrics": {
+        "truth": 12,
+        "jev.f1": null,
+        "jev.precision": null,
+        "jev.recall": 0,
+        "pairing.f1": 0
+      },
+      "requests": null
+    },
+    {
+      "caseId": "xrpl-hooks-ide-next13",
+      "phaseId": "main",
+      "use": "J5",
+      "metrics": {
+        "truth": 4,
+        "jev.f1": null,
+        "jev.precision": null,
+        "jev.recall": 0,
+        "pairing.f1": 0.28571428571428575
+      },
+      "requests": null
+    },
+    {
+      "caseId": "yakit-antd5",
+      "phaseId": "main",
+      "use": "J5",
+      "metrics": {
+        "truth": 1,
+        "jev.f1": 0,
+        "jev.precision": 0,
+        "jev.recall": 0,
+        "pairing.f1": null
+      },
+      "requests": null
+    }
+  ],
+  "spend": {
+    "roundId": "jev-round1",
+    "capUsd": 0.5,
+    "spentBefore": 0.023122512,
+    "spentAfter": 0.023974104,
+    "reservedAfter": 0,
+    "refusals": 0,
+    "requests": 4
+  }
+}

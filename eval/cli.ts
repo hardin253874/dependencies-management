@@ -34,7 +34,8 @@ import { judgeEvalCacheDir, JudgeEvalError, MEASURABLE_USES, mockJudgeClient, NO
 import { JudgeCache } from '../src/core/judge/cache';
 import { Judge } from '../src/core/judge/judge';
 import { normalizeJudgeSwitches } from '../src/core/judge/types';
-import { JevLedger, jevLedgerPathEval, sessionGate } from '../src/core/judge/ledger';
+import { JevLedger, jevLedgerPathEval } from '../src/core/judge/ledger';
+import { jevSpendSession, type JevSpendSession } from './lib/jev-report';
 import type { JudgeClient } from '../src/core/judge/client';
 import { extractImportSiteContext } from '../src/lib/scanners/importSiteContext';
 import { localDate, resultFilePath } from './lib/results';
@@ -357,7 +358,7 @@ async function execute(cmd: ParsedCommand): Promise<number> {
         now: new Date(),
         cases: corpus,
         files: { opus: await readResultFile(path.resolve(cmd.opus)), sonnet: await readResultFile(path.resolve(cmd.sonnet)), haiku: await readResultFile(path.resolve(cmd.haiku)) },
-        inputNames: { opus: path.basename(cmd.opus), sonnet: path.basename(cmd.sonnet), haiku: path.basename(cmd.haiku), jevCache: cmd.jevCache ?? null },
+        inputNames: { opus: path.basename(cmd.opus), sonnet: path.basename(cmd.sonnet), haiku: path.basename(cmd.haiku), jevCache: cmd.jevCache !== undefined ? path.resolve(cmd.jevCache) : null },
         ...(cmd.configuredModel !== undefined ? { configuredModel: cmd.configuredModel } : {}),
         ...(cmd.jevCache !== undefined ? { jev: jevCacheLookup(path.resolve(cmd.jevCache)) } : {})
       });
@@ -389,6 +390,7 @@ async function execute(cmd: ParsedCommand): Promise<number> {
       }
       let client: JudgeClient = mockJudgeClient(path.join(TOOL_ROOT, 'test-fixtures', 'judge'));
       let ledger: JevLedger | null = null;
+      let spend: JevSpendSession | null = null;
       if (cmd.real) {
         const key = await loadTypesafeKey(path.join(TOOL_ROOT, '.env'));
         const localAppData = process.env.LOCALAPPDATA;
@@ -396,9 +398,9 @@ async function execute(cmd: ParsedCommand): Promise<number> {
         ledger = await JevLedger.open(jevLedgerPathEval(localAppData));
         const s = ledger.state();
         out(`Jev ledger ${s.roundId} (start): spent $${s.spentUsd.toFixed(6)} · reserved $${s.reservedUsd.toFixed(6)} · remaining $${s.remainingUsd.toFixed(6)} of $${s.capUsd}`);
-        const gate = sessionGate(ledger, { step: `judge:${cmd.use}:${cmd.label}`, ...(cmd.stopAtUsd !== undefined ? { ceilingUsd: cmd.stopAtUsd } : {}) });
+        spend = jevSpendSession(ledger, { step: `judge:${cmd.use}:${cmd.label}`, ...(cmd.stopAtUsd !== undefined ? { ceilingUsd: cmd.stopAtUsd } : {}) });
         // Every selected case was checked public above; createRealJudgeClient re-checks one before building.
-        client = createRealJudgeClient({ evalCase: selected[0]!, privateIds, apiKey: key, gate });
+        client = createRealJudgeClient({ evalCase: selected[0]!, privateIds, apiKey: key, gate: spend.gate });
       }
       try {
         const cache = makeCache(all, cmd.cacheDir, cmd.offline);
@@ -422,7 +424,8 @@ async function execute(cmd: ParsedCommand): Promise<number> {
           for (const k of routed.skipped) out(`${k.caseId}/${k.phaseId}: skipped (${k.reason})`);
           out(`rules decided ${routed.rulesDecided} phase(s); asked ${routed.asked.length}; cache ${judgeCacheDir} (pass it to router-arms --jev-cache)`);
           const file = resultFilePath(RESULTS_DIR, 'public', localDate(new Date()), cmd.label);
-          await atomicWriteJson(file, routed);
+          // Spec §5: ledger state at start and end in the result file (review 5c M1).
+          await atomicWriteJson(file, spend !== null ? { ...routed, spend: spend.spendInfo() } : routed);
           out(`wrote ${path.relative(TOOL_ROOT, file)}`);
           return 0;
         }
@@ -456,7 +459,7 @@ async function execute(cmd: ParsedCommand): Promise<number> {
         });
         if (result.status === 'not-measurable') out(`${cmd.use}: ${result.reason ?? ''}`);
         const file = resultFilePath(RESULTS_DIR, 'public', localDate(new Date()), cmd.label);
-        await atomicWriteJson(file, result);
+        await atomicWriteJson(file, spend !== null ? { ...result, spend: spend.spendInfo() } : result);
         out(`wrote ${path.relative(TOOL_ROOT, file)}`);
         return 0;
       } finally {

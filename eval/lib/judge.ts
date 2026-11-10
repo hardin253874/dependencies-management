@@ -31,7 +31,7 @@ import { normalizeJudgeSwitches, type JFlag, type JudgeSubject } from '../../src
 import { coUpgradeJ5, rankFilesJ1, relatedUnknownJ6, type JudgeContext } from '../../src/core/judge/uses';
 import { COMMON_PAIRING_MAP } from '../../src/lib/llm/coUpgrade';
 import type { DependencyChange } from './truth';
-import type { LoadedCase } from './types';
+import type { LoadedCase, SpendInfo } from './types';
 
 export const MEASURABLE_USES = ['J1', 'J2', 'J4', 'J5', 'J6', 'J7'] as const;
 export type MeasuredUse = (typeof MEASURABLE_USES)[number];
@@ -73,6 +73,7 @@ export interface JudgeEvalPhase {
   phaseId: string;
   use: MeasuredUse;
   metrics: Record<string, number | null>;
+  /** Asks that reached the client in this phase (cache misses; a gate refusal counts here too, see `spend.refusals`). */
   requests: number;
 }
 
@@ -87,6 +88,8 @@ export interface JudgeEvalResult {
   reason?: string;
   notes: string[];
   phases: JudgeEvalPhase[];
+  /** `--real` only: Jev ledger state around the run (`jevSpendSession`), set by the CLI. */
+  spend?: SpendInfo;
 }
 
 export interface JudgeEvalDeps {
@@ -131,11 +134,21 @@ export async function runJudgeEval(opts: { use: MeasuredUse; label: string; now:
   const notMeasurable = NOT_MEASURABLE[opts.use];
   if (notMeasurable !== undefined) return { ...base, status: 'not-measurable', reason: notMeasurable, phases: [] };
   const flag = opts.use as JFlag;
-  const judge = new Judge({ client: opts.deps.client, cache: opts.deps.cache ?? null, switches: normalizeJudgeSwitches({ enabled: true, flags: { [flag]: true } }) });
+  // Count at the client, behind the cache: every ask that reaches it is a cache miss,
+  // whatever the client type (review 5c M1: only MockJudgeClient requests were counted).
+  let asked = 0;
+  const inner = opts.deps.client;
+  const counted: JudgeClient = {
+    kind: inner.kind,
+    ask: (input) => {
+      asked += 1;
+      return inner.ask(input);
+    }
+  };
+  const judge = new Judge({ client: counted, cache: opts.deps.cache ?? null, switches: normalizeJudgeSwitches({ enabled: true, flags: { [flag]: true } }) });
   const subject: JudgeSubject = { privacy: 'public' };
   const ctx: JudgeContext = { judge, subject };
   const phases: JudgeEvalPhase[] = [];
-  const countBefore = () => (opts.deps.client instanceof MockJudgeClient ? opts.deps.client.requests.length : 0);
   for (const c of opts.cases) {
     const dir = await opts.deps.prepare(c);
     const truths = await opts.deps.truth(c, dir);
@@ -144,7 +157,7 @@ export async function runJudgeEval(opts: { use: MeasuredUse; label: string; now:
     for (const phase of c.phases) {
       const t = truths.find((x) => x.phaseId === phase.id);
       if (t === undefined) continue;
-      const before = countBefore();
+      const before = asked;
       const pkgs = phase.packages.map((p) => p.name);
       const first = phase.packages[0];
       const from = first?.from ?? '0.0.0';
@@ -191,7 +204,7 @@ export async function runJudgeEval(opts: { use: MeasuredUse; label: string; now:
         }
         metrics = { deps: deps.length, scored, 'jev.accuracy': scored === 0 ? null : right / scored, 'investigate.accuracy': deps.length === 0 ? null : 0 };
       }
-      phases.push({ caseId: c.id, phaseId: phase.id, use: opts.use, metrics, requests: countBefore() - before });
+      phases.push({ caseId: c.id, phaseId: phase.id, use: opts.use, metrics, requests: asked - before });
     }
   }
   const notes = opts.use === 'J1' ? ['graph order = input order here (the base set is path-sorted)'] : [];
