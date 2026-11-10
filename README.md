@@ -22,7 +22,7 @@ Designed for senior developers driving long-term dependency hygiene on legacy fr
 
 | Requirement | Notes |
 |---|---|
-| Node.js ≥ 22 | Developed and tested on Node 24. `package.json` declares `engines: { node: ">=22" }`. |
+| Node.js 22.22.2+, 24.15+ or 26+ | Developed and tested on Node 24.22. `package.json` declares `engines: { node: "^22.22.2 || ^24.15.0 || >=26" }` (required by npm-registry-fetch 20 / @npmcli/arborist 10). |
 | `npm` on `PATH` | Used by the agent's resolver-check feature (`npm install --dry-run`). Volta-pinned `npm` is preferred when the target project has it. |
 | LLM API key | Anthropic (the only provider since v2; OpenAI support was removed). You can also run with `MOCK_LLM=true` for dev iteration without spend — see [Development](#development). |
 | OS | Windows, macOS, Linux. Windows has a couple of extra `next.config.mjs` notes — see the spec §5.1.1; everything is wired up correctly out of the box. |

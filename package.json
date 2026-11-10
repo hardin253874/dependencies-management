@@ -4,7 +4,7 @@
   "private": true,
   "description": "Locally-run AI-augmented dependencies analysis agent for legacy JS/TS projects",
   "engines": {
-    "node": ">=22"
+    "node": "^22.22.2 || ^24.15.0 || >=26"
   },
   "scripts": {
     "dev": "next dev -H 127.0.0.1 -p 3000",
@@ -22,12 +22,12 @@
     "@anthropic-ai/sdk": "1.6.0",
     "@babel/parser": "7.24.7",
     "@babel/types": "7.24.7",
-    "@npmcli/arborist": "9.9.3",
+    "@npmcli/arborist": "10.0.4",
     "@yarnpkg/lockfile": "1.1.0",
     "@yarnpkg/parsers": "3.0.0",
     "ignore": "5.3.1",
     "next": "16.4.6",
-    "npm-registry-fetch": "19.1.1",
+    "npm-registry-fetch": "20.0.1",
     "p-limit": "5.0.0",
     "p-queue": "8.0.1",
     "p-retry": "6.2.0",
