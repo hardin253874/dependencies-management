@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { useEffect, useState } from 'react';
 import { getApiClient } from '@/lib/client/api-client';
 import type { CveImpactEstimateResponse } from '@/lib/api-types';

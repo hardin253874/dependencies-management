@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { useState } from 'react';
 import { getApiClient } from '@/lib/client/api-client';
 import { useAppContext } from '../../AppContext';

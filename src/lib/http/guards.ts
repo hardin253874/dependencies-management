@@ -10,6 +10,15 @@ import { badRequest, forbidden } from './errors';
 export type Handler<C> = (req: Request, ctx: C) => Promise<NextResponse> | NextResponse;
 
 /**
+ * Second argument of a dynamic-segment Route Handler. `params` is a Promise
+ * since Next 15 (sync access was a deprecated compat mode, removed in 16), so
+ * handlers read it once at the top: `const params = await ctx.params;`.
+ * Named `RouteCtx`, not `RouteContext`, to avoid clashing with the global
+ * `RouteContext` helper type that `next typegen` / `next build` generate.
+ */
+export type RouteCtx<P extends Record<string, string>> = { params: Promise<P> };
+
+/**
  * Wrap a Route Handler with request logging. Logs method + path + status +
  * duration to `library/_logs/server.log` (and pretty console in dev) after
  * the handler returns. Errors thrown by the handler are logged at level

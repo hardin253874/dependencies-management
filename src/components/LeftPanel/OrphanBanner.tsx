@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import type { JobOrphan } from '@/lib/api-types';
 import { useAppContext } from '../AppContext';
 import styles from './OrphanBanner.module.css';

@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { getApiClient } from '@/lib/client/api-client';
 import type {

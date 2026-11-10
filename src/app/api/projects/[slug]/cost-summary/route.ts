@@ -11,15 +11,16 @@ import { NextResponse } from 'next/server';
 import { findBySlug } from '@/lib/storage/projects';
 import { computeCostSummary } from '@/lib/storage/costSummary';
 import { badRequest, internalError, notFound } from '@/lib/http/errors';
-import { withRequestLog } from '@/lib/http/guards';
+import { withRequestLog, type RouteCtx } from '@/lib/http/guards';
 import { isValidParam } from '@/lib/http/validate';
 import type { CostSummaryResponse } from '@/lib/api-types';
 
-export const GET = withRequestLog<{ params: { slug: string } }>(async (
+export const GET = withRequestLog<RouteCtx<{ slug: string }>>(async (
   _req,
   ctx
 ): Promise<NextResponse> => {
-  const slug = ctx.params.slug;
+  const params = await ctx.params;
+  const slug = params.slug;
   if (!isValidParam(slug)) return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
 
   const entry = await findBySlug(slug);

@@ -22,20 +22,19 @@ import { findBySlug } from '@/lib/storage/projects';
 import { relatedUpgradeDirForPackage, relatedUpgradeFilePath } from '@/lib/paths';
 import { readEnvelope } from '@/lib/storage/envelope';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
-import { withRequestLog } from '@/lib/http/guards';
+import { withRequestLog, type RouteCtx } from '@/lib/http/guards';
 import { isValidParam, isValidVersionParam } from '@/lib/http/validate';
 import { decodeAndValidatePackageName } from '@/lib/http/packageName';
 import { pathExists } from '@/lib/storage/atomic';
 import type { RelatedUpgradeDetail } from '@/lib/api-types';
 
-export const GET = withRequestLog<{
-  params: { slug: string; name: string; version: string };
-}>(async (_req, ctx): Promise<NextResponse> => {
-  const slug = ctx.params.slug;
+export const GET = withRequestLog<RouteCtx<{ slug: string; name: string; version: string }>>(async (_req, ctx): Promise<NextResponse> => {
+  const params = await ctx.params;
+  const slug = params.slug;
   if (!isValidParam(slug)) return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
-  const name = decodeAndValidatePackageName(ctx.params.name);
+  const name = decodeAndValidatePackageName(params.name);
   if (name === null) return badRequest('INVALID_PACKAGE_NAME', 'Package name failed allowlist validation.');
-  if (!isValidVersionParam(ctx.params.version)) {
+  if (!isValidVersionParam(params.version)) {
     return badRequest('INVALID_VERSION', 'Version failed allowlist validation.');
   }
 
@@ -57,7 +56,7 @@ export const GET = withRequestLog<{
   } catch (err) {
     return internalError('READ_DIR_FAILED', (err as Error).message);
   }
-  const suffix = `__${ctx.params.version}.json`;
+  const suffix = `__${params.version}.json`;
   const matching = entries.filter((e) => e.endsWith(suffix));
   if (matching.length === 0) {
     return notFound('NOT_CACHED', 'Related-deps upgrade analysis not yet generated for this version.');
@@ -72,7 +71,7 @@ export const GET = withRequestLog<{
       slug,
       name,
       filename.slice(0, filename.length - suffix.length),
-      ctx.params.version
+      params.version
     );
     try {
       const stat = await fs.stat(fp);

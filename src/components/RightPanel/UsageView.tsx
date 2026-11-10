@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, getApiClient } from '@/lib/client/api-client';
 import type {

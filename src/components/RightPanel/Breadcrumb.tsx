@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import type { BreadcrumbSegment, DetailRoute } from '@/lib/client/routes';
 import styles from './Breadcrumb.module.css';
 

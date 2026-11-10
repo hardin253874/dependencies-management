@@ -15,6 +15,7 @@
  * class names. That way the same component renders with either view [B]'s
  * or view [D]'s typography / spacing.
  */
+import type { JSX } from 'react';
 import type {
   RelatedDepUpgradeRecommendation,
   RelatedUpgradeDetail

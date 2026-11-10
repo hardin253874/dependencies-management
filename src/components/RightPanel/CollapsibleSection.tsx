@@ -19,6 +19,7 @@
  *   - Children only render when expanded — the DOM stays small for very long
  *     lists.
  */
+import type { JSX } from 'react';
 import { useCallback, useState, type ReactNode, type MouseEvent } from 'react';
 
 interface Props {

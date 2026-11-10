@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { useState } from 'react';
 import type { FsValidationResponse } from '@/lib/api-types';
 import { ApiError } from '@/lib/client/api-client';

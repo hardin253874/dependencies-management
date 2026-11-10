@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { useAppContext } from './AppContext';
 import { HeaderBar } from './HeaderBar';
 import { LeftPanel } from './LeftPanel/LeftPanel';

@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import styles from './Button.module.css';
 

@@ -6,12 +6,13 @@ import { promises as fs } from 'fs';
 import { NextResponse } from 'next/server';
 import { findBySlug, removeProject } from '@/lib/storage/projects';
 import { projectDir } from '@/lib/paths';
-import { withCsrf } from '@/lib/http/guards';
+import { withCsrf, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, internalError, notFound } from '@/lib/http/errors';
 import { isValidParam } from '@/lib/http/validate';
 
-export const DELETE = withCsrf<{ params: { slug: string } }>(async (req, ctx) => {
-  const slug = ctx.params.slug;
+export const DELETE = withCsrf<RouteCtx<{ slug: string }>>(async (req, ctx) => {
+  const params = await ctx.params;
+  const slug = params.slug;
   if (!isValidParam(slug)) {
     return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
   }

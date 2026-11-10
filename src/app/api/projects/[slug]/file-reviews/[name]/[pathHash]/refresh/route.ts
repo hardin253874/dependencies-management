@@ -12,7 +12,7 @@
  */
 import path from 'path';
 import { NextResponse } from 'next/server';
-import { withCsrf } from '@/lib/http/guards';
+import { withCsrf, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
 import { isValidParam } from '@/lib/http/validate';
 import { decodeAndValidatePackageName } from '@/lib/http/packageName';
@@ -39,14 +39,13 @@ import type {
 } from '@/lib/api-types';
 import type { ProjectJson } from '@/lib/projects/add';
 
-export const POST = withCsrf<{
-  params: { slug: string; name: string; pathHash: string };
-}>(async (_req, ctx) => {
-  const { slug, pathHash } = ctx.params;
+export const POST = withCsrf<RouteCtx<{ slug: string; name: string; pathHash: string }>>(async (_req, ctx) => {
+  const params = await ctx.params;
+  const { slug, pathHash } = params;
   if (!isValidParam(slug)) return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
   if (!isValidParam(pathHash)) return badRequest('INVALID_PATH_HASH', 'pathHash failed allowlist validation.');
 
-  const name = decodeAndValidatePackageName(ctx.params.name);
+  const name = decodeAndValidatePackageName(params.name);
   if (name === null) return badRequest('INVALID_PACKAGE_NAME', 'Package name failed allowlist validation.');
 
   const entry = await findBySlug(slug);

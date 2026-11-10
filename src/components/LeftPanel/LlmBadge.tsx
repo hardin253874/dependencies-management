@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import styles from './LlmBadge.module.css';
 
 interface LlmBadgeProps {

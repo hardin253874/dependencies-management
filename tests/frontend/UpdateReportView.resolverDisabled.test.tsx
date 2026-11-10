@@ -11,6 +11,7 @@
  * that opens Settings → Behavior. The failure variant offers a "Retry" button
  * that triggers regeneration.
  */
+import type { JSX } from 'react';
 import { describe, expect, it } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

@@ -8,7 +8,7 @@
  * for progress.
  */
 import { NextResponse } from 'next/server';
-import { withCsrf } from '@/lib/http/guards';
+import { withCsrf, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
 import { isValidParam } from '@/lib/http/validate';
 import { findBySlug } from '@/lib/storage/projects';
@@ -19,8 +19,9 @@ import { runPhase2Scan } from '@/lib/scanners/phase2';
 import type { ProjectJson } from '@/lib/projects/add';
 import type { ScanEnqueueResponse } from '@/lib/api-types';
 
-export const POST = withCsrf<{ params: { slug: string } }>(async (_req, ctx) => {
-  const slug = ctx.params.slug;
+export const POST = withCsrf<RouteCtx<{ slug: string }>>(async (_req, ctx) => {
+  const params = await ctx.params;
+  const slug = params.slug;
   if (!isValidParam(slug)) return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
 
   const entry = await findBySlug(slug);

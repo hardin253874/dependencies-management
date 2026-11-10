@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import type { OutdatedSeverity } from '@/lib/api-types';
 import styles from './BadgeCluster.module.css';
 

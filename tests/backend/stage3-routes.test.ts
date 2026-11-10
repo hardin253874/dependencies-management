@@ -14,6 +14,7 @@
  */
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { createSandbox, disposeAllSandboxes, type Sandbox } from './helpers/sandbox';
+import { routeCtx } from './helpers/fixtures';
 import { CSRF_HEADER, getCsrfToken } from '@/lib/csrf';
 
 import { POST as refreshReport } from '@/app/api/projects/[slug]/reports/[name]/[from]/[to]/refresh/route';
@@ -39,17 +40,13 @@ function newReq(method: string, withCsrf = true): Request {
 describe('POST /api/projects/.../reports/.../refresh — CSRF + validation', () => {
   it('rejects requests without X-Local-Token (CSRF invariant)', async () => {
     sandbox = await createSandbox('refresh-report-csrf');
-    const r = await refreshReport(newReq('POST', false), {
-      params: { slug: 'whatever', name: 'react', from: '18.0.0', to: '19.0.0' }
-    });
+    const r = await refreshReport(newReq('POST', false), routeCtx({ slug: 'whatever', name: 'react', from: '18.0.0', to: '19.0.0' }));
     expect(r.status).toBe(403);
   });
 
   it('rejects an invalid slug', async () => {
     sandbox = await createSandbox('refresh-report-bad-slug');
-    const r = await refreshReport(newReq('POST'), {
-      params: { slug: '../etc', name: 'react', from: '18.0.0', to: '19.0.0' }
-    });
+    const r = await refreshReport(newReq('POST'), routeCtx({ slug: '../etc', name: 'react', from: '18.0.0', to: '19.0.0' }));
     expect(r.status).toBe(400);
     const body = (await r.json()) as { error: { code: string } };
     expect(body.error.code).toBe('INVALID_SLUG');
@@ -57,9 +54,7 @@ describe('POST /api/projects/.../reports/.../refresh — CSRF + validation', () 
 
   it('rejects an invalid version param', async () => {
     sandbox = await createSandbox('refresh-report-bad-ver');
-    const r = await refreshReport(newReq('POST'), {
-      params: { slug: 'goodslug', name: 'react', from: '..', to: '19.0.0' }
-    });
+    const r = await refreshReport(newReq('POST'), routeCtx({ slug: 'goodslug', name: 'react', from: '..', to: '19.0.0' }));
     expect(r.status).toBe(400);
     const body = (await r.json()) as { error: { code: string } };
     expect(body.error.code).toBe('INVALID_VERSION');
@@ -67,9 +62,7 @@ describe('POST /api/projects/.../reports/.../refresh — CSRF + validation', () 
 
   it('returns 404 when the slug is unknown', async () => {
     sandbox = await createSandbox('refresh-report-unknown');
-    const r = await refreshReport(newReq('POST'), {
-      params: { slug: 'doesnotexist', name: 'react', from: '18.0.0', to: '19.0.0' }
-    });
+    const r = await refreshReport(newReq('POST'), routeCtx({ slug: 'doesnotexist', name: 'react', from: '18.0.0', to: '19.0.0' }));
     expect(r.status).toBe(404);
   });
 });
@@ -77,33 +70,25 @@ describe('POST /api/projects/.../reports/.../refresh — CSRF + validation', () 
 describe('GET /api/projects/.../file-reviews/...', () => {
   it('returns 400 on invalid slug', async () => {
     sandbox = await createSandbox('file-rev-bad-slug');
-    const r = await getFileReview(new Request('http://127.0.0.1/test'), {
-      params: { slug: '..', name: 'react', pathHash: 'abc123' }
-    });
+    const r = await getFileReview(new Request('http://127.0.0.1/test'), routeCtx({ slug: '..', name: 'react', pathHash: 'abc123' }));
     expect(r.status).toBe(400);
   });
 
   it('returns 400 on invalid pathHash', async () => {
     sandbox = await createSandbox('file-rev-bad-hash');
-    const r = await getFileReview(new Request('http://127.0.0.1/test'), {
-      params: { slug: 'goodslug', name: 'react', pathHash: '..' }
-    });
+    const r = await getFileReview(new Request('http://127.0.0.1/test'), routeCtx({ slug: 'goodslug', name: 'react', pathHash: '..' }));
     expect(r.status).toBe(400);
   });
 
   it('returns 400 on invalid package name', async () => {
     sandbox = await createSandbox('file-rev-bad-name');
-    const r = await getFileReview(new Request('http://127.0.0.1/test'), {
-      params: { slug: 'goodslug', name: '..', pathHash: 'abc123' }
-    });
+    const r = await getFileReview(new Request('http://127.0.0.1/test'), routeCtx({ slug: 'goodslug', name: '..', pathHash: 'abc123' }));
     expect(r.status).toBe(400);
   });
 
   it('returns 404 when the project does not exist', async () => {
     sandbox = await createSandbox('file-rev-no-proj');
-    const r = await getFileReview(new Request('http://127.0.0.1/test'), {
-      params: { slug: 'goodslug', name: 'react', pathHash: 'abc123' }
-    });
+    const r = await getFileReview(new Request('http://127.0.0.1/test'), routeCtx({ slug: 'goodslug', name: 'react', pathHash: 'abc123' }));
     expect(r.status).toBe(404);
   });
 });
@@ -111,25 +96,19 @@ describe('GET /api/projects/.../file-reviews/...', () => {
 describe('POST /api/projects/.../file-reviews/.../refresh — CSRF', () => {
   it('rejects requests without X-Local-Token', async () => {
     sandbox = await createSandbox('file-rev-refresh-csrf');
-    const r = await refreshFileReview(newReq('POST', false), {
-      params: { slug: 'whatever', name: 'react', pathHash: 'abc123' }
-    });
+    const r = await refreshFileReview(newReq('POST', false), routeCtx({ slug: 'whatever', name: 'react', pathHash: 'abc123' }));
     expect(r.status).toBe(403);
   });
 
   it('rejects invalid slug', async () => {
     sandbox = await createSandbox('file-rev-refresh-bad-slug');
-    const r = await refreshFileReview(newReq('POST'), {
-      params: { slug: '..', name: 'react', pathHash: 'abc123' }
-    });
+    const r = await refreshFileReview(newReq('POST'), routeCtx({ slug: '..', name: 'react', pathHash: 'abc123' }));
     expect(r.status).toBe(400);
   });
 
   it('returns 404 when the project does not exist', async () => {
     sandbox = await createSandbox('file-rev-refresh-no-proj');
-    const r = await refreshFileReview(newReq('POST'), {
-      params: { slug: 'goodslug', name: 'react', pathHash: 'abc123' }
-    });
+    const r = await refreshFileReview(newReq('POST'), routeCtx({ slug: 'goodslug', name: 'react', pathHash: 'abc123' }));
     expect(r.status).toBe(404);
   });
 });

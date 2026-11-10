@@ -7,13 +7,14 @@ import { findBySlug } from '@/lib/storage/projects';
 import { projectJsonPath } from '@/lib/paths';
 import { readJson, pathExists } from '@/lib/storage/atomic';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
-import { withRequestLog } from '@/lib/http/guards';
+import { withRequestLog, type RouteCtx } from '@/lib/http/guards';
 import { isValidParam } from '@/lib/http/validate';
 import type { ProjectDetail } from '@/lib/api-types';
 import type { ProjectJson } from '@/lib/projects/add';
 
-export const GET = withRequestLog<{ params: { slug: string } }>(async (_req, ctx): Promise<NextResponse> => {
-  const slug = ctx.params.slug;
+export const GET = withRequestLog<RouteCtx<{ slug: string }>>(async (_req, ctx): Promise<NextResponse> => {
+  const params = await ctx.params;
+  const slug = params.slug;
   if (!isValidParam(slug)) {
     return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
   }

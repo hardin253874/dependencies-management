@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { useAppContext } from '../AppContext';

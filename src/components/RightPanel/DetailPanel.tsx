@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { useAppContext } from '../AppContext';
 import { buildBreadcrumb } from '@/lib/client/routes';
 import { Breadcrumb } from './Breadcrumb';

@@ -4,25 +4,27 @@
  */
 import { NextResponse } from 'next/server';
 import { getJobQueue } from '@/lib/jobs/queue';
-import { withCsrf, withRequestLog } from '@/lib/http/guards';
+import { withCsrf, withRequestLog, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, notFound } from '@/lib/http/errors';
 import { isValidParam } from '@/lib/http/validate';
 import type { JobRecord } from '@/lib/api-types';
 
-export const GET = withRequestLog<{ params: { jobId: string } }>(async (_req, ctx) => {
-  if (!isValidParam(ctx.params.jobId)) {
+export const GET = withRequestLog<RouteCtx<{ jobId: string }>>(async (_req, ctx) => {
+  const params = await ctx.params;
+  if (!isValidParam(params.jobId)) {
     return badRequest('INVALID_JOB_ID', 'Job id failed allowlist validation.');
   }
-  const rec = getJobQueue().get(ctx.params.jobId);
-  if (rec === null) return notFound('JOB_NOT_FOUND', `No job with id ${ctx.params.jobId}.`);
+  const rec = getJobQueue().get(params.jobId);
+  if (rec === null) return notFound('JOB_NOT_FOUND', `No job with id ${params.jobId}.`);
   return NextResponse.json<JobRecord>(rec);
 });
 
-export const DELETE = withCsrf<{ params: { jobId: string } }>(async (_req, ctx) => {
-  if (!isValidParam(ctx.params.jobId)) {
+export const DELETE = withCsrf<RouteCtx<{ jobId: string }>>(async (_req, ctx) => {
+  const params = await ctx.params;
+  if (!isValidParam(params.jobId)) {
     return badRequest('INVALID_JOB_ID', 'Job id failed allowlist validation.');
   }
-  const ok = getJobQueue().cancel(ctx.params.jobId);
+  const ok = getJobQueue().cancel(params.jobId);
   if (!ok) return notFound('JOB_NOT_FOUND_OR_DONE', 'Job not found or already finished.');
   return new NextResponse(null, { status: 204 });
 });

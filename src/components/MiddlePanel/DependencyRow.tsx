@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import type { DependencyEntry } from '@/lib/api-types';
 import { formatCompactAge } from '@/lib/client/format';
 import { BadgeCluster, deriveBadgeState } from './BadgeCluster';

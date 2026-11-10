@@ -22,7 +22,7 @@ import { findBySlug } from '@/lib/storage/projects';
 import { projectJsonPath } from '@/lib/paths';
 import { readJson } from '@/lib/storage/atomic';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
-import { withRequestLog } from '@/lib/http/guards';
+import { withRequestLog, type RouteCtx } from '@/lib/http/guards';
 import { isValidParam, isValidVersionParam } from '@/lib/http/validate';
 import { decodeAndValidatePackageName } from '@/lib/http/packageName';
 import { readConfig } from '@/lib/storage/config';
@@ -31,16 +31,17 @@ import { computeDeepReportEstimate } from '@/lib/llm/estimate';
 import type { ProjectJson } from '@/lib/projects/add';
 import type { DeepReportEstimateResponse } from '@/lib/api-types';
 
-export const GET = withRequestLog<{ params: { slug: string; name: string; from: string; to: string } }>(async (
+export const GET = withRequestLog<RouteCtx<{ slug: string; name: string; from: string; to: string }>>(async (
   _req,
   ctx
 ): Promise<NextResponse> => {
-  const { slug, from, to } = ctx.params;
+  const params = await ctx.params;
+  const { slug, from, to } = params;
   if (!isValidParam(slug)) return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
   if (!isValidVersionParam(from)) return badRequest('INVALID_VERSION', '`from` failed allowlist validation.');
   if (!isValidVersionParam(to)) return badRequest('INVALID_VERSION', '`to` failed allowlist validation.');
 
-  const name = decodeAndValidatePackageName(ctx.params.name);
+  const name = decodeAndValidatePackageName(params.name);
   if (name === null) return badRequest('INVALID_PACKAGE_NAME', 'Package name failed allowlist validation.');
 
   const entry = await findBySlug(slug);

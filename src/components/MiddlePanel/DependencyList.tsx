@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { useState, useCallback, useEffect } from 'react';
 import type { DependencyEntry } from '@/lib/api-types';
 import { PersistenceKeys, readLocal, writeLocal } from '@/lib/client/persistence';

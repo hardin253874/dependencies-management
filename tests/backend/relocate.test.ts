@@ -11,7 +11,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { createSandbox, disposeAllSandboxes, type Sandbox } from './helpers/sandbox';
-import { createSmallNpmProject } from './helpers/fixtures';
+import { createSmallNpmProject, routeCtx } from './helpers/fixtures';
 import { addProjectPipeline } from '@/lib/projects/add';
 import { writeEnvelope } from '@/lib/storage/envelope';
 import { depFilePath, projectJsonPath } from '@/lib/paths';
@@ -41,19 +41,19 @@ function req(body: object, withCsrf = true): Request {
 describe('PATCH /api/projects/:slug/relocate', () => {
   it('rejects requests without CSRF', async () => {
     sandbox = await createSandbox('relocate-csrf');
-    const r = await relocate(req({ newPath: '/nope' }, false), { params: { slug: 'x' } });
+    const r = await relocate(req({ newPath: '/nope' }, false), routeCtx({ slug: 'x' }));
     expect(r.status).toBe(403);
   });
 
   it('rejects an invalid slug', async () => {
     sandbox = await createSandbox('relocate-bad-slug');
-    const r = await relocate(req({ newPath: '/x' }), { params: { slug: '..' } });
+    const r = await relocate(req({ newPath: '/x' }), routeCtx({ slug: '..' }));
     expect(r.status).toBe(400);
   });
 
   it('returns 404 when slug unknown', async () => {
     sandbox = await createSandbox('relocate-unknown');
-    const r = await relocate(req({ newPath: sandbox.scratchRoot }), { params: { slug: 'missing' } });
+    const r = await relocate(req({ newPath: sandbox.scratchRoot }), routeCtx({ slug: 'missing' }));
     expect(r.status).toBe(404);
   });
 
@@ -75,7 +75,7 @@ describe('PATCH /api/projects/:slug/relocate', () => {
     const newDir = path.join(sandbox.scratchRoot, 'project-new');
     await fs.rename(oldDir, newDir);
 
-    const r = await relocate(req({ newPath: newDir }), { params: { slug } });
+    const r = await relocate(req({ newPath: newDir }), routeCtx({ slug }));
     expect(r.status).toBe(200);
 
     // Slug preserved in _projects.json.

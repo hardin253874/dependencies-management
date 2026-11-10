@@ -12,18 +12,18 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 ## Project context in one paragraph
 
-A locally-run AI-augmented agent that scans, analyses, and reviews dependencies of legacy JS/TS projects. Next.js 14.2 App Router (Route Handlers, not Server Actions). Server binds 127.0.0.1 only. Six right-panel views per dep ([A]–[E] + [D-Deep]). Cache-first design: every view reads its persisted envelope first; LLM calls happen only on explicit user action. The agent is **read-only against target projects** — all writes go to `library/`.
+A locally-run AI-augmented agent that scans, analyses, and reviews dependencies of legacy JS/TS projects. Next.js 16.4 App Router + React 19.3 (Route Handlers, not Server Actions; Turbopack for dev and build since v2 Stage 2). Server binds 127.0.0.1 only. Six right-panel views per dep ([A]–[E] + [D-Deep]). Cache-first design: every view reads its persisted envelope first; LLM calls happen only on explicit user action. The agent is **read-only against target projects** — all writes go to `library/`.
 
-Test baseline (2026-11-10, after the v2 round-1 QA cleanup): 683 passed / 1 skipped across 116 files (~8 s wall). Typecheck + lint must be clean before any commit.
+Test baseline (2026-11-10, after v2 Stage 2): 686 passed / 1 skipped across 117 files (~8 s wall). Typecheck + lint must be clean before any commit.
 
 ## Commands
 
 ```bash
-npm run dev                 # next dev on 127.0.0.1:3000
+npm run dev                 # next dev (Turbopack) on 127.0.0.1:3000; `next dev --webpack …` to compare bundlers
 npm run setup               # interactive: writes .env + library/_config.json
-npm run typecheck && npm run lint && npm test   # lint = `eslint .` (ESLint 9 flat config, eslint.config.mjs; `next lint` does not read flat config on Next 14)
+npm run typecheck && npm run lint && npm test   # lint = `eslint .` (ESLint 9 flat config, eslint.config.mjs; `next lint` was removed in Next 16 and `next build` no longer lints)
 npm run eval -- help        # Stage 0 eval harness (vite-node eval/cli.ts; corpus in eval/corpus, output in eval/results)
-npm run build && npm start  # production build, also bound to 127.0.0.1:3000
+npm run build && npm start  # production build (Turbopack), also bound to 127.0.0.1:3000
 npx vitest run tests/backend/resolver.test.ts          # single file
 npx vitest run tests/backend/resolver.test.ts -t "name" # single test
 npm run test:e2e            # Playwright; auto-starts `npm run dev` (reuses a running one)
@@ -46,7 +46,7 @@ Vitest 5 `test.projects` (vitest.config.ts): `backend` = `tests/backend/**` → 
 These are the rules; violating them is a bug, regardless of how convenient the shortcut looks.
 
 ### 1. Target project is read-only
-The agent NEVER writes to, deletes from, or modifies the target project's source tree. There is no dedicated test for this yet (the related invariant tests are `tests/backend/invariant.*.test.ts`: api-key, bind, csrf, traversal). If you touch code that does anything filesystem-y near `project.path`, your PR is suspect.
+The agent NEVER writes to, deletes from, or modifies the target project's source tree. There is no dedicated test for this yet (the related invariant tests are `tests/backend/invariant.*.test.ts`: api-key, bind, csrf, singletons, traversal). If you touch code that does anything filesystem-y near `project.path`, your PR is suspect.
 
 ### 2. Cache-first, lazy AI
 Every view reads its cached envelope first. LLM calls fire only on explicit user clicks ("Generate", "Regenerate", "Analyze"). Never silently auto-trigger an LLM call from a GET handler or a `useEffect` mount.
@@ -60,7 +60,7 @@ Every view reads its cached envelope first. LLM calls fire only on explicit user
 **Module-scoped mutable singletons are forbidden.** This is the most-frequently-violated rule in this codebase's history and is the root of about a third of the real bugs we've fixed.
 
 ```ts
-// ❌ BUG — Next.js dev evaluates this module per-route bundle, creating N independent instances
+// ❌ BUG — webpack dev evaluates this module per-route bundle, creating N independent instances
 const STATES = new Map<string, WriterState>();
 let logger: Logger | null = null;
 let cachedToken: string | null = null;
@@ -83,6 +83,8 @@ If you `grep "^const [A-Z_]*\s*=\s*new (Map|Set)\(" src/lib/` and find a non-rea
 
 Currently-pinned singletons: `JobQueue`, CSRF token, logger state, project locks, orphan cache, LLM client cache + its config signature (`__DEP_AGENT_LLM_SIGNATURE__`, `llm/factory.ts`), LLM concurrency limiters (`__DEP_AGENT_LLM_LIMITS__`), canonical-writer STATES.
 
+Guards: `tests/backend/invariant.singletons.test.ts` (in `npm test`) fails on any top-level `let`/`var` or `const X = new Map|Set|…` in `src/lib/**` (minus `src/lib/client/`) that is not in its allowlist with a reason. `tests/e2e/invariant.cross-route-singleton.spec.ts` checks at runtime that the CSRF token from `/api/csrf` is accepted by `PATCH /api/config`. Measured on Next 16.4: only webpack dev splits modules per route; Turbopack dev and production builds share one instance. So the rule still holds (`--webpack` is one flag away), but the e2e spec can only catch a regression under `next dev --webpack`. The static guard catches it with any bundler.
+
 ### 5. Test isolation
 Every test that touches the library or a fixture project gets its own tempdir via `createSandbox(name)` (`tests/backend/helpers/sandbox.ts`). NEVER write to the developer's real `library/` from a test.
 
@@ -95,16 +97,23 @@ Every test that touches the library or a fixture project gets its own tempdir vi
 Every route file in `src/app/api/**/route.ts` MUST be wrapped:
 
 ```ts
-// GETs (read-only)
-export const GET = withRequestLog<{ params: { slug: string } }>(async (_req, ctx) => {
+// GETs (read-only). Dynamic segments: `params` is a Promise (Next 15+), read it once at the top.
+export const GET = withRequestLog<RouteCtx<{ slug: string }>>(async (_req, ctx) => {
+  const params = await ctx.params;
   // ...
 });
 
 // Mutating routes (POST/PATCH/PUT/DELETE)
-export const POST = withCsrf<{ params: { slug: string } }>(async (_req, ctx) => {
+export const POST = withCsrf<RouteCtx<{ slug: string }>>(async (_req, ctx) => {
+  const params = await ctx.params;
   // ...
 });
+
+// Routes without dynamic segments
+export const GET = withRequestLog<unknown>(async () => { /* ... */ });
 ```
+
+`RouteCtx<P>` lives in `src/lib/http/guards.ts` (named so it does not clash with Next's generated global `RouteContext`). In tests, call handlers with `routeCtx({ slug })` from `tests/backend/helpers/fixtures.ts`.
 
 `withCsrf` composes `withRequestLog` internally — never wrap twice. The only intentional exception is the SSE stream `GET /api/jobs/[jobId]/events`, which streams indefinitely and would never produce a final status line.
 
@@ -226,7 +235,7 @@ These are the bugs that have actually shipped in this repo. Each one is here bec
 ```bash
 npm run typecheck   # tsc --noEmit — must be clean
 npm run lint        # ESLint — must be clean
-npm test            # Full Vitest suite — must match current baseline (683 pass / 1 skipped)
+npm test            # Full Vitest suite — must match current baseline (686 pass / 1 skipped)
 ```
 
 ### When you change a route
@@ -273,7 +282,7 @@ If `tests/backend/storage.atomic.test.ts` fails under parallel pressure with EPE
 
 - **TypeScript strict** everywhere. No `any` without a comment justifying it.
 - **Path aliases**: import via `@/lib/...` not relative paths.
-- **Comments explain WHY**, not WHAT. If a comment restates the code, delete it. If a function exists to dodge a Next.js / Windows / Webpack quirk, the comment MUST name the quirk so the next person knows not to "simplify" it away.
+- **Comments explain WHY**, not WHAT. If a comment restates the code, delete it. If a function exists to dodge a Next.js / Windows / bundler quirk, the comment MUST name the quirk so the next person knows not to "simplify" it away.
 - **Pure functions where possible** — easier to test. `src/lib/scanners/cve.ts`'s `deriveSeverity` is a good template.
 - **Function declarations for top-level helpers**, arrow functions for callbacks.
 - **`never` for exhaustive-switch defaults** — let TS catch missing cases.

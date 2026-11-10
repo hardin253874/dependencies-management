@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppContext } from './AppContext';

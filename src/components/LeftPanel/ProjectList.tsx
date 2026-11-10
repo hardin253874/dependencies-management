@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import type { ProjectSummary } from '@/lib/api-types';
 import { formatCompactAge } from '@/lib/client/format';
 import { ProjectOrphanBanner } from './ProjectOrphanBanner';

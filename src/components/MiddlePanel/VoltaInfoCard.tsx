@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import type { PackageManager, VoltaInfo } from '@/lib/api-types';
 import styles from './VoltaInfoCard.module.css';
 

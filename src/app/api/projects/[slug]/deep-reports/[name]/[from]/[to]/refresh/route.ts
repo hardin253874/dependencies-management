@@ -8,7 +8,7 @@
  * Spec §7.6 + §11.6 + §11.9 + §11.11.
  */
 import { NextResponse } from 'next/server';
-import { withCsrf } from '@/lib/http/guards';
+import { withCsrf, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
 import { isValidParam, isValidVersionParam } from '@/lib/http/validate';
 import { decodeAndValidatePackageName } from '@/lib/http/packageName';
@@ -33,15 +33,14 @@ import type {
   ResolverCheckBlock
 } from '@/lib/api-types';
 
-export const POST = withCsrf<{
-  params: { slug: string; name: string; from: string; to: string };
-}>(async (req, ctx) => {
-  const { slug, from, to } = ctx.params;
+export const POST = withCsrf<RouteCtx<{ slug: string; name: string; from: string; to: string }>>(async (req, ctx) => {
+  const params = await ctx.params;
+  const { slug, from, to } = params;
   if (!isValidParam(slug)) return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
   if (!isValidVersionParam(from)) return badRequest('INVALID_VERSION', '`from` failed allowlist validation.');
   if (!isValidVersionParam(to)) return badRequest('INVALID_VERSION', '`to` failed allowlist validation.');
 
-  const name = decodeAndValidatePackageName(ctx.params.name);
+  const name = decodeAndValidatePackageName(params.name);
   if (name === null) return badRequest('INVALID_PACKAGE_NAME', 'Package name failed allowlist validation.');
 
   const entry = await findBySlug(slug);

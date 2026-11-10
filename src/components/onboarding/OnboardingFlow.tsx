@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { useState } from 'react';
 import { useAppContext } from '../AppContext';
 import { WelcomeStep } from './WelcomeStep';

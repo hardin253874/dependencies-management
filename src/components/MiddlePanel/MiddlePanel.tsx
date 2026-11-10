@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAppContext } from '../AppContext';
 import { SortFilterToolbar, type FilterChips, type SortKey } from './SortFilterToolbar';

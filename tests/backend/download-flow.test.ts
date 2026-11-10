@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import { createSandbox, disposeAllSandboxes, type Sandbox } from './helpers/sandbox';
-import { createSmallNpmProject } from './helpers/fixtures';
+import { createSmallNpmProject, routeCtx } from './helpers/fixtures';
 import { addProjectPipeline } from '@/lib/projects/add';
 import { writeEnvelope } from '@/lib/storage/envelope';
 import { reportFilePath, deepReportFilePath } from '@/lib/paths';
@@ -66,9 +66,7 @@ describe('GET /api/projects/:slug/reports/:name/:from/:to/download', () => {
     await createSmallNpmProject(proj);
     const result = await addProjectPipeline({ absolutePath: proj });
     if (!result.ok) throw new Error('Add failed');
-    const r = await downloadReport(req('http://x/?format=md'), {
-      params: { slug: result.slug, name: 'react', from: '18.3.1', to: '19.0.0' }
-    });
+    const r = await downloadReport(req('http://x/?format=md'), routeCtx({ slug: result.slug, name: 'react', from: '18.3.1', to: '19.0.0' }));
     expect(r.status).toBe(404);
     const body = (await r.json()) as { error: { code: string } };
     expect(body.error.code).toBe('NOT_CACHED');
@@ -85,9 +83,7 @@ describe('GET /api/projects/:slug/reports/:name/:from/:to/download', () => {
       { source: 'anthropic:test', ttlHours: null, data: FIXTURE_REPORT }
     );
 
-    const r = await downloadReport(req('http://x/?format=md'), {
-      params: { slug: result.slug, name: 'react', from: '18.3.1', to: '19.0.0' }
-    });
+    const r = await downloadReport(req('http://x/?format=md'), routeCtx({ slug: result.slug, name: 'react', from: '18.3.1', to: '19.0.0' }));
     expect(r.status).toBe(200);
     expect(r.headers.get('Content-Type')).toContain('text/markdown');
     expect(r.headers.get('Content-Disposition')).toContain('attachment');
@@ -107,9 +103,7 @@ describe('GET /api/projects/:slug/reports/:name/:from/:to/download', () => {
       { source: 'anthropic:test', ttlHours: null, data: FIXTURE_REPORT }
     );
 
-    const r = await downloadReport(req('http://x/?format=html'), {
-      params: { slug: result.slug, name: 'react', from: '18.3.1', to: '19.0.0' }
-    });
+    const r = await downloadReport(req('http://x/?format=html'), routeCtx({ slug: result.slug, name: 'react', from: '18.3.1', to: '19.0.0' }));
     expect(r.status).toBe(200);
     expect(r.headers.get('Content-Type')).toContain('text/html');
     const body = await r.text();
@@ -123,9 +117,7 @@ describe('GET /api/projects/:slug/reports/:name/:from/:to/download', () => {
     await createSmallNpmProject(proj);
     const result = await addProjectPipeline({ absolutePath: proj });
     if (!result.ok) throw new Error('Add failed');
-    const r = await downloadReport(req('http://x/?format=pdf'), {
-      params: { slug: result.slug, name: 'react', from: '18.3.1', to: '19.0.0' }
-    });
+    const r = await downloadReport(req('http://x/?format=pdf'), routeCtx({ slug: result.slug, name: 'react', from: '18.3.1', to: '19.0.0' }));
     expect(r.status).toBe(400);
   });
 
@@ -135,9 +127,7 @@ describe('GET /api/projects/:slug/reports/:name/:from/:to/download', () => {
     await createSmallNpmProject(proj);
     const result = await addProjectPipeline({ absolutePath: proj });
     if (!result.ok) throw new Error('Add failed');
-    const r = await downloadReport(req('http://x/?format=md'), {
-      params: { slug: result.slug, name: 'react', from: '..', to: '19.0.0' }
-    });
+    const r = await downloadReport(req('http://x/?format=md'), routeCtx({ slug: result.slug, name: 'react', from: '..', to: '19.0.0' }));
     expect(r.status).toBe(400);
     const body = (await r.json()) as { error: { code: string } };
     expect(body.error.code).toBe('INVALID_VERSION');
@@ -151,9 +141,7 @@ describe('GET /api/projects/:slug/deep-reports/:name/:from/:to/download', () => 
     await createSmallNpmProject(proj);
     const result = await addProjectPipeline({ absolutePath: proj });
     if (!result.ok) throw new Error('Add failed');
-    const r = await downloadDeepReport(req('http://x/?format=md'), {
-      params: { slug: result.slug, name: 'react', from: '17.0.2', to: '19.0.0' }
-    });
+    const r = await downloadDeepReport(req('http://x/?format=md'), routeCtx({ slug: result.slug, name: 'react', from: '17.0.2', to: '19.0.0' }));
     expect(r.status).toBe(404);
   });
 
@@ -172,9 +160,7 @@ describe('GET /api/projects/:slug/deep-reports/:name/:from/:to/download', () => 
         data: { ...FIXTURE_DEEP_BASE, lockfileStateHashShort: hashShort }
       }
     );
-    const r = await downloadDeepReport(req('http://x/?format=md'), {
-      params: { slug: result.slug, name: 'react', from: '17.0.2', to: '19.0.0' }
-    });
+    const r = await downloadDeepReport(req('http://x/?format=md'), routeCtx({ slug: result.slug, name: 'react', from: '17.0.2', to: '19.0.0' }));
     expect(r.status).toBe(200);
     const body = await r.text();
     expect(body).toContain('# Deep Update Report — react');
@@ -195,9 +181,7 @@ describe('GET /api/projects/:slug/deep-reports/:name/:from/:to/download', () => 
         data: { ...FIXTURE_DEEP_BASE, lockfileStateHashShort: 'xxxxx' }
       }
     );
-    const r = await downloadDeepReport(req('http://x/?format=md'), {
-      params: { slug: result.slug, name: 'react', from: '17.0.2', to: '19.0.0' }
-    });
+    const r = await downloadDeepReport(req('http://x/?format=md'), routeCtx({ slug: result.slug, name: 'react', from: '17.0.2', to: '19.0.0' }));
     expect(r.status).toBe(404);
   });
 });

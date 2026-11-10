@@ -8,15 +8,16 @@ import { findBySlug } from '@/lib/storage/projects';
 import { usageFilePath } from '@/lib/paths';
 import { envelopeOr404 } from '@/lib/http/envelopeResponse';
 import { badRequest, notFound } from '@/lib/http/errors';
-import { withRequestLog } from '@/lib/http/guards';
+import { withRequestLog, type RouteCtx } from '@/lib/http/guards';
 import { isValidParam } from '@/lib/http/validate';
 import { decodeAndValidatePackageName } from '@/lib/http/packageName';
 import type { UsageDetail } from '@/lib/api-types';
 
-export const GET = withRequestLog<{ params: { slug: string; name: string } }>(async (_req, ctx): Promise<NextResponse> => {
-  const slug = ctx.params.slug;
+export const GET = withRequestLog<RouteCtx<{ slug: string; name: string }>>(async (_req, ctx): Promise<NextResponse> => {
+  const params = await ctx.params;
+  const slug = params.slug;
   if (!isValidParam(slug)) return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
-  const name = decodeAndValidatePackageName(ctx.params.name);
+  const name = decodeAndValidatePackageName(params.name);
   if (name === null) return badRequest('INVALID_PACKAGE_NAME', 'Package name failed allowlist validation.');
 
   const entry = await findBySlug(slug);

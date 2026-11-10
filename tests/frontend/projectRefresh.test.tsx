@@ -98,7 +98,10 @@ describe('Project refresh wiring (Stage 1 carry-over)', () => {
     });
 
     await waitFor(() => expect(screen.getByText('my-app')).toBeInTheDocument());
-    const refreshBtn = screen.getByTestId('project-refresh-p');
+    // The refresh button renders only once the project is active, which can
+    // be a later commit than the list itself (seen under React 19), so wait
+    // for the button rather than assuming it arrives with the name.
+    const refreshBtn = await screen.findByTestId('project-refresh-p');
     await userEvent.click(refreshBtn);
 
     await waitFor(() => {

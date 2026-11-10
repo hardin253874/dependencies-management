@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import styles from './SortFilterToolbar.module.css';
 

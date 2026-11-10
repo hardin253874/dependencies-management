@@ -15,8 +15,8 @@ import type { JobRecord } from '@/lib/api-types';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: Request, ctx: { params: { jobId: string } }): Promise<Response> {
-  const jobId = ctx.params.jobId;
+export async function GET(_req: Request, ctx: { params: Promise<{ jobId: string }> }): Promise<Response> {
+  const { jobId } = await ctx.params;
   if (!isValidParam(jobId)) {
     return badRequest('INVALID_JOB_ID', 'Job id failed allowlist validation.');
   }

@@ -8,7 +8,7 @@
  */
 import path from 'path';
 import { NextResponse } from 'next/server';
-import { withCsrf } from '@/lib/http/guards';
+import { withCsrf, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, internalError, notFound } from '@/lib/http/errors';
 import { isValidParam } from '@/lib/http/validate';
 import { findBySlug, updateProject } from '@/lib/storage/projects';
@@ -20,8 +20,9 @@ import type { ProjectJson, ProjectDependency } from '@/lib/projects/add';
 import type { RefreshResponse } from '@/lib/api-types';
 import { promises as fs } from 'fs';
 
-export const POST = withCsrf<{ params: { slug: string } }>(async (_req, ctx) => {
-  const slug = ctx.params.slug;
+export const POST = withCsrf<RouteCtx<{ slug: string }>>(async (_req, ctx) => {
+  const params = await ctx.params;
+  const slug = params.slug;
   if (!isValidParam(slug)) return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
 
   const entry = await findBySlug(slug);

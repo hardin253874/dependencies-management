@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import { formatRelativeTime } from '@/lib/client/format';
 import styles from './CacheFreshnessLine.module.css';
 

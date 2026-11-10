@@ -8,6 +8,7 @@
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import type { RouteCtx } from '@/lib/http/guards';
 
 export interface SmallProjectOptions {
   name?: string;
@@ -139,4 +140,13 @@ async function walk(base: string, current: string, out: Record<string, string>):
       out[rel] = `${hash}:${buf.length}`;
     }
   }
+}
+
+/**
+ * Route-handler context for direct handler calls in tests. Since Next 15 the
+ * `params` of a dynamic-segment Route Handler is a Promise (see `RouteCtx` in
+ * `src/lib/http/guards.ts`).
+ */
+export function routeCtx<P extends Record<string, string>>(params: P): RouteCtx<P> {
+  return { params: Promise.resolve(params) };
 }

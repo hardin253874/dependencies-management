@@ -6,7 +6,7 @@
  * surfacing.
  */
 import { NextResponse } from 'next/server';
-import { withCsrf } from '@/lib/http/guards';
+import { withCsrf, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
 import { isValidParam } from '@/lib/http/validate';
 import { decodeAndValidatePackageName } from '@/lib/http/packageName';
@@ -23,10 +23,11 @@ import { computeRelatedDeps } from '@/lib/projects/relatedDeps';
 import type { ProjectJson } from '@/lib/projects/add';
 import type { DepDetail, CveRecord, ScanEnqueueResponse } from '@/lib/api-types';
 
-export const POST = withCsrf<{ params: { slug: string; name: string } }>(async (_req, ctx) => {
-  const slug = ctx.params.slug;
+export const POST = withCsrf<RouteCtx<{ slug: string; name: string }>>(async (_req, ctx) => {
+  const params = await ctx.params;
+  const slug = params.slug;
   if (!isValidParam(slug)) return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
-  const name = decodeAndValidatePackageName(ctx.params.name);
+  const name = decodeAndValidatePackageName(params.name);
   if (name === null) return badRequest('INVALID_PACKAGE_NAME', 'Package name failed allowlist validation.');
 
   const entry = await findBySlug(slug);

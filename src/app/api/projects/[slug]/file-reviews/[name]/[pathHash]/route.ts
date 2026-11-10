@@ -14,7 +14,7 @@ import { NextResponse } from 'next/server';
 import { findBySlug } from '@/lib/storage/projects';
 import { fileReviewFilePath, usageFilePath, projectJsonPath } from '@/lib/paths';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
-import { withRequestLog } from '@/lib/http/guards';
+import { withRequestLog, type RouteCtx } from '@/lib/http/guards';
 import { isValidParam } from '@/lib/http/validate';
 import { decodeAndValidatePackageName } from '@/lib/http/packageName';
 import { pathExists, readJson } from '@/lib/storage/atomic';
@@ -23,15 +23,16 @@ import { computeCurrentFileHash } from '@/lib/llm/fileReviewService';
 import type { FileEnvelope, FileReviewDetail, UsageDetail } from '@/lib/api-types';
 import type { ProjectJson } from '@/lib/projects/add';
 
-export const GET = withRequestLog<{ params: { slug: string; name: string; pathHash: string } }>(async (
+export const GET = withRequestLog<RouteCtx<{ slug: string; name: string; pathHash: string }>>(async (
   _req,
   ctx
 ): Promise<NextResponse> => {
-  const { slug, pathHash } = ctx.params;
+  const params = await ctx.params;
+  const { slug, pathHash } = params;
   if (!isValidParam(slug)) return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
   if (!isValidParam(pathHash)) return badRequest('INVALID_PATH_HASH', 'pathHash failed allowlist validation.');
 
-  const name = decodeAndValidatePackageName(ctx.params.name);
+  const name = decodeAndValidatePackageName(params.name);
   if (name === null) return badRequest('INVALID_PACKAGE_NAME', 'Package name failed allowlist validation.');
 
   const entry = await findBySlug(slug);

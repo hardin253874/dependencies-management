@@ -1,16 +1,22 @@
-// ESLint 9 flat config (v2 Stage 1.6).
+// ESLint 9 flat config (v2 Stage 1.6, updated Stage 2.5).
 //
-// Why ESLint 9 and not 10: eslint-plugin-react (7.37.5) and eslint-plugin-jsx-a11y
-// (6.10.2) — both part of the `next/core-web-vitals` rule set — declare peers up
-// to ESLint 9 only (checked 2026-11-09), so ESLint 10 needs --legacy-peer-deps.
-// Fallback D14: ESLint 9 now, 10 in Stage 2 with eslint-config-next@16.
+// Why ESLint 9 and not 10 (D14): eslint-plugin-react (7.37.5) and
+// eslint-plugin-jsx-a11y (6.10.2) — both part of the `next/core-web-vitals`
+// rule set — still declare peers up to ESLint 9 only (re-checked 2026-11-10),
+// so ESLint 10 would need --legacy-peer-deps.
 //
-// Why no eslint-config-next: v14.2.35 ships eslintrc only and peers ESLint ^7 || ^8.
-// This file recreates its `next/core-web-vitals` preset by composing the same
-// plugins directly (eslint-config-next@14.2.35 index.js + core-web-vitals.js):
-// react/recommended + react-hooks/recommended + @next/next recommended and
-// core-web-vitals, plus its rule overrides, the TS parser for .ts/.tsx, and the
-// repo's one override (react/no-unescaped-entities: off).
+// Why no eslint-config-next (proposed D17): eslint-config-next@16 pulls
+// eslint-plugin-react-hooks ^7, whose `recommended` preset turns on the React
+// Compiler rules (purity, refs, set-state-in-effect, ...) as errors. Adopting
+// them is a separate code-quality task, so this file keeps composing the
+// `next/core-web-vitals` preset by hand from the same plugins
+// (eslint-config-next index.js + core-web-vitals.js):
+// react/recommended + react-hooks 5 recommended-latest + @next/next
+// recommended and core-web-vitals, plus its rule overrides, the TS parser for
+// .ts/.tsx, and the repo's one override (react/no-unescaped-entities: off).
+//
+// @next/eslint-plugin-next@16 is flat-config native and ESLint 9 compatible, so
+// it is registered directly (the Stage 1 @eslint/compat shim is gone).
 //
 // Extend here for D1's `src/core` import ban in Stage 3 (no-restricted-imports
 // on files: ['src/core/**']).
@@ -20,7 +26,6 @@ import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import jsxA11yPlugin from 'eslint-plugin-jsx-a11y';
 import importPlugin from 'eslint-plugin-import';
 import tsParser from '@typescript-eslint/parser';
-import { fixupPluginRules } from '@eslint/compat';
 
 const config = [
   {
@@ -47,10 +52,7 @@ const config = [
     plugins: {
       react: reactPlugin,
       'react-hooks': reactHooksPlugin,
-      // @next/eslint-plugin-next@14 calls context.getAncestors() etc., removed in
-      // ESLint 9; the official @eslint/compat shim maps them to the new API.
-      // Keeps the plugin version matched to Next 14 (drop the shim in Stage 2).
-      '@next/next': fixupPluginRules(nextPlugin),
+      '@next/next': nextPlugin,
       'jsx-a11y': jsxA11yPlugin,
       import: importPlugin
     },
@@ -65,7 +67,7 @@ const config = [
       ...reactHooksPlugin.configs['recommended-latest'].rules,
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs['core-web-vitals'].rules,
-      // eslint-config-next@14.2.35 overrides:
+      // eslint-config-next overrides (unchanged from 14.2.35 to 16.4.6):
       'import/no-anonymous-default-export': 'warn',
       'react/no-unknown-property': 'off',
       'react/react-in-jsx-scope': 'off',

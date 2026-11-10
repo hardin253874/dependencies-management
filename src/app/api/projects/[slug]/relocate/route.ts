@@ -6,7 +6,7 @@
  * preserved so all cached library/<slug>/ data stays intact (spec §6.3).
  */
 import { NextResponse } from 'next/server';
-import { withCsrf, readJsonBody, isNextResponse } from '@/lib/http/guards';
+import { withCsrf, readJsonBody, isNextResponse, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, conflict, internalError, notFound, forbidden } from '@/lib/http/errors';
 import { isValidParam } from '@/lib/http/validate';
 import { findBySlug, updateProject } from '@/lib/storage/projects';
@@ -20,8 +20,9 @@ import type { ProjectJson, ProjectDependency } from '@/lib/projects/add';
 import type { RelocateRequest } from '@/lib/api-types';
 import path from 'path';
 
-export const PATCH = withCsrf<{ params: { slug: string } }>(async (req, ctx) => {
-  const slug = ctx.params.slug;
+export const PATCH = withCsrf<RouteCtx<{ slug: string }>>(async (req, ctx) => {
+  const params = await ctx.params;
+  const slug = params.slug;
   if (!isValidParam(slug)) return badRequest('INVALID_SLUG', 'Slug failed allowlist validation.');
 
   const entry = await findBySlug(slug);
