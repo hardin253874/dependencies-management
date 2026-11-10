@@ -31,6 +31,10 @@ export interface AiRunOptions {
   mockScript?: string;
   /** v1-ai: answer from MOCK_LLM fixtures (test-fixtures/llm/). */
   mock: boolean;
+  /** Stage 4c: real Anthropic API through the spend gate (public cases only). */
+  real: boolean;
+  /** `--stop-at-usd`: lower ledger ceiling for this run; can never raise the round cap. */
+  stopAtUsd?: number;
 }
 export const GRAPH_PACKAGE_SOURCES: readonly GraphPackageSource[] = ['declared', 'phase'];
 
@@ -85,8 +89,10 @@ Commands:
                   [--model <id>] [--effort low|medium|high|xhigh|max]
                   [--budget update|deep] [--playbooks off|on]
                   [--mock-script <file>] (v2-agent) · [--mock-llm] (v1-ai)
+                  [--real [--stop-at-usd <n>]] (v2-agent / v1-ai, public cases only)
                   Score every case; write eval/results/<date>-<label>.json.
-                  AI predictors need a mock in Stage 4a; real API runs come with --real (4c).
+                  AI predictors need a mock, or --real: the real Anthropic API through the
+                  spend ledger (hard round cap in code; --stop-at-usd can only lower it).
   graph           --label <label> [--cases id,id] [--packages declared|phase]
                   [--cache-dir <dir>] [--offline] [--refresh-truth]
                   Graph "files that use package X" vs TypeScript truth + unresolved %;
@@ -103,7 +109,7 @@ Exit codes: 0 ok · 1 usage/validation error · 2 results written with case erro
 const VALUE_FLAGS: Record<string, readonly string[]> = {
   validate: ['corpus', 'local'],
   truth: ['case', 'phase', 'cache-dir', 'corpus', 'local'],
-  run: ['label', 'cases', 'cache-dir', 'predictor', 'corpus', 'local', 'model', 'effort', 'budget', 'playbooks', 'mock-script'],
+  run: ['label', 'cases', 'cache-dir', 'predictor', 'corpus', 'local', 'model', 'effort', 'budget', 'playbooks', 'mock-script', 'stop-at-usd'],
   graph: ['label', 'cases', 'cache-dir', 'packages', 'corpus', 'local'],
   'score-findings': ['corpus', 'local'],
   compare: []
@@ -111,7 +117,7 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
 const BOOL_FLAGS: Record<string, readonly string[]> = {
   validate: [],
   truth: ['offline'],
-  run: ['offline', 'mock-llm'],
+  run: ['offline', 'mock-llm', 'real'],
   graph: ['offline', 'refresh-truth'],
   'score-findings': [],
   compare: []
@@ -207,7 +213,7 @@ function oneOf<T extends string>(raw: RawArgs, name: string, allowed: readonly T
   return v as T;
 }
 
-const AI_ONLY_FLAGS = ['model', 'effort', 'budget', 'playbooks', 'mock-script', 'mock-llm'];
+const AI_ONLY_FLAGS = ['model', 'effort', 'budget', 'playbooks', 'mock-script', 'mock-llm', 'real', 'stop-at-usd'];
 
 /** AI predictor options; rejects AI-only flags on the deterministic predictors. */
 function aiOptions(raw: RawArgs, predictor: PredictorId): AiRunOptions | undefined {
@@ -223,15 +229,28 @@ function aiOptions(raw: RawArgs, predictor: PredictorId): AiRunOptions | undefin
     effort: oneOf(raw, 'effort', EFFORTS, 'medium'),
     budget: oneOf(raw, 'budget', BUDGET_KINDS, 'update'),
     playbooks: oneOf(raw, 'playbooks', PLAYBOOK_MODES, 'off'),
-    mock: raw.flags.get('mock-llm') === true
+    mock: raw.flags.get('mock-llm') === true,
+    real: raw.flags.get('real') === true
   };
   const mockScript = str(raw, 'mock-script');
   if (mockScript !== undefined) out.mockScript = mockScript;
-  if (predictor === 'v2-agent' && out.mockScript === undefined) {
-    throw new UsageError('--predictor v2-agent needs --mock-script <file> in Stage 4a (real API runs come with --real in 4c)');
+  const stopAt = str(raw, 'stop-at-usd');
+  if (stopAt !== undefined) {
+    if (!out.real) throw new UsageError('--stop-at-usd only applies with --real');
+    const n = Number(stopAt);
+    if (!/^\d+(\.\d+)?$/.test(stopAt) || !Number.isFinite(n) || n <= 0) throw new UsageError(`invalid --stop-at-usd "${stopAt}" (a positive dollar amount)`);
+    out.stopAtUsd = n;
   }
-  if (predictor === 'v1-ai' && !out.mock) {
-    throw new UsageError('--predictor v1-ai needs --mock-llm in Stage 4a (real API runs come with --real in 4c)');
+  if (out.real) {
+    if (out.mock || out.mockScript !== undefined) throw new UsageError('--real cannot be combined with --mock-llm / --mock-script');
+    // Privacy (4c.2): the private corpus never runs against a real API.
+    if (raw.flags.has('local')) throw new UsageError('--real cannot be combined with --local (private cases never reach a real API)');
+  }
+  if (predictor === 'v2-agent' && out.mockScript === undefined && !out.real) {
+    throw new UsageError('--predictor v2-agent needs --mock-script <file> or --real');
+  }
+  if (predictor === 'v1-ai' && !out.mock && !out.real) {
+    throw new UsageError('--predictor v1-ai needs --mock-llm or --real');
   }
   if (predictor === 'v1-ai' && out.mockScript !== undefined) throw new UsageError('--mock-script only applies to --predictor v2-agent');
   if (predictor === 'v2-agent' && out.mock) throw new UsageError('--mock-llm only applies to --predictor v1-ai (v2-agent uses --mock-script)');

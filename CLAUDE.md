@@ -14,7 +14,7 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 A locally-run AI-augmented agent that scans, analyses, and reviews dependencies of legacy JS/TS projects. Next.js 16.4 App Router + React 19.3 (Route Handlers, not Server Actions; Turbopack for dev and build since v2 Stage 2). Server binds 127.0.0.1 only. Six right-panel views per dep ([A]–[E] + [D-Deep]). Cache-first design: every view reads its persisted envelope first; LLM calls happen only on explicit user action. The agent is **read-only against target projects** — all writes go to `library/`.
 
-Test baseline (2026-11-10, after v2 Stage 4b): 1118 passed / 5 skipped across 157 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
+Test baseline (2026-11-10, after v2 Stage 4c): 1148 passed / 5 skipped across 159 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
 
 ## Commands
 
@@ -63,9 +63,10 @@ Design contract: `Plans/V2_CODE_GRAPH_DESIGN.md` + `Plans/V2_STAGE3_SPEC.md`; mo
 
 Design contract: `Plans/V2_STAGE4_SPEC.md` §2–§3 + `Plans/V2_AI_OVER_GRAPH.md`; module map, tool table and budget semantics in `src/core/agent/README.md`. The rules that bite:
 
-- **Own loop, not the Agent SDK** (proposed D24 = D8's fallback): `runAgent` in `core/agent/loop.ts` on `@anthropic-ai/sdk` 1.x via the `AgentModel` seam (`lib/llm/agentAnthropic.ts`: `messages.stream` → `finalMessage`, `tool_choice: auto`, `strict` tools, explicit effort, no `thinking` param, cache breakpoints on last tool + system + rolling last user block, history never mutated so thinking blocks pass back byte-identical).
+- **Own loop, not the Agent SDK** (proposed D24 = D8's fallback): `runAgent` in `core/agent/loop.ts` on `@anthropic-ai/sdk` 1.x via the `AgentModel` seam (`lib/llm/agentAnthropic.ts`: `messages.stream` → `finalMessage`, `tool_choice: auto`, only the terminal `submit_*` tool `strict` (the API allows at most 24 optional params summed over all strict schemas of one request; the read tools have 29 and are validated by the registry; `registry.test.ts` guards the limits), explicit effort, no `thinking` param, cache breakpoints on last tool + system + rolling last user block, history never mutated so thinking blocks pass back byte-identical).
 - **Tools are MCP-first and read-only.** One list: `createReadToolRegistry()` (`core/agent/tools`). The registry throws on any `capability !== 'read'`. Tools take `workspaceRoot` from `ToolContext`, read through `pathGuard` (graph file set + `package.json`, `.env*` refused before any fs call, realpath containment). Add a tool → add it to `CALLS` in `tests/backend/agent/invariant.readonly-tools.test.ts` (the test fails otherwise).
-- **Budgets are hard and checked BEFORE each request** (projection in `loop.ts`; a normal turn needs room for a same-size final turn). Never add a code path that sends a request without going through `runAgent`'s projection (4c adds the spend gate there via `SpendGate`).
+- **Budgets are hard and checked BEFORE each request** (projection in `loop.ts`; a normal turn needs room for a same-size final turn). Never add a code path that sends a request without going through `runAgent`'s projection.
+- **Real API = spend gate (4c)**: `src/core/spend` (`ledger.ts`: `CAP_USD = 10` code constant, ledger + lock outside the repo under `%LOCALAPPDATA%\dep-agent-eval\_spend`; `gate.ts`: reserve worst case before, settle from API usage after, unpriced model refused). Eval `--real` (`eval/lib/real.ts`, the only eval file allowed a real client) refuses private cases and `--local`, reads only `ANTHROPIC_API_KEY` from `.env` in code, `maxRetries: 0`. `--stop-at-usd` can only lower the cap.
 - **Run records**: `library/<slug>/runs/<runId>.json` (`lib/agent/runStore.ts`, envelope, `trigger` only `'user'`), written by the refresh routes next to the report envelope (`resultRef`). The report carries `agentRun` (runId, status, cost, trace calls) for the trace viewer. `library/<slug>/memory/` is reserved (L4), never created.
 - **Agent graph handle**: the job opens its own `openGraphReader` for the run and closes it in `finally` (`lib/agent/reportJobs.ts`); the shared reader cache must not be held across awaits.
 - **Scripted mock**: `MOCK_LLM=true` → `ScriptedAgentModel` from `test-fixtures/agent/<scenario>.json` (`MOCK_AGENT_SCENARIO` or the view id), keyed by scenario, not prompt hash. Tests pin models/intel with `setAgentModelOverride` / `setAgentIntelOverride` (globalThis, reset to `null` in `afterEach`); never let a test reach the npm registry.
@@ -278,7 +279,7 @@ These are the bugs that have actually shipped in this repo. Each one is here bec
 ```bash
 npm run typecheck   # tsc --noEmit — must be clean
 npm run lint        # ESLint — must be clean
-npm test            # Full Vitest suite — must match current baseline (1118 pass / 5 skipped)
+npm test            # Full Vitest suite — must match current baseline (1148 pass / 5 skipped)
 ```
 
 ### When you change a route

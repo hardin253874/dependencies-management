@@ -1,8 +1,9 @@
 /**
  * `npm run eval -- <command>` entry point: dispatch + I/O only; the logic
  * lives in eval/lib/*. No HTTP server, no UI. The AI predictors (v2-agent,
- * v1-ai, Stage 4a) only run against mocks here (`--mock-script` /
- * `--mock-llm`); real API runs arrive with `--real` in Stage 4c.
+ * v1-ai) run against mocks (`--mock-script` / `--mock-llm`) or, with
+ * `--real` (Stage 4c), against the real API: public cases only, every
+ * request through the spend ledger (eval/lib/real.ts).
  *
  * Output goes to stdout/stderr directly: this is a CLI whose output *is*
  * the product, not server code, so the app logger does not apply.
@@ -27,6 +28,8 @@ import { predictV1Ai } from './lib/predict-v1-ai';
 import { loadPlaybookDir } from '../src/core/agent/playbooks';
 import { MockLLMClient } from '../src/lib/llm/mock';
 import type { AiRunOptions } from './lib/args';
+import { assertPublicCases, loadPrivateIds, MissingApiKeyError, PrivateCaseError, startRealSession, type RealSession } from './lib/real';
+import { defaultLedgerPath, LedgerLockError } from '../src/core/spend/ledger';
 import type { CasePrediction } from './lib/types';
 import { findingsSheetPath, LabelCollisionError, runEval } from './lib/results';
 import { RESULT_SCHEMA_VERSION, type LoadedCase, type ResultFile, type ToolInfo } from './lib/types';
@@ -42,9 +45,40 @@ async function predictorFor(
   predictor: string,
   ai: AiRunOptions | undefined,
   cacheDir: string,
-  label: string
+  label: string,
+  session?: RealSession
 ): Promise<(c: LoadedCase, dir: string) => Promise<CasePrediction>> {
   if (predictor === 'v2-graph') return (c, dir) => predictV2Graph(c, dir, cacheDir);
+  if (ai?.real === true) {
+    if (session === undefined) throw new UsageError('--real needs a spend session');
+    const notAfterCap = () => {
+      if (session.stopped()) throw new Error('not run: the spend gate refused an earlier request (cap reached)');
+    };
+    if (predictor === 'v2-agent') {
+      const playbooks = ai.playbooks === 'on' ? await loadPlaybookDir(path.join(TOOL_ROOT, 'playbooks')) : [];
+      return (c, dir) => {
+        notAfterCap();
+        const rc = session.clientFor(c);
+        return predictV2Agent(c, dir, {
+          cacheDir,
+          label,
+          modelFor: () => rc.agentModel,
+          gate: rc.agentGate,
+          modelId: ai.model,
+          effort: ai.effort,
+          budgets: { ...EVAL_AGENT_BUDGETS[ai.budget] },
+          playbooks: ai.playbooks,
+          loadedPlaybooks: playbooks
+        });
+      };
+    }
+    if (predictor === 'v1-ai') {
+      return (c, dir) => {
+        notAfterCap();
+        return predictV1Ai(c, dir, { cacheDir, client: session.clientFor(c).llm, model: ai.model });
+      };
+    }
+  }
   if (predictor === 'v2-agent' && ai?.mockScript !== undefined) {
     const source = JSON.parse(await fs.readFile(path.resolve(ai.mockScript), 'utf8')) as MockScriptSource;
     const playbooks = ai.playbooks === 'on' ? await loadPlaybookDir(path.join(TOOL_ROOT, 'playbooks')) : [];
@@ -65,8 +99,8 @@ async function predictorFor(
     return (c, dir) => predictV1Ai(c, dir, { cacheDir, client, model: ai.model });
   }
   if (predictor === 'v1-code-scan') return (c, dir) => predictV1(c, dir);
-  // parseArgs already refuses AI predictors without a mock; this is the safety net.
-  throw new UsageError(`--predictor ${predictor} has no real-API mode before Stage 4c`);
+  // parseArgs already refuses AI predictors without a mock or --real; this is the safety net.
+  throw new UsageError(`--predictor ${predictor} needs a mock or --real`);
 }
 
 function out(text: string): void {
@@ -195,24 +229,51 @@ async function execute(cmd: ParsedCommand): Promise<number> {
     case 'run': {
       const all = await loadValidCorpus(cmd);
       const selected = selectCases(all, cmd.cases);
-      const cache = makeCache(all, cmd.cacheDir, cmd.offline);
-      const outcome = await runEval({
-        cases: selected,
-        label: cmd.label,
-        predictor: cmd.predictor,
-        tool: await toolInfo(),
-        resultsDir: RESULTS_DIR,
-        now: new Date(),
-        deps: {
-          prepare: (c) => cache.prepare(c, { offline: cmd.offline }),
-          truth: async (c, dir) =>
-            (await cache.truthForPhases(c, dir)).map((p) => ({ phaseId: p.phaseId, truth: p.truth })),
-          predict: await predictorFor(cmd.predictor, cmd.ai, cache.cacheDir, cmd.label),
-          log: out
+      let session: RealSession | undefined;
+      if (cmd.ai?.real === true) {
+        // Privacy first (4c.2): before the key, the ledger or any network call.
+        const privateIds = new Set([...(await loadPrivateIds(DEFAULT_LOCAL_FILE)), ...all.filter((c) => c.visibility === 'private').map((c) => c.id)]);
+        try {
+          assertPublicCases(selected, privateIds);
+        } catch (e) {
+          if (e instanceof PrivateCaseError) throw new UsageError(`${e.message} Pass --cases with public case ids.`);
+          throw e;
         }
-      });
-      for (const w of outcome.written) out(`wrote ${path.relative(TOOL_ROOT, w)}`);
-      return outcome.exitCode;
+        const localAppData = process.env.LOCALAPPDATA;
+        if (localAppData === undefined || localAppData === '') throw new UsageError('--real needs %LOCALAPPDATA% for the spend ledger');
+        session = await startRealSession({
+          cases: selected,
+          privateIds,
+          envFile: path.join(TOOL_ROOT, '.env'),
+          ledgerPath: defaultLedgerPath(localAppData),
+          step: `${cmd.predictor}:${cmd.label}`,
+          ...(cmd.ai.stopAtUsd !== undefined ? { ceilingUsd: cmd.ai.stopAtUsd } : {}),
+          log: out
+        });
+      }
+      try {
+        const cache = makeCache(all, cmd.cacheDir, cmd.offline);
+        const outcome = await runEval({
+          cases: selected,
+          label: cmd.label,
+          predictor: cmd.predictor,
+          tool: await toolInfo(),
+          resultsDir: RESULTS_DIR,
+          now: new Date(),
+          deps: {
+            prepare: (c) => cache.prepare(c, { offline: cmd.offline }),
+            truth: async (c, dir) =>
+              (await cache.truthForPhases(c, dir)).map((p) => ({ phaseId: p.phaseId, truth: p.truth })),
+            predict: await predictorFor(cmd.predictor, cmd.ai, cache.cacheDir, cmd.label, session),
+            log: out
+          },
+          ...(session !== undefined ? { spend: session.spendInfo } : {})
+        });
+        for (const w of outcome.written) out(`wrote ${path.relative(TOOL_ROOT, w)}`);
+        return outcome.exitCode;
+      } finally {
+        await session?.close();
+      }
     }
 
     case 'graph': {
@@ -297,7 +358,10 @@ async function main(): Promise<void> {
       e instanceof ValidationFailure ||
       e instanceof LabelCollisionError ||
       e instanceof CompareError ||
-      e instanceof FindingsSheetError
+      e instanceof FindingsSheetError ||
+      e instanceof MissingApiKeyError ||
+      e instanceof PrivateCaseError ||
+      e instanceof LedgerLockError
     ) {
       err(`eval: ${e.message}`);
       if (e instanceof UsageError) err('Run `npm run eval -- --help` for usage.');

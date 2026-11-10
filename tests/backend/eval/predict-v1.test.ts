@@ -90,10 +90,12 @@ describe('no-LLM guard', () => {
   }
 
   // v2 Stage 4a: the AI predictors (v2-agent, v1-ai) and the CLI that wires
-  // them may import LLM services, but only with injected mock/scripted models.
-  // No eval file may import a real client (SDK, `llm/anthropic`,
-  // `llm/agentAnthropic`) or the LLM factory before the 4c spend gate exists.
-  const AI_PREDICTOR_FILES = new Set(['cli.ts', 'predict-agent.ts', 'predict-v1-ai.ts']);
+  // them may import LLM services, but only with injected models.
+  // v2 Stage 4c: `eval/lib/real.ts` is the ONLY eval file that may import a
+  // real client (SDK, `llm/anthropic`, `llm/agentAnthropic`), and it must
+  // build them behind the spend gate. The LLM factory stays forbidden.
+  const AI_PREDICTOR_FILES = new Set(['cli.ts', 'predict-agent.ts', 'predict-v1-ai.ts', 'real.ts']);
+  const REAL_CLIENT_FILE = path.join(EVAL_DIR, 'lib', 'real.ts');
   const REAL_CLIENT_RE = /@anthropic-ai|openai|llm\/anthropic|llm\/agentAnthropic|llm\/factory|src\/app\/|^next(\/|$)/;
 
   it('no file under eval/ imports a real LLM client or SDK; only the AI predictor files import LLM modules', async () => {
@@ -106,9 +108,18 @@ describe('no-LLM guard', () => {
       const aiFile = AI_PREDICTOR_FILES.has(path.basename(file));
       for (const m of src.matchAll(importRe)) {
         const spec = m[1] ?? '';
-        if (REAL_CLIENT_RE.test(spec) || (!aiFile && /llm\//.test(spec))) offenders.push(`${file}: ${spec}`);
+        const realAllowed = file === REAL_CLIENT_FILE && !/llm\/factory|openai|src\/app\/|^next(\/|$)/.test(spec);
+        if ((REAL_CLIENT_RE.test(spec) && !realAllowed) || (!aiFile && /llm\//.test(spec))) offenders.push(`${file}: ${spec}`);
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it('the real-client file builds its clients behind the spend gate', async () => {
+    const src = await fs.readFile(REAL_CLIENT_FILE, 'utf8');
+    expect(src).toMatch(/from '\.\.\/\.\.\/src\/core\/spend\/gate'/);
+    expect(src).toMatch(/maxRetries: 0/);
+    expect(src).toMatch(/wrapLlmClient\(/);
+    expect(src).toMatch(/agentGate\(/);
   });
 });

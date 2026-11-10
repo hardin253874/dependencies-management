@@ -236,6 +236,20 @@ export interface ToolInfo {
 
 export const RESULT_SCHEMA_VERSION = 1;
 
+/** v2 Stage 4c: spend-ledger state around a `--real` run (USD, from the ledger outside the repo). */
+export interface SpendInfo {
+  roundId: string;
+  capUsd: number;
+  spentBefore: number;
+  spentAfter: number;
+  /** Open reservations after the run (requests that threw without usage stay reserved). */
+  reservedAfter: number;
+  /** Requests the gate refused (cap or step ceiling); > 0 means the run stopped at the cap. */
+  refusals: number;
+  /** Requests that passed the gate. */
+  requests: number;
+}
+
 export interface ResultFile {
   schemaVersion: typeof RESULT_SCHEMA_VERSION;
   label: string;
@@ -246,6 +260,8 @@ export interface ResultFile {
   visibility: Visibility;
   cases: CaseResult[];
   aggregate: Aggregate;
+  /** Stage 4c `--real` runs only. */
+  spend?: SpendInfo;
 }
 
 // ---------------------------------------------------------------------------

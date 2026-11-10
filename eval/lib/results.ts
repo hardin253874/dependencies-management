@@ -20,6 +20,7 @@ import {
   type LoadedCase,
   type PredictorId,
   type ResultFile,
+  type SpendInfo,
   type ToolInfo,
   type TruthSet,
   type Visibility
@@ -41,6 +42,8 @@ export interface RunOptions {
   resultsDir: string;
   now: Date;
   deps: RunDeps;
+  /** Stage 4c `--real`: ledger state, read when the result file is written. */
+  spend?: () => SpendInfo;
 }
 
 export interface RunOutcome {
@@ -199,6 +202,7 @@ export async function runEval(opts: RunOptions): Promise<RunOutcome> {
       visibility: v,
       cases: mine.map((d) => d.result)
     });
+    if (opts.spend !== undefined) file.spend = opts.spend();
     const target = resultFilePath(opts.resultsDir, v, date, opts.label);
     await atomicWriteJson(target, file);
     written.push(target);
