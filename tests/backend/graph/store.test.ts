@@ -10,6 +10,7 @@ import {
   type GraphDriver
 } from '@/core/graph/store';
 import { SCHEMA_VERSION } from '@/core/graph/schema';
+import { buildGraph } from '@/core/graph/build';
 
 let sandbox: Sandbox;
 let projectRoot: string;
@@ -32,6 +33,9 @@ afterEach(async () => {
   for (const h of open.splice(0)) h.close();
   await sandbox.dispose();
 });
+
+/** These tests exercise the store on a schema-only DB, before any build has completed. */
+const STORE_LEVEL = { requireCompleteBuild: false } as const;
 
 function metaValue(db: GraphDriver, key: string): string | undefined {
   const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(key);
@@ -77,9 +81,23 @@ describe('graph store (3a.1)', () => {
     expect(() => openGraphReader(dbPath)).toThrow(GraphNotBuiltError);
   });
 
+  // Stage 3c (3a QA m1): a writer that opened but never committed a build leaves an openable, empty DB.
+  it('reader on a DB without a completed build throws GraphNotBuiltError', async () => {
+    const w = await openGraphWriter({ dbPath, projectRoot });
+    w.db.close();
+    expect(() => openGraphReader(dbPath)).toThrow(GraphNotBuiltError);
+    expect(() => openGraphReader(dbPath)).toThrow(/no completed build/);
+  });
+
+  it('a failed first build leaves no readable graph (GraphNotBuiltError, not empty answers)', async () => {
+    const missing = path.join(path.dirname(projectRoot), 'gone');
+    await expect(buildGraph({ projectRoot: missing, dbPath, mode: 'full', lock: (_k, fn) => fn() })).rejects.toThrow();
+    expect(() => openGraphReader(dbPath)).toThrow(GraphNotBuiltError);
+  });
+
   it('reader is read-only', async () => {
     track(await openGraphWriter({ dbPath, projectRoot }));
-    const r = track(openGraphReader(dbPath));
+    const r = track(openGraphReader(dbPath, STORE_LEVEL));
     expect(metaValue(r, 'schemaVersion')).toBe(String(SCHEMA_VERSION));
     expect(() => r.exec("INSERT INTO meta(key, value) VALUES ('x', 'y')")).toThrow();
   });
@@ -104,7 +122,7 @@ describe('graph store (3a.1)', () => {
     const w1 = await openGraphWriter({ dbPath, projectRoot });
     w1.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION + 1}`);
     w1.db.close();
-    const r = track(openGraphReader(dbPath));
+    const r = track(openGraphReader(dbPath, STORE_LEVEL));
     const w2 = track(await openGraphWriter({ dbPath, projectRoot }));
     expect(w2.rebuildReason).toBe('schema');
     expect(metaValue(r, 'rebuildReason')).toBe('schema');
@@ -123,7 +141,7 @@ describe('graph store (3a.1)', () => {
   it('a reader opened before a write transaction sees the old value until commit (WAL snapshot)', async () => {
     const w = track(await openGraphWriter({ dbPath, projectRoot }));
     w.db.exec("INSERT INTO meta(key, value) VALUES ('probe', 'old')");
-    const r = track(openGraphReader(dbPath));
+    const r = track(openGraphReader(dbPath, STORE_LEVEL));
     expect(metaValue(r, 'probe')).toBe('old');
 
     w.db.transaction(() => {

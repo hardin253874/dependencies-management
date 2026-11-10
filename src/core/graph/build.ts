@@ -18,15 +18,29 @@ import path from 'path';
 import { detectLockfile, parseLockfile } from '../../lib/scanners/lockfile';
 import { configInfo, jsConfigInfo } from './configFiles';
 import { extractConfigRefs } from './configRefs';
-import { babelParser, fileRole, type ParsedFile, type ParsedImport, type ParserAdapter } from './parse';
+import { BABEL_PARSER_VERSION, BABEL_TRAVERSE_VERSION, babelParser, fileRole, type ParsedFile, type ParsedImport, type ParserAdapter } from './parse';
 import { pruneOrphans, recomputeReach, relinkSymbols } from './reach';
-import { createResolverContext, type ResolveOutcome, type ResolverContext } from './resolve';
+import { createResolverContext, OXC_RESOLVER_VERSION, type ResolveOutcome, type ResolverContext } from './resolve';
 import { createRows, type EdgeRow, type FileRow, type GraphRows } from './rows';
 import { openGraphWriter, type GraphDriver, type RebuildReason } from './store';
 import { parseStyleImports } from './style';
 import { walkProject, type WalkEntry } from './walk';
+import { sortDiagnostics, type GraphDiagnostic } from './types';
 
 export const YIELD_EVERY = 50;
+
+/**
+ * Bump whenever walk/parse/resolve/reach output changes for the same input
+ * (3a QA m2): D2 says the graph is derived and rebuilt, never migrated, and
+ * that only holds if a builder change actually triggers the rebuild.
+ *   1 = Stage 3a/3b.
+ *   2 = Stage 3c: no `jsx` on .ts (F1), scope-free fallback (F2), declared
+ *       polyfill beats builtin (F3), module augmentations (F4), node_modules
+ *       state + outside-root tsconfig extends in the change hashes (m3).
+ */
+export const GRAPH_BUILDER_VERSION = 2;
+/** `meta.builder`: builder version + the pinned versions of the libraries whose output lands in the graph. */
+export const GRAPH_BUILDER_ID = `graph@${GRAPH_BUILDER_VERSION};@babel/parser@${BABEL_PARSER_VERSION};@babel/traverse@${BABEL_TRAVERSE_VERSION};oxc-resolver@${OXC_RESOLVER_VERSION}`;
 
 export type BuildMode = 'full' | 'incremental';
 
@@ -64,6 +78,8 @@ export interface BuildGraphResult {
   rebuildReason?: RebuildReason;
   /** Incremental only: files re-parsed, added or removed. */
   filesChanged?: number;
+  /** Directories/files/configs the build could not read (also in `meta.diagnostics`). Empty when clean. */
+  diagnostics: GraphDiagnostic[];
 }
 
 /** One analysed source file, ready to write. */
@@ -106,6 +122,28 @@ async function lockfileStateHash(projectRoot: string): Promise<string> {
     // An unparseable lockfile must not fail the build; '' still changes the hash when it is fixed.
     return 'unreadable';
   }
+}
+
+/** Files package managers rewrite on every install, even when the lockfile stays the same. */
+const NODE_MODULES_MARKERS: readonly string[] = Object.freeze(['.package-lock.json', '.yarn-integrity', '.yarn-state.yml', '.modules.yaml']);
+
+/**
+ * Stat-only fingerprint of the installed packages (3a QA m3a): `npm ci` with
+ * an unchanged lockfile still changes what external edges resolve to (medium
+ * by name → high in node_modules, `exports` subpaths). Covers the root and
+ * every workspace dir: the `node_modules` dir itself (entries added/removed)
+ * and the install markers above. Never reads or writes anything there.
+ */
+export async function nodeModulesStateHash(projectRoot: string, dirs: readonly string[]): Promise<string> {
+  const hash = createHash('sha256');
+  for (const dir of [...new Set(['', ...dirs])].sort()) {
+    const nm = path.join(projectRoot, dir, 'node_modules');
+    for (const name of ['', ...NODE_MODULES_MARKERS]) {
+      const st = await fs.stat(name === '' ? nm : path.join(nm, name)).catch(() => null);
+      hash.update(`${dir}\0${name}\0${st === null ? '-' : `${st.size}:${st.mtimeMs}`}\0`);
+    }
+  }
+  return hash.digest('hex');
 }
 
 const EMPTY_PARSE: ParsedFile = { imports: [], exports: [], reexports: [], usages: [], hasExports: false, parseError: null };
@@ -344,7 +382,7 @@ function byPathAsc(a: WalkEntry, b: WalkEntry): number {
  *    baseUrl specifier flipping from external-by-name to a project file);
  *  - resolver config changed -> every edge, and config files are re-analysed
  *    (their refs depend on the declared dependency list);
- *  - lockfile state changed -> external edges only.
+ *  - lockfile or node_modules state changed -> external edges only.
  * Derived data (symbol links, orphans, reach) is then recomputed in full.
  * Returns the number of files re-parsed, added or removed.
  */
@@ -362,7 +400,8 @@ async function incrementalBuild(
   const walked = new Set(entries.map((e) => e.path));
   const removed = [...existing.keys()].filter((p) => !walked.has(p));
   const configChanged = prev.resolverConfigHash !== meta.resolverConfigHash;
-  const lockChanged = prev.lockfileStateHash !== meta.lockfileStateHash;
+  // An install without a lockfile change counts like a lockfile change: re-resolve externals.
+  const lockChanged = prev.lockfileStateHash !== meta.lockfileStateHash || prev.nodeModulesStateHash !== meta.nodeModulesStateHash;
 
   const added: WalkEntry[] = [];
   const suspects: WalkEntry[] = [];
@@ -402,6 +441,8 @@ async function incrementalBuild(
   db.transaction(() => {
     if (nothingChanged) {
       rows.setMeta('builtAt', meta.builtAt!);
+      // A transient read error can clear without any file changing.
+      if (prev.diagnostics !== meta.diagnostics) rows.setMeta('diagnostics', meta.diagnostics!);
       return;
     }
     for (const p of removed) rows.deleteFileByPath(p);
@@ -474,18 +515,23 @@ export async function buildGraph(opts: BuildGraphOptions): Promise<BuildGraphRes
     const db = writer.db;
     try {
       opts.onProgress?.({ phase: 'walk', current: 0, total: 0 });
-      const entries = await walkProject({ projectRoot });
+      const walkDiagnostics: GraphDiagnostic[] = [];
+      const entries = await walkProject({ projectRoot, diagnostics: walkDiagnostics });
       checkAbort(opts.signal);
       opts.onProgress?.({ phase: 'resolve', current: 0, total: entries.length });
       const ctx = await createResolverContext({ projectRoot, files: entries });
       const meta: Record<string, string> = {
         builtAt: new Date().toISOString(),
+        builder: GRAPH_BUILDER_ID,
         parser: parser.id,
         resolver: ctx.id,
         resolverConfigHash: ctx.configHash,
         lockfileStateHash: await lockfileStateHash(projectRoot),
+        nodeModulesStateHash: await nodeModulesStateHash(projectRoot, ctx.workspaces.map((w) => w.dir)),
         projectRootHash: projectRootHash(projectRoot)
       };
+      const diagnostics = sortDiagnostics([...walkDiagnostics, ...ctx.diagnostics]);
+      meta.diagnostics = JSON.stringify(diagnostics);
       checkAbort(opts.signal);
 
       const prev = createRows(db).allMeta();
@@ -493,6 +539,7 @@ export async function buildGraph(opts: BuildGraphOptions): Promise<BuildGraphRes
         opts.mode === 'auto' &&
         writer.rebuildReason === null &&
         prev.builtAt !== undefined &&
+        prev.builder === meta.builder &&
         prev.parser === meta.parser &&
         prev.resolver === meta.resolver &&
         prev.projectRootHash === meta.projectRootHash;
@@ -513,7 +560,8 @@ export async function buildGraph(opts: BuildGraphOptions): Promise<BuildGraphRes
         unresolved: c.unresolved,
         durationMs: Date.now() - started,
         ...(writer.rebuildReason !== null ? { rebuildReason: writer.rebuildReason } : {}),
-        ...(filesChanged !== undefined ? { filesChanged } : {})
+        ...(filesChanged !== undefined ? { filesChanged } : {}),
+        diagnostics
       };
     } finally {
       db.close();

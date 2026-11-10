@@ -64,8 +64,8 @@ function count(d: GraphDriver, table: string): number {
 }
 
 describe('graph schema (3a.2)', () => {
-  it('schema version is 1', () => {
-    expect(SCHEMA_VERSION).toBe(1);
+  it('schema version is 2 (Stage 3c: module-augmentation edge kind)', () => {
+    expect(SCHEMA_VERSION).toBe(2);
   });
 
   it('a fresh DB has every table and index', async () => {
@@ -109,7 +109,7 @@ describe('graph schema (3a.2)', () => {
     rows.setMeta('builtAt', '2026-11-10T00:00:00.000Z');
     expect(rows.getMeta('builtAt')).toBe('2026-11-10T00:00:00.000Z');
     expect(rows.getMeta('missing')).toBeNull();
-    expect(rows.allMeta().schemaVersion).toBe('1');
+    expect(rows.allMeta().schemaVersion).toBe('2');
   });
 
   it('an older schema version on disk triggers a full recreate with every table', async () => {

@@ -10,7 +10,7 @@
  * across an `await`; `closeGraphReaders` may close it at any await point.
  */
 import { graphDbPath } from '@/lib/paths';
-import { GraphNotBuiltError, openGraphReader, type GraphDriver } from '@/core/graph/store';
+import { GraphNotBuiltError, completedBuildAt, openGraphReader, type GraphDriver } from '@/core/graph/store';
 
 interface CachedReader {
   handle: GraphDriver;
@@ -28,17 +28,6 @@ function readers(): Map<string, CachedReader> {
     globalThis.__DEP_AGENT_GRAPH_READERS__ = new Map<string, CachedReader>();
   }
   return globalThis.__DEP_AGENT_GRAPH_READERS__;
-}
-
-/** `meta.builtAt`, or null when the DB has tables but no completed build. */
-function builtAtOf(handle: GraphDriver): string | null {
-  try {
-    const row = handle.prepare("SELECT value FROM meta WHERE key = 'builtAt'").get();
-    return row === undefined || row.value === null ? null : String(row.value);
-  } catch {
-    // No meta table at all: the file exists but was never initialised.
-    return null;
-  }
 }
 
 function closeQuietly(handle: GraphDriver): void {
@@ -61,17 +50,19 @@ export function getGraphReader(slug: string): GraphDriver {
   if (cached !== undefined) {
     // WAL readers see the latest committed data on each new statement, so this
     // also notices a rebuild committed by a writer since the handle was opened.
-    const current = builtAtOf(cached.handle);
+    const current = completedBuildAt(cached.handle);
     if (current !== null && current === cached.builtAt) return cached.handle;
     map.delete(slug);
     closeQuietly(cached.handle);
   }
   const dbPath = graphDbPath(slug);
+  // Core refuses a DB without a completed build (GraphNotBuiltError); the
+  // re-check only covers a schema recreate racing in between the two reads.
   const handle = openGraphReader(dbPath);
-  const builtAt = builtAtOf(handle);
+  const builtAt = completedBuildAt(handle);
   if (builtAt === null) {
     closeQuietly(handle);
-    throw new GraphNotBuiltError(dbPath);
+    throw new GraphNotBuiltError(dbPath, 'no completed build');
   }
   map.set(slug, { handle, builtAt });
   return handle;

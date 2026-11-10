@@ -3,7 +3,9 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createSandbox, type Sandbox } from '../helpers/sandbox';
 import { copyGraphFixture, writeProjectFile } from '../helpers/graphFixture';
-import { buildGraph, type BuildProgress } from '@/core/graph/build';
+import { buildGraph, GRAPH_BUILDER_ID, type BuildProgress } from '@/core/graph/build';
+import { BABEL_PARSER_VERSION, BABEL_TRAVERSE_VERSION } from '@/core/graph/parse';
+import { OXC_RESOLVER_VERSION } from '@/core/graph/resolve';
 import { openGraphReader, openGraphWriter, GraphDbLockedError, type GraphDriver } from '@/core/graph/store';
 import { dumpGraph } from '@/core/graph/dump';
 import { withProjectLock } from '@/lib/storage/projectLock';
@@ -44,8 +46,14 @@ async function edit(projectRoot: string, rel: string, content: string): Promise<
  * The core assertion of 3a.8: after a change, the incremental DB's dump equals
  * a fresh full build of the same tree.
  */
-async function expectIncrementalEqualsFull(fixture: string, mutate: (root: string) => Promise<void>, expectedMode = 'incremental') {
+async function expectIncrementalEqualsFull(
+  fixture: string,
+  mutate: (root: string) => Promise<void>,
+  expectedMode = 'incremental',
+  setup?: (root: string) => Promise<void>
+) {
   const { projectRoot, dbPath } = await copyGraphFixture(sandbox, fixture);
+  if (setup !== undefined) await setup(projectRoot);
   await buildGraph({ projectRoot, dbPath, mode: 'full', lock });
   await mutate(projectRoot);
   const inc = await buildGraph({ projectRoot, dbPath, mode: 'auto', lock });
@@ -119,6 +127,31 @@ describe('incremental rescan (3a.8): incremental == full', () => {
     );
   });
 
+  // Stage 3c (3a QA m3a): `npm ci` with an unchanged lockfile still changes what external edges resolve to.
+  it('install packages into node_modules without a lockfile change (externals re-resolved)', async () => {
+    const inc = await expectIncrementalEqualsFull('wrapper-module', async (root) => {
+      await writeProjectFile(root, 'node_modules/axios/package.json', '{ "name": "axios", "version": "1.7.0", "main": "index.js" }\n');
+      await writeProjectFile(root, 'node_modules/axios/index.js', 'module.exports = {};\n');
+      await writeProjectFile(root, 'node_modules/.package-lock.json', '{ "name": "wrapper-module", "lockfileVersion": 3, "packages": {} }\n');
+    });
+    expect(inc.filesChanged).toBe(0);
+  });
+
+  // Stage 3c (3a QA m3b): a sub-project tsconfig extending a base outside its root (per-projectDir eval builds).
+  it('edit a tsconfig base that lies outside the project root (extends ../)', async () => {
+    await expectIncrementalEqualsFull(
+      'paths-alias',
+      (root) =>
+        edit(root, '../tsconfig.base.json', JSON.stringify({ compilerOptions: { baseUrl: './paths-alias', paths: { '#lib/*': ['./src/utils/*'] } } })),
+      'incremental',
+      async (root) => {
+        await writeProjectFile(root, '../tsconfig.base.json', JSON.stringify({ compilerOptions: {} }));
+        await writeProjectFile(root, 'tsconfig.json', JSON.stringify({ extends: '../tsconfig.base.json', include: ['src'] }));
+        await writeProjectFile(root, 'src/utils/z.ts', "import { x } from '#lib/x';\nexport const z = x;\n");
+      }
+    );
+  });
+
   it('a moved project root forces a full build', async () => {
     const { projectRoot, dbPath } = await copyGraphFixture(sandbox, 'index-files');
     await buildGraph({ projectRoot, dbPath, mode: 'full', lock });
@@ -126,6 +159,49 @@ describe('incremental rescan (3a.8): incremental == full', () => {
     await fs.rename(projectRoot, moved);
     const res = await buildGraph({ projectRoot: moved, dbPath, mode: 'auto', lock });
     expect(res.mode).toBe('full');
+  });
+
+  // Stage 3c (3a QA m2): parse/resolve logic or dependency changes must invalidate an existing graph.
+  it('records the builder version in meta', async () => {
+    const { projectRoot, dbPath } = await copyGraphFixture(sandbox, 'index-files');
+    await buildGraph({ projectRoot, dbPath, mode: 'full', lock });
+    const r = openGraphReader(dbPath);
+    handles.push(r);
+    expect(r.prepare("SELECT value FROM meta WHERE key = 'builder'").get()?.value).toBe(GRAPH_BUILDER_ID);
+  });
+
+  it('a graph written by another builder version is rebuilt in full', async () => {
+    const { projectRoot, dbPath } = await copyGraphFixture(sandbox, 'index-files');
+    await buildGraph({ projectRoot, dbPath, mode: 'full', lock });
+    const w = await openGraphWriter({ dbPath, projectRoot });
+    w.db.exec("UPDATE meta SET value = 'graph@1' WHERE key = 'builder'");
+    w.db.close();
+    const res = await buildGraph({ projectRoot, dbPath, mode: 'auto', lock });
+    expect(res.mode).toBe('full');
+  });
+
+  it('a graph from before builder versions existed (no meta.builder) is rebuilt in full', async () => {
+    const { projectRoot, dbPath } = await copyGraphFixture(sandbox, 'index-files');
+    await buildGraph({ projectRoot, dbPath, mode: 'full', lock });
+    const w = await openGraphWriter({ dbPath, projectRoot });
+    w.db.exec("DELETE FROM meta WHERE key = 'builder'");
+    w.db.close();
+    expect((await buildGraph({ projectRoot, dbPath, mode: 'auto', lock })).mode).toBe('full');
+  });
+
+  it('the builder id names the pinned parser, traverse and resolver versions, matching package.json and node_modules', async () => {
+    const pkg = JSON.parse(await fs.readFile(path.join(process.cwd(), 'package.json'), 'utf8')) as { dependencies: Record<string, string> };
+    const installed = async (name: string) =>
+      (JSON.parse(await fs.readFile(path.join(process.cwd(), 'node_modules', ...name.split('/'), 'package.json'), 'utf8')) as { version: string }).version;
+    for (const [name, constant] of [
+      ['@babel/parser', BABEL_PARSER_VERSION],
+      ['@babel/traverse', BABEL_TRAVERSE_VERSION],
+      ['oxc-resolver', OXC_RESOLVER_VERSION]
+    ] as const) {
+      expect(pkg.dependencies[name], name).toBe(constant);
+      expect(await installed(name), name).toBe(constant);
+      expect(GRAPH_BUILDER_ID).toContain(`${name}@${constant}`);
+    }
   });
 
   it('auto on a missing DB is a full build', async () => {

@@ -19,7 +19,7 @@ import path from 'path';
 import { buildIgnoreMatcher, type IgnoreMatcher } from '../../lib/scanners/gitignore';
 import { categorizeFile, MAX_FILE_SIZE_BYTES, MIN_HEURISTIC_RE } from '../../lib/scanners/code';
 import { dataConfigInfo, jsConfigInfo } from './configFiles';
-import type { FileCategory, FileKind, SkipReason } from './types';
+import { diagnosticOf, type FileCategory, type FileKind, type GraphDiagnostic, type SkipReason } from './types';
 
 export const JS_EXTS: readonly string[] = Object.freeze(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts']);
 export const STYLE_EXTS: readonly string[] = Object.freeze(['.css', '.scss', '.sass', '.less']);
@@ -38,6 +38,8 @@ export interface WalkEntry {
 export interface WalkOptions {
   projectRoot: string;
   matcher?: IgnoreMatcher;
+  /** Receives one entry per directory or file the walk could not read (3a QA m5). */
+  diagnostics?: GraphDiagnostic[];
 }
 
 /** True for `.env`, `.env.local`, `.envrc`, … — the hard-skip rule. */
@@ -59,6 +61,10 @@ function categoryOf(rel: string, kind: FileKind): FileCategory {
   return categorizeFile(rel);
 }
 
+function relPosix(root: string, abs: string): string {
+  return path.relative(root, abs).split(path.sep).join('/');
+}
+
 function isInside(child: string, root: string): boolean {
   const key = (p: string) => (process.platform === 'win32' ? p.toLowerCase() : p);
   const rel = path.relative(key(root), key(child));
@@ -77,7 +83,9 @@ export async function walkProject(opts: WalkOptions): Promise<WalkEntry[]> {
     let entries;
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
+    } catch (err) {
+      // Unreadable (EACCES/EPERM/…) or vanished mid-walk: its files are missing from the graph, so say so.
+      opts.diagnostics?.push(diagnosticOf('walk', relPosix(root, dir), err));
       continue;
     }
     for (const e of entries) {
@@ -110,8 +118,13 @@ export async function walkProject(opts: WalkOptions): Promise<WalkEntry[]> {
       const rel = path.relative(root, full).split(path.sep).join('/');
       const kind = fileKindOf(rel);
       if (kind === null) continue;
-      const st = await fs.stat(full).catch(() => null);
-      if (st === null) continue;
+      let st;
+      try {
+        st = await fs.stat(full);
+      } catch (err) {
+        opts.diagnostics?.push(diagnosticOf('walk', rel, err));
+        continue;
+      }
       out.push({
         path: rel,
         absPath: full,

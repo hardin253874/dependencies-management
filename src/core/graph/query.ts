@@ -11,14 +11,19 @@ import type { GraphDriver, Row } from './store';
 import {
   type Confidence,
   type DependentHit,
+  type DynamicImportSite,
   type EdgeKind,
   type EntryPoint,
   type FileCategory,
   type FileHit,
+  type FileKind,
   type FileRole,
   type FilesUsingPackageOptions,
   type GraphInfo,
+  type ImportStatement,
   type Page,
+  type SkippedFile,
+  type SkipReason,
   type SymbolUse,
   type UnresolvedImport,
   type UnresolvedReason,
@@ -348,6 +353,76 @@ export function unresolved(h: GraphDriver, p?: Page): { items: UnresolvedImport[
     count += n;
   }
   return { items, summary: { totalEdges: total, unresolved: count, pct: total === 0 ? 0 : count / total, byReason } };
+}
+
+/**
+ * Import lines that bring `pkg` into each file, path/line/col ordered
+ * (OQ-3b-A1, view [C]'s `importStatements`). `direct` rows are edges to the
+ * package (optionally only of `kinds`); `reexport` rows are the importing
+ * edges whose bindings reach the package through a re-export chain.
+ */
+export function importStatements(h: GraphDriver, pkg: string, opts: { kinds?: readonly EdgeKind[] } = {}): ImportStatement[] {
+  const pid = packageIdOf(h, pkg);
+  if (pid === null) return [];
+  const kinds = opts.kinds ?? [];
+  const kindFilter = kinds.length > 0 ? `AND e.kind IN (${kinds.map(() => '?').join(',')})` : '';
+  const toRow = (via: ImportStatement['via']) => (r: Row): ImportStatement => ({
+    path: str(r.path),
+    line: Number(r.line),
+    col: Number(r.col),
+    snippet: str(r.snippet),
+    via
+  });
+  const direct = h
+    .prepare(
+      `SELECT f.path, e.line, e.col, e.snippet FROM import_edge e JOIN file f ON f.id = e.from_file
+        WHERE e.to_package = ? ${kindFilter}
+        ORDER BY f.path, e.line, e.col, e.id`
+    )
+    .all(pid, ...kinds)
+    .map(toRow('direct'));
+  const reexport = h
+    .prepare(
+      `SELECT DISTINCT e.id, f.path, e.line, e.col, e.snippet FROM import_edge e
+         JOIN file f ON f.id = e.from_file
+         JOIN import_binding b ON b.edge_id = e.id
+         JOIN binding_reach br ON br.binding_id = b.id
+        WHERE br.package_id = ? AND br.depth > 0
+        ORDER BY f.path, e.line, e.col, e.id`
+    )
+    .all(pid)
+    .map(toRow('reexport'));
+  return [...direct, ...reexport].sort((a, b) => byPath(a, b) || a.line - b.line || a.col - b.col);
+}
+
+/** Every dynamic import/require with a non-literal target (`unresolved: dynamic-expression`), path/line ordered. */
+export function dynamicImports(h: GraphDriver): DynamicImportSite[] {
+  return h
+    .prepare(
+      `SELECT f.path, e.line, e.col, e.snippet FROM import_edge e JOIN file f ON f.id = e.from_file
+        WHERE e.resolution = 'unresolved' AND e.unresolved_reason = 'dynamic-expression'
+        ORDER BY f.path, e.line, e.col, e.id`
+    )
+    .all()
+    .map((r) => ({ path: str(r.path), line: Number(r.line), col: Number(r.col), snippet: str(r.snippet) }));
+}
+
+/** Files the walk kept but did not parse (oversized, …), optionally of one reason and file kinds. Path ordered. */
+export function skippedFiles(h: GraphDriver, opts: { reason?: SkipReason; kinds?: readonly FileKind[] } = {}): SkippedFile[] {
+  const where = ['skip_reason IS NOT NULL'];
+  const params: string[] = [];
+  if (opts.reason !== undefined) {
+    where.push('skip_reason = ?');
+    params.push(opts.reason);
+  }
+  if (opts.kinds !== undefined && opts.kinds.length > 0) {
+    where.push(`kind IN (${opts.kinds.map(() => '?').join(',')})`);
+    params.push(...opts.kinds);
+  }
+  return h
+    .prepare(`SELECT path, size, kind, skip_reason FROM file WHERE ${where.join(' AND ')} ORDER BY path`)
+    .all(...params)
+    .map((r) => ({ path: str(r.path), size: Number(r.size), kind: str(r.kind) as FileKind, reason: str(r.skip_reason) as SkipReason }));
 }
 
 export function graphInfo(h: GraphDriver): GraphInfo {

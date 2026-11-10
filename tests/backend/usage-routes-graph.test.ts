@@ -4,16 +4,19 @@
  * status codes stay as they were.
  */
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, promises as fs } from 'node:fs';
 import { createSandbox, disposeAllSandboxes, type Sandbox } from './helpers/sandbox';
 import { createSmallNpmProject, routeCtx } from './helpers/fixtures';
 import { writeProjectFile } from './helpers/graphFixture';
 import { addProjectPipeline } from '@/lib/projects/add';
 import { CSRF_HEADER, getCsrfToken } from '@/lib/csrf';
 import { getJobQueue } from '@/lib/jobs/queue';
-import { depFilePath, graphDbPath, usageFilePath } from '@/lib/paths';
+import { depFilePath, graphDbPath, projectJsonPath, usageFilePath } from '@/lib/paths';
 import { readEnvelope, writeEnvelope } from '@/lib/storage/envelope';
-import { closeGraphReaders } from '@/lib/graph/readerCache';
+import { closeGraphReaders, getGraphReader } from '@/lib/graph/readerCache';
+import { GraphNotBuiltError, openGraphReader } from '@/core/graph/store';
+import { readJson } from '@/lib/storage/atomic';
+import type { ProjectJson } from '@/lib/projects/add';
 import type { DepDetail, RelatedUsageEnqueueResponse, ScanEnqueueResponse, UsageDetail } from '@/lib/api-types';
 import type { JobRecord } from '@/lib/jobs/types';
 
@@ -67,6 +70,10 @@ async function setupProject(name: string): Promise<string> {
   return slug;
 }
 
+async function projectPathOf(s: string): Promise<string> {
+  return (await readJson<ProjectJson>(projectJsonPath(s))).path;
+}
+
 async function cacheDepDetail(s: string, name: string, extra: Partial<DepDetail>): Promise<void> {
   const detail = {
     name,
@@ -116,6 +123,21 @@ describe('POST /usage/:name/refresh reads from the graph', () => {
     expect((await awaitJob(body.jobId)).state).toBe('done');
     const env = await readEnvelope<UsageDetail>(usageFilePath(s, 'typescript'));
     expect(env.data).toMatchObject({ files: [], totalFiles: 0, declaredButUnused: true });
+  });
+
+  // Stage 3c (3a QA m1): a first build that fails must surface, never become "0 files use X".
+  it('reports a failed first build as a job error and writes no usage envelope', async () => {
+    const s = await setupProject('usage-route-failed-build');
+    const project = await projectPathOf(s);
+    await fs.rm(project, { recursive: true, force: true });
+    const body = (await (await refreshUsage(post(), routeCtx({ slug: s, name: 'react' }))).json()) as ScanEnqueueResponse;
+    const job = await awaitJob(body.jobId);
+    expect(job.state).toBe('error');
+    expect(job.error?.message).toMatch(/ENOENT|no such file/i);
+    expect(existsSync(usageFilePath(s, 'react'))).toBe(false);
+    expect(existsSync(graphDbPath(s))).toBe(true);
+    expect(() => getGraphReader(s)).toThrow(GraphNotBuiltError);
+    expect(() => openGraphReader(graphDbPath(s))).toThrow(/no completed build/);
   });
 
   it('keeps the 404 for an unknown project', async () => {

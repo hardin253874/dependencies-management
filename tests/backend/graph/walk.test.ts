@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createSandbox, type Sandbox } from '../helpers/sandbox';
 import { copyGraphFixture, writeProjectFile } from '../helpers/graphFixture';
 import { walkProject } from '@/core/graph/walk';
+import type { GraphDiagnostic as WalkDiagnostic } from '@/core/graph/types';
 
 const SENTINEL = 'ENV_SENTINEL_DO_NOT_READ_3a3';
 
@@ -86,6 +87,23 @@ describe('walkProject (3a.3)', () => {
     const a = await walkProject({ projectRoot });
     const b = await walkProject({ projectRoot });
     expect(b).toEqual(a);
+  });
+
+  // Stage 3c (3a QA m5): an unreadable directory must be reported, not silently dropped.
+  it('records an unreadable directory as a diagnostic and keeps walking the rest', async () => {
+    const locked = path.join(projectRoot, 'src', 'components');
+    const realReaddir = fs.promises.readdir.bind(fs.promises);
+    vi.spyOn(fs.promises, 'readdir').mockImplementation(((dir: fs.PathLike, opts?: unknown) => {
+      if (path.resolve(String(dir)) === locked) {
+        return Promise.reject(Object.assign(new Error(`EACCES: permission denied, scandir '${String(dir)}'`), { code: 'EACCES' }));
+      }
+      return (realReaddir as (d: fs.PathLike, o?: unknown) => Promise<unknown>)(dir, opts);
+    }) as typeof fs.promises.readdir);
+    const diagnostics: WalkDiagnostic[] = [];
+    const paths = (await walkProject({ projectRoot, diagnostics })).map((f) => f.path);
+    expect(paths).toContain('src/index.ts');
+    expect(paths.some((p) => p.startsWith('src/components/'))).toBe(false);
+    expect(diagnostics).toEqual([{ stage: 'walk', path: 'src/components', code: 'EACCES', message: expect.stringContaining('EACCES') }]);
   });
 
   it('does not follow a directory symlink that points outside the root', async () => {

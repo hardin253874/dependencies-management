@@ -13,7 +13,10 @@ import {
   testsCovering,
   wrappers,
   unresolved,
-  graphInfo
+  graphInfo,
+  importStatements,
+  dynamicImports,
+  skippedFiles
 } from '@/core/graph/query';
 
 let sandbox: Sandbox;
@@ -34,6 +37,10 @@ beforeAll(async () => {
   await build('next-app-router');
   await build('index-files');
   await build('dynamic-import');
+  await build('oversized', async (root) => {
+    await writeProjectFile(root, 'src/huge.ts', 'x'.repeat(2 * 1024 * 1024 + 1));
+    await writeProjectFile(root, 'src/huge.css', 'a{}'.repeat(700 * 1024));
+  }, 'index-files');
   await build('cycle', async (root) => {
     await writeProjectFile(root, 'src/a.ts', "import { b } from './b';\nexport const a = () => b;\n");
     await writeProjectFile(root, 'src/b.ts', "import { c } from './c';\nexport const b = () => c;\n");
@@ -199,6 +206,44 @@ describe('unresolved / graphInfo (3a.9)', () => {
     expect(info.meta.parser).toBe('babel@7.24.7');
     expect(info.counts).toEqual({ files: 6, packages: 1, edges: 5, unresolved: 0, usages: info.counts.usages, reach: 4 });
     expect(info.counts.usages).toBeGreaterThan(0);
+  });
+});
+
+// Stage 3c (OQ-3b-A1): the reads view [C] needs, so src/lib/graph issues no SQL.
+describe('importStatements / dynamicImports / skippedFiles', () => {
+  it('importStatements: direct edges per file, path/line ordered', () => {
+    const st = importStatements(dbs['wrapper-module']!, 'axios');
+    expect(st.map((x) => `${x.path}:${x.line}:${x.via}:${x.snippet}`)).toEqual(["src/lib/http.ts:1:direct:import axios from 'axios';"]);
+  });
+
+  it('importStatements: barrel consumers get their importing line as reexport', () => {
+    const st = importStatements(dbs['barrel-reexport']!, 'antd');
+    const byFile = (p: string) => st.filter((x) => x.path === p).map((x) => x.via);
+    expect(byFile('src/ui/Button.tsx')).toEqual(['direct']);
+    expect(byFile('src/app/Page.tsx')).toEqual(['reexport']);
+    expect(byFile('src/ui/index.ts')).toEqual([]);
+    expect(st.map((x) => x.path)).toEqual([...st.map((x) => x.path)].sort());
+  });
+
+  it('importStatements: kinds filter applies to direct edges; unknown package is empty', () => {
+    expect(importStatements(dbs['wrapper-module']!, 'axios', { kinds: ['require'] })).toEqual([]);
+    expect(importStatements(dbs['wrapper-module']!, 'no-such-pkg')).toEqual([]);
+  });
+
+  it('dynamicImports lists dynamic-expression edges', () => {
+    expect(dynamicImports(dbs['dynamic-import']!)).toEqual([
+      { path: 'src/router.ts', line: 2, col: expect.any(Number), snippet: 'export const locale = (l: string) => import(`./locales/${l}.json`);' }
+    ]);
+    expect(dynamicImports(dbs['index-files']!)).toEqual([]);
+  });
+
+  it('skippedFiles filters by reason and file kind', () => {
+    const db = dbs['oversized']!;
+    expect(skippedFiles(db).map((f) => `${f.path}:${f.kind}:${f.reason}`)).toEqual(['src/huge.css:style:oversized', 'src/huge.ts:js:oversized']);
+    expect(skippedFiles(db, { reason: 'oversized', kinds: ['js'] })).toEqual([
+      { path: 'src/huge.ts', size: 2 * 1024 * 1024 + 1, kind: 'js', reason: 'oversized' }
+    ]);
+    expect(skippedFiles(db, { reason: 'minified' })).toEqual([]);
   });
 });
 

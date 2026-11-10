@@ -33,7 +33,9 @@ export type EdgeKind =
   | 'side-effect'
   | 'export-from'
   | 'style-import'
-  | 'config-ref';
+  | 'config-ref'
+  /** `declare module 'x' { … }` inside a module file: a type augmentation of x (Stage 3c, OQ-3b-B3). */
+  | 'module-augmentation';
 
 export type Resolution = 'resolved' | 'external' | 'builtin' | 'unresolved';
 
@@ -50,6 +52,29 @@ export type UnresolvedReason =
 export type UsageKind = 'call' | 'new' | 'member' | 'jsx' | 'value';
 
 export type Via = 'direct' | 'reexport' | 'wrapper';
+
+/**
+ * Something the build could not read and therefore left out (3a QA m5). Core
+ * has no logger; the app logs these, and they are kept in `meta.diagnostics`.
+ */
+export interface GraphDiagnostic {
+  stage: 'walk' | 'config';
+  /** POSIX path relative to the project root ('' = the root); absolute POSIX outside it. */
+  path: string;
+  /** Node error code (EACCES, EPERM, EBUSY, …) or 'UNKNOWN'. */
+  code: string;
+  message: string;
+}
+
+export function diagnosticOf(stage: GraphDiagnostic['stage'], relPath: string, err: unknown): GraphDiagnostic {
+  const code = (err as NodeJS.ErrnoException | null)?.code;
+  return { stage, path: relPath, code: typeof code === 'string' ? code : 'UNKNOWN', message: err instanceof Error ? err.message : String(err) };
+}
+
+export function sortDiagnostics(ds: readonly GraphDiagnostic[]): GraphDiagnostic[] {
+  const key = (d: GraphDiagnostic) => `${d.stage}\0${d.path}\0${d.code}`;
+  return [...ds].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+}
 
 export const CONFIDENCE_RANK: Readonly<Record<Confidence, number>> = Object.freeze({ low: 1, medium: 2, high: 3 });
 
@@ -147,6 +172,31 @@ export interface GraphInfo {
     usages: number;
     reach: number;
   };
+}
+
+/** One import line that brings `pkg` into a file (Stage 3c, OQ-3b-A1). */
+export interface ImportStatement {
+  path: string;
+  line: number;
+  col: number;
+  snippet: string;
+  /** `direct`: the edge targets the package; `reexport`: its bindings reach it through a barrel chain. */
+  via: 'direct' | 'reexport';
+}
+
+/** A `import(expr)` / `require(expr)` whose target the graph cannot know. */
+export interface DynamicImportSite {
+  path: string;
+  line: number;
+  col: number;
+  snippet: string;
+}
+
+export interface SkippedFile {
+  path: string;
+  size: number;
+  kind: FileKind;
+  reason: SkipReason;
 }
 
 export interface Page {

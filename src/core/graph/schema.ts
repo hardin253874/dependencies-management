@@ -11,9 +11,10 @@
  * can follow barrels with an indexed lookup.
  */
 
-export const SCHEMA_VERSION = 1;
+// 2: edge kind 'module-augmentation' (Stage 3c F4).
+export const SCHEMA_VERSION = 2;
 
-const EDGE_KINDS = `'static','require','dynamic-literal','dynamic-expr','type-only','side-effect','export-from','style-import','config-ref'`;
+const EDGE_KINDS = `'static','require','dynamic-literal','dynamic-expr','type-only','side-effect','export-from','style-import','config-ref','module-augmentation'`;
 const CONFIDENCES = `'high','medium','low'`;
 
 export const SCHEMA_STATEMENTS: readonly string[] = Object.freeze([

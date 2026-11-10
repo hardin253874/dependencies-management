@@ -108,6 +108,23 @@ describe('usageFromGraph parity with the v1 scanCode mapping', () => {
     await expectParity(dir, ['victim', 'real']);
   });
 
+  // Stage 3c (OQ-3b-A2): v1 listed only oversized JS/TS files; a 3 MB stylesheet is not [C] material.
+  it('lists only oversized JS/TS files, not oversized style files (v1 meaning)', async () => {
+    const dir = await project('oversize-style');
+    await fs.writeFile(path.join(dir, 'huge.ts'), 'x'.repeat(3 * 1024 * 1024));
+    await fs.writeFile(path.join(dir, 'huge.scss'), '/* x */'.repeat(500 * 1024));
+    await writeProjectFile(dir, 'small.ts', `import 'react';`);
+    await expectParity(dir, ['react']);
+    const v2 = await graphUsage(dir, 'react');
+    expect(v2.oversizedSkipped.map((o) => o.path)).toEqual(['huge.ts']);
+  });
+
+  // Stage 3c (OQ-3b-A1): the compat layer reads the graph only through src/core/graph/query.ts.
+  it('usageFromGraph issues no raw SQL of its own', async () => {
+    const src = await fs.readFile(path.join(process.cwd(), 'src', 'lib', 'graph', 'usageFromGraph.ts'), 'utf8');
+    expect(src).not.toMatch(/\.prepare\(|SELECT/);
+  });
+
   it('records oversized files and dynamic imports the same way', async () => {
     const dir = await project('oversize-dyn');
     await fs.writeFile(path.join(dir, 'huge.ts'), 'x'.repeat(3 * 1024 * 1024));

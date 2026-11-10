@@ -55,8 +55,11 @@ export class GraphPathError extends Error {
 }
 
 export class GraphNotBuiltError extends Error {
-  constructor(readonly dbPath: string) {
-    super(`graph not built: no graph database at ${dbPath}`);
+  constructor(
+    readonly dbPath: string,
+    detail: 'no graph database' | 'no completed build' = 'no graph database'
+  ) {
+    super(detail === 'no graph database' ? `graph not built: no graph database at ${dbPath}` : `graph not built: no completed build in ${dbPath}`);
     this.name = 'GraphNotBuiltError';
   }
 }
@@ -315,14 +318,44 @@ export async function openGraphWriter(opts: OpenGraphWriterOptions): Promise<Gra
   return { db, rebuildReason: reason };
 }
 
-/** Opens a read-only handle; throws GraphNotBuiltError when the DB file does not exist. */
-export function openGraphReader(dbPath: string): GraphDriver {
+/**
+ * The build-complete marker: `meta.builtAt` is written only inside a build's
+ * commit, and a schema recreate drops it. Returns null when no build has
+ * completed (fresh/recreated schema, failed or aborted first build), or when
+ * the file has no meta table at all.
+ */
+export function completedBuildAt(db: GraphDriver): string | null {
+  try {
+    const row = db.prepare("SELECT value FROM meta WHERE key = 'builtAt'").get();
+    return row === undefined || row.value === null ? null : String(row.value);
+  } catch {
+    return null;
+  }
+}
+
+export interface OpenGraphReaderOptions {
+  /**
+   * Default true: refuse a DB with no completed build. A failed first build
+   * leaves an empty but openable file, and answering "no file uses X" from it
+   * would be a silent lie (3a QA m1). Only store-level tests pass false.
+   */
+  requireCompleteBuild?: boolean;
+}
+
+/** Opens a read-only handle; throws GraphNotBuiltError when the DB file is missing or holds no completed build. */
+export function openGraphReader(dbPath: string, opts: OpenGraphReaderOptions = {}): GraphDriver {
   const resolved = path.resolve(dbPath);
   if (!existsSync(resolved)) throw new GraphNotBuiltError(resolved);
+  let driver: NodeSqliteDriver;
   try {
-    return new NodeSqliteDriver(resolved, true);
+    driver = new NodeSqliteDriver(resolved, true);
   } catch (err) {
     if (sqliteCode(err) === SQLITE_CANTOPEN) throw new GraphNotBuiltError(resolved);
     throw err;
   }
+  if ((opts.requireCompleteBuild ?? true) && completedBuildAt(driver) === null) {
+    driver.close();
+    throw new GraphNotBuiltError(resolved, 'no completed build');
+  }
+  return driver;
 }

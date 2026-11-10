@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import fs from 'node:fs';
 import path from 'node:path';
 import { createSandbox, type Sandbox } from '../helpers/sandbox';
-import { copyGraphFixture } from '../helpers/graphFixture';
+import { copyGraphFixture, writeProjectFile } from '../helpers/graphFixture';
 import { buildGraph, type BuildProgress } from '@/core/graph/build';
 import { openGraphReader, type GraphDriver } from '@/core/graph/store';
 import { dumpGraph } from '@/core/graph/dump';
@@ -14,6 +15,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const r of readers.splice(0)) r.close();
   await sandbox.dispose();
 });
@@ -107,7 +109,7 @@ describe('buildGraph full (3a.7)', () => {
     const db = reader(dbPath);
     const meta = Object.fromEntries(db.prepare('SELECT key, value FROM meta').all().map((r) => [String(r.key), String(r.value)]));
     expect(meta).toMatchObject({
-      schemaVersion: '1',
+      schemaVersion: '2',
       parser: 'babel@7.24.7',
       resolver: 'oxc-resolver@11.24.2',
       rebuildReason: 'new'
@@ -225,6 +227,78 @@ describe('buildGraph full (3a.7)', () => {
       }
     });
     expect(keys).toEqual(['graph:my-slug']);
+  });
+
+  // Stage 3c F2: a scope failure must not drop the file (its edges and the re-export chains through it).
+  it('keeps edges of a file Babel scope rejects, and records unparseable files instead of dropping them', async () => {
+    const { projectRoot, dbPath } = await copyGraphFixture(sandbox, 'wrapper-module');
+    await writeProjectFile(
+      projectRoot,
+      'src/Monaco.tsx',
+      "import Editor, { Monaco } from 'axios';\nexport { Editor };\nconst Monaco = () => <Editor />;\nexport default Monaco;\n"
+    );
+    await writeProjectFile(projectRoot, 'src/useEditor.ts', "import { Editor } from './Monaco';\nexport const e = Editor;\n");
+    await writeProjectFile(projectRoot, 'src/Page.tsx', "import Monaco from './Monaco';\nexport const P = () => <Monaco />;\n");
+    await writeProjectFile(projectRoot, 'src/broken.ts', "import axios from 'axios';\nconst = ;\n}}}\n");
+    await buildGraph({ projectRoot, dbPath, mode: 'full', lock });
+    const db = reader(dbPath);
+    const files = Object.fromEntries(
+      db
+        .prepare("SELECT path, parse_error FROM file WHERE path IN ('src/Monaco.tsx', 'src/broken.ts', 'src/useEditor.ts')")
+        .all()
+        .map((r) => [String(r.path), r.parse_error === null ? null : String(r.parse_error)])
+    );
+    expect(files['src/Monaco.tsx']).toMatch(/^scope analysis failed/);
+    expect(files['src/useEditor.ts']).toBeNull();
+    expect(files['src/broken.ts']).toEqual(expect.any(String));
+    const axios = reach(db, 'axios').map((r) => `${r.file}:${r.via}`);
+    expect(axios).toContain('src/Monaco.tsx:direct');
+    expect(axios).toContain('src/useEditor.ts:reexport');
+    // The merged default export also carries the imported type (TS declaration merging).
+    expect(axios).toContain('src/Page.tsx:reexport');
+  });
+
+  it('stores module augmentations as module-augmentation edges and reports them as direct hits', async () => {
+    const { projectRoot, dbPath } = await copyGraphFixture(sandbox, 'wrapper-module');
+    await writeProjectFile(projectRoot, 'src/axios-override.d.ts', "import 'axios';\ndeclare module 'axios' {\n  interface AxiosRequestConfig { retry?: number }\n}\n");
+    await buildGraph({ projectRoot, dbPath, mode: 'full', lock });
+    const db = reader(dbPath);
+    const kinds = db
+      .prepare(
+        `SELECT e.kind, e.resolution, p.name AS pkg FROM import_edge e JOIN file f ON f.id = e.from_file
+           LEFT JOIN package p ON p.id = e.to_package WHERE f.path = 'src/axios-override.d.ts' ORDER BY e.line`
+      )
+      .all()
+      .map((r) => `${String(r.kind)}:${String(r.resolution)}:${String(r.pkg)}`);
+    expect(kinds).toEqual(['side-effect:external:axios', 'module-augmentation:external:axios']);
+    expect(reach(db, 'axios').map((r) => `${r.file}:${r.via}`)).toContain('src/axios-override.d.ts:direct');
+  });
+
+  // Stage 3c (3a QA m5): unreadable configs are recorded on the result and in meta, not silently skipped.
+  it('records an unreadable resolver config as a diagnostic (result + meta.diagnostics)', async () => {
+    const { projectRoot, dbPath } = await copyGraphFixture(sandbox, 'paths-alias');
+    const tsconfig = path.join(projectRoot, 'tsconfig.json');
+    const realReadFile = fs.promises.readFile.bind(fs.promises);
+    vi.spyOn(fs.promises, 'readFile').mockImplementation(((file: fs.PathLike, opts?: unknown) => {
+      if (path.resolve(String(file)) === tsconfig) {
+        return Promise.reject(Object.assign(new Error(`EACCES: permission denied, open '${String(file)}'`), { code: 'EACCES' }));
+      }
+      return (realReadFile as (f: fs.PathLike, o?: unknown) => Promise<unknown>)(file, opts);
+    }) as typeof fs.promises.readFile);
+    const res = await buildGraph({ projectRoot, dbPath, mode: 'full', lock });
+    vi.restoreAllMocks();
+    const expected = { stage: 'config', path: 'tsconfig.json', code: 'EACCES', message: expect.stringContaining('EACCES') };
+    expect(res.diagnostics).toEqual([expected]);
+    const db = reader(dbPath);
+    const meta = db.prepare("SELECT value FROM meta WHERE key = 'diagnostics'").get();
+    expect(JSON.parse(String(meta?.value))).toEqual([expected]);
+  });
+
+  it('a clean build reports no diagnostics', async () => {
+    const { projectRoot, dbPath } = await copyGraphFixture(sandbox, 'wrapper-module');
+    const res = await buildGraph({ projectRoot, dbPath, mode: 'full', lock });
+    expect(res.diagnostics).toEqual([]);
+    expect(reader(dbPath).prepare("SELECT value FROM meta WHERE key = 'diagnostics'").get()?.value).toBe('[]');
   });
 
   it('counts unresolved edges', async () => {

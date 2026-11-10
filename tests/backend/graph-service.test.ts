@@ -87,6 +87,24 @@ describe('refreshProjectGraph', () => {
     expect(order).toEqual(['holder', 'build']);
   });
 
+  // Stage 3c (3b QA m3): a reader cached while this refresh waited for the lock must be closed
+  // before the build runs (a corrupt-DB delete would otherwise hit EBUSY on Windows).
+  it('closes readers cached while waiting for the lock before building', async () => {
+    const projectRoot = await fixture();
+    await refreshProjectGraph({ slug: SLUG, projectRoot });
+    let release!: () => void;
+    const held = withProjectLock(graphLockKey(SLUG), () => new Promise<void>((resolve) => (release = resolve)));
+    const openDuringBuild: number[] = [];
+    const waiting = refreshProjectGraph({ slug: SLUG, projectRoot, report: () => openDuringBuild.push(_openGraphReaderCount()) });
+    await new Promise((r) => setTimeout(r, 20));
+    getGraphReader(SLUG); // another job reads the committed graph while the refresh waits
+    expect(_openGraphReaderCount()).toBe(1);
+    release();
+    await Promise.all([held, waiting]);
+    expect(openDuringBuild.length).toBeGreaterThan(0);
+    expect(openDuringBuild.every((n) => n === 0)).toBe(true);
+  });
+
   it('rethrows an abort and leaves no readable graph behind on a first build', async () => {
     const projectRoot = await fixture();
     const ctrl = new AbortController();

@@ -14,7 +14,7 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 A locally-run AI-augmented agent that scans, analyses, and reviews dependencies of legacy JS/TS projects. Next.js 16.4 App Router + React 19.3 (Route Handlers, not Server Actions; Turbopack for dev and build since v2 Stage 2). Server binds 127.0.0.1 only. Six right-panel views per dep ([A]–[E] + [D-Deep]). Cache-first design: every view reads its persisted envelope first; LLM calls happen only on explicit user action. The agent is **read-only against target projects** — all writes go to `library/`.
 
-Test baseline (2026-11-10, after v2 Stage 3b): 879 passed / 5 skipped across 137 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
+Test baseline (2026-11-10, after v2 Stage 3c): 925 passed / 5 skipped across 137 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
 
 ## Commands
 
@@ -51,8 +51,9 @@ Design contract: `Plans/V2_CODE_GRAPH_DESIGN.md` + `Plans/V2_STAGE3_SPEC.md`; mo
 - **Read-only target.** The build only reads (readdir/stat/readFile), never opens `.env*`, never executes target configs (they are parsed as data). `tests/backend/graph/invariant.readonly.test.ts` is the guard.
 - **Driver.** `node:sqlite` (builtin, no ExperimentalWarning on Node 24.22; Node 22 prints one). Only `core/graph/store.ts` imports it; WAL, one writer. `better-sqlite3` is the documented fallback behind `GraphDriver`, not installed.
 - **`serverExternalPackages`** (`next.config.mjs`): `oxc-resolver` is a napi addon and Turbopack `next build` fails without the entry ("node addon is not placeable in ESM chunks"); `@babel/traverse` is externalized like `@babel/parser`. `node:sqlite` needs no entry.
-- **App entry points** (`src/lib/graph/`): `refreshProjectGraph({ slug, projectRoot, report, signal })` builds with `mode: 'auto'` under `withProjectLock('graph:<slug>')` — a separate key from the slug's `project.json` lock, so a long build does not block those writers while two builds of one project serialize. `getGraphReader(slug)` hands out the cached read handle (throws `GraphNotBuiltError` when there is no completed build); use it synchronously, never across an `await`.
+- **App entry points** (`src/lib/graph/`): `refreshProjectGraph({ slug, projectRoot, report, signal })` builds with `mode: 'auto'` under `withProjectLock('graph:<slug>')` — a separate key from the slug's `project.json` lock, so a long build does not block those writers while two builds of one project serialize. `getGraphReader(slug)` hands out the cached read handle; use it synchronously, never across an `await`. Core `openGraphReader` itself throws `GraphNotBuiltError` when there is no DB or no completed build (`meta.builtAt` is the completion marker, written only in a build's commit).
 - **Close readers before deleting.** On Windows an open SQLite handle makes `fs.rm(library/<slug>)` fail with EBUSY/EPERM. Anything that removes or replaces the project dir must run inside `withProjectGraphLock(slug, …)` and call `closeGraphReaders(slug)` first (see the project DELETE route).
+- **Rebuild triggers.** `mode: 'auto'` does a full build when `meta.builder` (`GRAPH_BUILDER_ID` in `core/graph/build.ts`: builder version + pinned `@babel/parser`/`@babel/traverse`/`oxc-resolver`) changes. **Bump `GRAPH_BUILDER_VERSION` whenever parse/resolve/reach output changes for the same input**; a test ties the pins to `package.json`. Schema changes bump `SCHEMA_VERSION` (drop + recreate). Unreadable dirs/configs land in `BuildGraphResult.diagnostics` and `meta.diagnostics` (logged at warn by `refreshProjectGraph`).
 - **Perf budgets** are gated: `$env:GRAPH_PERF='1'; npx vitest run tests/backend/graph/perf.test.ts`.
 
 ---
@@ -251,7 +252,7 @@ These are the bugs that have actually shipped in this repo. Each one is here bec
 ```bash
 npm run typecheck   # tsc --noEmit — must be clean
 npm run lint        # ESLint — must be clean
-npm test            # Full Vitest suite — must match current baseline (879 pass / 5 skipped)
+npm test            # Full Vitest suite — must match current baseline (925 pass / 5 skipped)
 ```
 
 ### When you change a route

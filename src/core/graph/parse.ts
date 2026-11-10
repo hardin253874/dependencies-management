@@ -24,6 +24,7 @@ const traverseMod = requireFn('@babel/traverse') as { default: (ast: t.Node, opt
 const traverse = traverseMod.default;
 
 export const BABEL_PARSER_VERSION = '7.24.7';
+export const BABEL_TRAVERSE_VERSION = '7.24.7';
 
 export interface ParsedBinding {
   local: string;
@@ -81,25 +82,40 @@ export interface ParserAdapter {
   parse(source: string, relPosixPath: string): ParsedFile;
 }
 
-const BABEL_OPTIONS: BabelParser.ParserOptions = {
-  sourceType: 'unambiguous',
-  allowImportExportEverywhere: true,
-  allowAwaitOutsideFunction: true,
-  allowReturnOutsideFunction: true,
-  allowSuperOutsideMethod: true,
-  errorRecovery: true,
-  plugins: [
-    'typescript',
-    'jsx',
-    'decorators-legacy',
-    'classProperties',
-    'classPrivateProperties',
-    'classPrivateMethods',
-    'dynamicImport',
-    'importMeta',
-    'topLevelAwait'
-  ]
-};
+const COMMON_PLUGINS: readonly BabelParser.ParserPlugin[] = Object.freeze([
+  'typescript',
+  'decorators-legacy',
+  'classProperties',
+  'classPrivateProperties',
+  'classPrivateMethods',
+  'dynamicImport',
+  'importMeta',
+  'topLevelAwait'
+] as BabelParser.ParserPlugin[]);
+
+function babelOptions(jsx: boolean): BabelParser.ParserOptions {
+  return {
+    sourceType: 'unambiguous',
+    allowImportExportEverywhere: true,
+    allowAwaitOutsideFunction: true,
+    allowReturnOutsideFunction: true,
+    allowSuperOutsideMethod: true,
+    errorRecovery: true,
+    plugins: jsx ? [...COMMON_PLUGINS, 'jsx'] : [...COMMON_PLUGINS]
+  };
+}
+
+// Stage 3c F1: v1 enabled `jsx` for every file, so a `.ts` file with a
+// `<T>{…}` angle-bracket assertion (legal TS, illegal TSX) failed to parse and
+// lost every edge. TypeScript itself never treats `.ts/.mts/.cts` as JSX.
+const OPTIONS_TS = Object.freeze(babelOptions(false));
+const OPTIONS_JSX = Object.freeze(babelOptions(true));
+const TS_ONLY_RE = /\.(?:ts|mts|cts)$/i;
+
+/** `typescript` without `jsx` for `.ts/.mts/.cts` (incl. `.d.ts`); `typescript` + `jsx` for everything else (v1 parity). */
+export function babelOptionsFor(relPath: string | undefined): BabelParser.ParserOptions {
+  return relPath !== undefined && TS_ONLY_RE.test(relPath) ? OPTIONS_TS : OPTIONS_JSX;
+}
 
 const USAGE_SNIPPET_MAX = 200;
 // Import snippets feed v1-compatible `importStatements`; capped only so a
@@ -132,23 +148,115 @@ function literalSpecifier(arg: t.Node | undefined): { value: string; template: b
 interface PendingExport {
   local: string;
   exported: string;
-  binding: Binding | undefined;
+  /** A Babel `Binding` (scoped pass) or a top-level name (scope-free fallback); undefined = no import binding. */
+  binding: BindingKey | undefined;
+}
+
+type BindingKey = Binding | string;
+
+interface Extraction {
+  imports: ParsedImport[];
+  exports: string[];
+  reexports: ParsedReexport[];
+  usages: ParsedUsage[];
+  cjsExports: boolean;
+}
+
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 function parseBabel(source: string, relPosixPath: string): ParsedFile {
   let ast: t.File;
   try {
-    ast = babel.parse(source, BABEL_OPTIONS) as unknown as t.File;
+    ast = babel.parse(source, babelOptionsFor(relPosixPath)) as unknown as t.File;
   } catch (err) {
-    return emptyResult(err instanceof Error ? err.message : String(err));
+    return emptyResult(errorText(err));
+  }
+  const lines = source.split('\n');
+  const recoverable = (ast as { errors?: Array<{ message?: string }> }).errors ?? [];
+  // errorRecovery: keep what was extracted (v1 parity) but record the first error.
+  const recoveredError = recoverable.length > 0 ? String(recoverable[0]?.message ?? 'parse error') : null;
+
+  let out: Extraction;
+  let parseError = recoveredError;
+  try {
+    out = extract(ast, lines, true);
+  } catch (scopedErr) {
+    // Stage 3c F2: Babel's scope tracker throws on declarations TypeScript
+    // allows, e.g. a type-only `import { Monaco }` merged with `const Monaco`
+    // (`checkBlockScopedCollisions` → `hub.buildError`, and a bare
+    // `traverse(ast)` has no hub, hence "reading 'buildError'"). Dropping the
+    // file would lose its imports and break re-export chains through it, so
+    // re-run without scope: imports, exports and re-exports by top-level name,
+    // no usages. The degraded result is recorded in `parseError`.
+    try {
+      out = extract(ast, lines, false);
+      const msg = errorText(scopedErr);
+      const why = msg.includes("reading 'buildError'") ? 'Babel scope rejected a duplicate declaration (TS declaration merging)' : msg;
+      parseError = `scope analysis failed, imports kept without usages: ${why}`;
+    } catch (err) {
+      return emptyResult(`traverse failed: ${errorText(err)}`);
+    }
   }
 
-  const lines = source.split('\n');
+  return {
+    imports: out.imports,
+    exports: [...new Set(out.exports)],
+    reexports: out.reexports,
+    usages: out.usages,
+    hasExports: out.exports.length > 0 || out.reexports.length > 0 || out.cjsExports,
+    parseError
+  };
+}
+
+/** Names declared at the top level of the program (shadow a same-named import in the scope-free pass). */
+function topLevelLocalNames(program: t.Program): Set<string> {
+  const out = new Set<string>();
+  for (const stmt of program.body) {
+    const decl = stmt.type === 'ExportNamedDeclaration' || stmt.type === 'ExportDefaultDeclaration' ? stmt.declaration : stmt;
+    if (decl === null || decl === undefined) continue;
+    if (decl.type === 'VariableDeclaration') {
+      for (const d of decl.declarations) for (const name of declaredNames(d.id)) out.add(name);
+    } else if (
+      (decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration' || decl.type === 'TSEnumDeclaration') &&
+      decl.id !== null &&
+      decl.id !== undefined
+    ) {
+      out.add(decl.id.name);
+    }
+  }
+  return out;
+}
+
+/** Top-level statements that make a file an ES/TS module (TypeScript's "external module" test). */
+function isModuleSyntax(stmt: t.Statement): boolean {
+  return (
+    stmt.type === 'ImportDeclaration' ||
+    stmt.type === 'ExportNamedDeclaration' ||
+    stmt.type === 'ExportDefaultDeclaration' ||
+    stmt.type === 'ExportAllDeclaration' ||
+    stmt.type === 'TSExportAssignment' ||
+    (stmt.type === 'TSImportEqualsDeclaration' && stmt.moduleReference.type === 'TSExternalModuleReference')
+  );
+}
+
+function isProgramChild(p: NodePath | null | undefined): boolean {
+  return p?.parentPath?.node.type === 'Program';
+}
+
+/**
+ * One traversal over the AST. `scoped` uses Babel's scope analysis (shadowing,
+ * usages); the scope-free variant maps names at the top level only.
+ */
+function extract(ast: t.File, lines: string[], scoped: boolean): Extraction {
   const imports: ParsedImport[] = [];
   const exports: string[] = [];
   const reexports: ParsedReexport[] = [];
   const pendingExports: PendingExport[] = [];
-  const bindingOwners = new Map<Binding, { importIndex: number; imported: string; local: string }>();
+  const bindingOwners = new Map<BindingKey, { importIndex: number; imported: string; local: string }>();
+  const topLocals = scoped ? new Set<string>() : topLevelLocalNames(ast.program);
+  const isModuleFile = ast.program.body.some(isModuleSyntax);
   let cjsExports = false;
 
   const addImport = (imp: ParsedImport): number => {
@@ -156,12 +264,21 @@ function parseBabel(source: string, relPosixPath: string): ParsedFile {
     return imports.length - 1;
   };
   const pos = (node: t.Node) => ({ line: node.loc?.start.line ?? 0, col: node.loc?.start.column ?? 0 });
-  const own = (scopePath: NodePath, importIndex: number, local: string, imported: string) => {
-    const binding = scopePath.scope.getBinding(local);
-    if (binding !== undefined) bindingOwners.set(binding, { importIndex, imported, local });
+  /** The import binding `name` refers to at `p`, if any. */
+  const bindingAt = (p: NodePath, name: string): BindingKey | undefined => (scoped ? p.scope.getBinding(name) : name);
+  /** True when `name` is a local declaration at `p` (shadows module / exports globals). */
+  const isLocallyBound = (p: NodePath, name: string): boolean => (scoped ? p.scope.getBinding(name) !== undefined : topLocals.has(name));
+  const own = (declPath: NodePath, importIndex: number, local: string, imported: string) => {
+    if (scoped) {
+      const binding = declPath.scope.getBinding(local);
+      if (binding !== undefined) bindingOwners.set(binding, { importIndex, imported, local });
+    } else if (isProgramChild(declPath) && !bindingOwners.has(local)) {
+      bindingOwners.set(local, { importIndex, imported, local });
+    }
   };
 
   const visitor: TraverseOptions = {
+    noScope: !scoped,
     ImportDeclaration(p) {
       const node = p.node;
       const { line, col } = pos(node);
@@ -205,6 +322,24 @@ function parseBabel(source: string, relPosixPath: string): ParsedFile {
         snippet: lineText(lines, line, IMPORT_SNIPPET_MAX)
       });
       own(p, idx, local, 'default');
+    },
+
+    TSModuleDeclaration(p) {
+      // Stage 3c F4: like TypeScript's preProcessFile, a string-named `declare module`
+      // is an import of that module only inside a module file (an augmentation);
+      // in a script file it declares an ambient module and uses nothing. Wildcard
+      // patterns (`'*.svg'`) name no module.
+      const id = p.node.id;
+      if (id.type !== 'StringLiteral' || !isModuleFile || id.value.includes('*')) return;
+      const { line, col } = pos(p.node);
+      addImport({
+        specifier: id.value,
+        kind: 'module-augmentation',
+        bindings: [],
+        line,
+        col,
+        snippet: lineText(lines, line, IMPORT_SNIPPET_MAX)
+      });
     },
 
     TSImportType(p) {
@@ -277,14 +412,14 @@ function parseBabel(source: string, relPosixPath: string): ParsedFile {
       }
       for (const s of node.specifiers) {
         if (s.type !== 'ExportSpecifier') continue;
-        pendingExports.push({ local: s.local.name, exported: exportedNameOf(s.exported), binding: p.scope.getBinding(s.local.name) });
+        pendingExports.push({ local: s.local.name, exported: exportedNameOf(s.exported), binding: bindingAt(p, s.local.name) });
       }
     },
 
     ExportDefaultDeclaration(p) {
       const decl = p.node.declaration;
       if (decl.type === 'Identifier') {
-        pendingExports.push({ local: decl.name, exported: 'default', binding: p.scope.getBinding(decl.name) });
+        pendingExports.push({ local: decl.name, exported: 'default', binding: bindingAt(p, decl.name) });
       } else {
         exports.push('default');
       }
@@ -305,7 +440,7 @@ function parseBabel(source: string, relPosixPath: string): ParsedFile {
           obj.object.type === 'Identifier' &&
           obj.object.name === 'module' &&
           propName(obj) === 'exports');
-      if (!isModuleExports || p.scope.getBinding(obj.type === 'Identifier' ? obj.name : 'module') !== undefined) return;
+      if (!isModuleExports || isLocallyBound(p, obj.type === 'Identifier' ? obj.name : 'module')) return;
       cjsExports = true;
       // module.exports = … → 'default' (+ the keys of an object literal); exports.x / module.exports.x → 'x'.
       if (obj.type === 'Identifier' && obj.name === 'module') {
@@ -361,24 +496,26 @@ function parseBabel(source: string, relPosixPath: string): ParsedFile {
         col,
         snippet: lineText(lines, line, IMPORT_SNIPPET_MAX)
       });
-      if (parent !== null) for (const b of bindings) own(parent, idx, b.local, b.imported);
+      // The declaration statement (not the declarator) is the Program child the scope-free pass checks.
+      const declPath = parent?.parentPath ?? parent;
+      if (declPath !== null) for (const b of bindings) own(declPath, idx, b.local, b.imported);
     }
   };
 
-  try {
-    traverse(ast, visitor);
-  } catch (err) {
-    return emptyResult(`traverse failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
+  traverse(ast, visitor);
 
   for (const pe of pendingExports) {
     const owner = pe.binding === undefined ? undefined : bindingOwners.get(pe.binding);
+    // Scope-free pass only: a name that is both imported and declared locally is one merged TS
+    // symbol (e.g. type import + const), and exporting it exports both meanings.
+    const alsoLocal = !scoped && topLocals.has(pe.local);
+    if (owner === undefined || alsoLocal) exports.push(pe.exported);
     if (owner !== undefined) reexports.push({ importIndex: owner.importIndex, exported: pe.exported, imported: owner.imported });
-    else exports.push(pe.exported);
   }
 
   const usages: ParsedUsage[] = [];
   for (const [binding, owner] of bindingOwners) {
+    if (typeof binding === 'string') continue; // scope-free pass: no reference tracking
     for (const ref of binding.referencePaths) {
       const u = classifyReference(ref);
       if (u === null) continue;
@@ -396,17 +533,7 @@ function parseBabel(source: string, relPosixPath: string): ParsedFile {
     }
   }
   usages.sort((a, b) => a.line - b.line || a.col - b.col || a.local.localeCompare(b.local));
-
-  const recoverable = (ast as { errors?: Array<{ message?: string }> }).errors ?? [];
-  return {
-    imports,
-    exports: [...new Set(exports)],
-    reexports,
-    usages,
-    hasExports: exports.length > 0 || reexports.length > 0 || cjsExports,
-    // errorRecovery: keep what was extracted (v1 parity) but record the first error.
-    parseError: recoverable.length > 0 ? String(recoverable[0]?.message ?? 'parse error') : null
-  };
+  return { imports, exports, reexports, usages, cjsExports };
 }
 
 /** Names bound by a declarator id (identifier or destructuring pattern). */
@@ -465,9 +592,9 @@ function classifyReference(ref: NodePath): { kind: UsageKind; member: string | n
  * Parse with the same options as the adapter and return the raw AST (or null
  * on a fatal error). Used to read config files as data (aliases, config refs).
  */
-export function parseAst(source: string): t.File | null {
+export function parseAst(source: string, relPath?: string): t.File | null {
   try {
-    return babel.parse(source, BABEL_OPTIONS) as unknown as t.File;
+    return babel.parse(source, babelOptionsFor(relPath)) as unknown as t.File;
   } catch {
     return null;
   }

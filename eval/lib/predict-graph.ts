@@ -21,8 +21,20 @@ import type { CasePrediction, CorpusCase } from './types';
 
 export const GRAPH_JS_EXTS: readonly string[] = Object.freeze(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts']);
 
-/** Edge kinds TypeScript's `preProcessFile` can see; config-ref is invisible to the truth. */
-const TS_VISIBLE_KINDS: ReadonlySet<string> = new Set(['static', 'require', 'dynamic-literal', 'type-only', 'side-effect', 'export-from']);
+/**
+ * Edge kinds TypeScript's `preProcessFile` can see; config-ref is invisible to the truth.
+ * `module-augmentation` (Stage 3c F4) is listed because preProcessFile reports
+ * augmentations in `importedFiles`; a hit through it is an ordinary direct hit (D22).
+ */
+const TS_VISIBLE_KINDS: ReadonlySet<string> = new Set([
+  'static',
+  'require',
+  'dynamic-literal',
+  'type-only',
+  'side-effect',
+  'export-from',
+  'module-augmentation'
+]);
 
 const trivialLock: GraphLock = (_key, fn) => fn();
 

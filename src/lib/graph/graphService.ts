@@ -45,15 +45,20 @@ function isAbort(err: unknown, signal: AbortSignal | undefined): boolean {
 export async function refreshProjectGraph(input: RefreshProjectGraphInput): Promise<BuildGraphResult> {
   const { slug, projectRoot, report, signal } = input;
   const log = (await getLogger()).child({ scope: 'graph', slug });
-  // Release our own cached reader first: a corrupt DB is deleted and
-  // recreated by the writer, which an open handle would block on Windows.
-  closeGraphReaders(slug);
   try {
     const result = await buildGraph({
       projectRoot,
       dbPath: graphDbPath(slug),
       mode: 'auto',
-      lock: (key, fn) => withProjectLock(key, fn),
+      // Release the cached reader once the lock is held, not before: a corrupt
+      // DB is deleted and recreated by the writer, which an open handle blocks
+      // on Windows, and another job may cache a fresh reader while this one
+      // waits for the lock (3b QA m3).
+      lock: (key, fn) =>
+        withProjectLock(key, () => {
+          closeGraphReaders(slug);
+          return fn();
+        }),
       lockKey: graphLockKey(slug),
       signal,
       onProgress: (p) => report?.({ current: p.current, total: p.total, label: PHASE_LABEL[p.phase], phase: 'scan' })
@@ -70,6 +75,13 @@ export async function refreshProjectGraph(input: RefreshProjectGraphInput): Prom
       },
       `graph ${result.mode} build done — ${result.files} files, ${result.edges} edges in ${result.durationMs} ms`
     );
+    if (result.diagnostics.length > 0) {
+      // Unreadable dirs/configs mean the graph under-reports; core has no logger, so say it here (3a QA m5).
+      log.warn(
+        { diagnostics: result.diagnostics.slice(0, 20), total: result.diagnostics.length },
+        `graph build skipped ${result.diagnostics.length} unreadable path(s), first: ${result.diagnostics[0]!.path} (${result.diagnostics[0]!.code})`
+      );
+    }
     return result;
   } catch (err) {
     if (isAbort(err, signal)) {

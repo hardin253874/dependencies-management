@@ -15,14 +15,14 @@
  *   (via reexport); its importStatements are the barrel imports.
  * - Lists are in a stable order (path, then line) instead of parse-completion order.
  */
-import { filesUsingPackage } from '@/core/graph/query';
+import { dynamicImports, filesUsingPackage, importStatements, skippedFiles } from '@/core/graph/query';
 import { JS_EXTS } from '@/core/graph/walk';
 import type { GraphDriver } from '@/core/graph/store';
 import type { EdgeKind } from '@/core/graph/types';
 import { sha1Prefix } from '@/lib/scanners/code';
-import type { UsageDetail, UsageDynamicImport, UsageFile, UsageOversized } from '@/lib/api-types';
+import type { UsageDetail, UsageFile } from '@/lib/api-types';
 
-/** Edge kinds v1's JS import scan saw; style-import / config-ref are not [C] material yet. */
+/** Edge kinds v1's JS import scan saw; style-import / config-ref / module-augmentation are not [C] material yet. */
 const JS_IMPORT_KINDS: readonly EdgeKind[] = Object.freeze([
   'static',
   'require',
@@ -40,76 +40,41 @@ function isJsPath(p: string): boolean {
   return JS_EXTS.some((ext) => lower.endsWith(ext));
 }
 
-function kindPlaceholders(): string {
-  return JS_IMPORT_KINDS.map(() => '?').join(',');
-}
-
-/** Import lines of `filePath` whose edge targets `pkg` directly. */
-function directStatements(h: GraphDriver, filePath: string, pkg: string): string[] {
-  return h
-    .prepare(
-      `SELECT e.snippet FROM import_edge e
-         JOIN file f ON f.id = e.from_file JOIN package p ON p.id = e.to_package
-        WHERE f.path = ? AND p.name = ? AND e.kind IN (${kindPlaceholders()})
-        ORDER BY e.line, e.col, e.id`
-    )
-    .all(filePath, pkg, ...JS_IMPORT_KINDS)
-    .map((r) => String(r.snippet ?? ''));
-}
-
-/** Import lines of `filePath` whose bindings reach `pkg` through a re-export chain. */
-function reexportStatements(h: GraphDriver, filePath: string, pkg: string): string[] {
-  return h
-    .prepare(
-      `SELECT DISTINCT e.id, e.line, e.col, e.snippet FROM import_edge e
-         JOIN file f ON f.id = e.from_file
-         JOIN import_binding b ON b.edge_id = e.id
-         JOIN binding_reach br ON br.binding_id = b.id
-         JOIN package p ON p.id = br.package_id
-        WHERE f.path = ? AND p.name = ? AND br.depth > 0
-        ORDER BY e.line, e.col, e.id`
-    )
-    .all(filePath, pkg)
-    .map((r) => String(r.snippet ?? ''));
-}
-
-function dynamicImports(h: GraphDriver): UsageDynamicImport[] {
-  return h
-    .prepare(
-      `SELECT f.path, e.line, e.snippet FROM import_edge e JOIN file f ON f.id = e.from_file
-        WHERE e.resolution = 'unresolved' AND e.unresolved_reason = 'dynamic-expression'
-        ORDER BY f.path, e.line, e.col, e.id`
-    )
-    .all()
-    .map((r) => ({ file: String(r.path), line: Number(r.line), snippet: String(r.snippet ?? '') }));
-}
-
-function oversizedSkipped(h: GraphDriver): UsageOversized[] {
-  return h
-    .prepare(`SELECT path, size FROM file WHERE skip_reason = 'oversized' ORDER BY path`)
-    .all()
-    .map((r) => ({ path: String(r.path), sizeBytes: Number(r.size), reason: OVERSIZED_REASON }));
-}
-
+/**
+ * All reads go through `src/core/graph/query.ts` (OQ-3b-A1), so this module
+ * does not depend on schema columns. One statement query per package, not per file.
+ */
 export function usageFromGraph(h: GraphDriver, name: string): UsageDetail {
   const hits = filesUsingPackage(h, name, { transitive: true, wrapperDepth: 0, kinds: [...JS_IMPORT_KINDS] }).filter(
     (hit) => (hit.via === 'direct' || hit.via === 'reexport') && isJsPath(hit.path)
   );
+  const statements = new Map<string, string[]>();
+  for (const st of importStatements(h, name, { kinds: JS_IMPORT_KINDS })) {
+    const key = `${st.via}:${st.path}`;
+    const list = statements.get(key);
+    if (list === undefined) statements.set(key, [st.snippet]);
+    else list.push(st.snippet);
+  }
   const files: UsageFile[] = hits.map((hit) => {
-    const importStatements = hit.via === 'direct' ? directStatements(h, hit.path, name) : reexportStatements(h, hit.path, name);
+    const importStatementsOfFile = statements.get(`${hit.via}:${hit.path}`) ?? [];
     return {
       path: hit.path,
       pathHash: sha1Prefix(hit.path, 12),
       category: hit.category,
-      importStatements,
-      importCount: importStatements.length
+      importStatements: importStatementsOfFile,
+      importCount: importStatementsOfFile.length
     };
   });
   return {
     files,
-    dynamicImports: dynamicImports(h),
+    dynamicImports: dynamicImports(h).map((d) => ({ file: d.path, line: d.line, snippet: d.snippet })),
     totalFiles: files.length,
     declaredButUnused: files.length === 0,
-    oversizedSkipped: oversizedSkipped(h)
+    // v1 listed oversized JS/TS files only (OQ-3b-A2): a huge stylesheet is not a [C] import site.
+    oversizedSkipped: skippedFiles(h, { reason: 'oversized', kinds: ['js'] }).map((f) => ({
+      path: f.path,
+      sizeBytes: f.size,
+      reason: OVERSIZED_REASON
+    }))
   };
 }

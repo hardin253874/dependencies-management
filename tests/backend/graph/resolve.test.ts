@@ -175,6 +175,21 @@ describe('resolver (3a.5)', () => {
     check(ctx, 'src/app.js', 'Widgets/x', { resolution: 'unresolved', unresolvedReason: 'alias-unreadable', alias: 'Widgets' });
   });
 
+  // Stage 3c F3: browser bundlers resolve `buffer` / `punycode` to the npm polyfill the project declares.
+  it('a builtin name the nearest package.json declares resolves as that package; node: stays builtin', async () => {
+    const { projectRoot } = await copyGraphFixture(sandbox, 'index-files');
+    await writeProjectFile(projectRoot, 'package.json', '{ "name": "index-files", "dependencies": { "buffer": "6.0.3" } }\n');
+    await writeProjectFile(projectRoot, 'tools/package.json', '{ "name": "tools", "dependencies": { "punycode": "2.3.1" } }\n');
+    const ctx = await createResolverContext({ projectRoot, files: await walkProject({ projectRoot }) });
+    check(ctx, 'src/app.ts', 'buffer', { resolution: 'external', packageName: 'buffer', confidence: 'medium' });
+    check(ctx, 'src/app.ts', 'buffer/', { resolution: 'external', packageName: 'buffer' });
+    check(ctx, 'src/app.ts', 'node:buffer', { resolution: 'builtin', packageName: null });
+    check(ctx, 'src/app.ts', 'fs', { resolution: 'builtin', packageName: null });
+    // Nearest package.json decides: punycode is declared under tools/ only.
+    check(ctx, 'tools/x.js', 'punycode', { resolution: 'external', packageName: 'punycode' });
+    check(ctx, 'src/app.ts', 'punycode', { resolution: 'builtin', packageName: null });
+  });
+
   it('URL-like and invalid bare specifiers are unresolved, never attributed to a package', async () => {
     const { ctx } = await contextFor('index-files');
     check(ctx, 'src/app.ts', 'https://cdn.example.com/x.js', { resolution: 'unresolved', unresolvedReason: 'not-found', packageName: null });

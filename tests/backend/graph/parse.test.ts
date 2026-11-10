@@ -185,6 +185,96 @@ describe('babel parser adapter (3a.4)', () => {
     expect(p.exports).toEqual([]);
   });
 
+  // Stage 3c F1: `jsx` on a `.ts` file turns `<T>{…}` angle-bracket assertions into a hard parse error.
+  it.each(['src/hooks/useThing.ts', 'src/types/x.mts', 'src/types/x.cts', 'src/types/x.d.ts'])(
+    'parses angle-bracket type assertions in %s (no jsx plugin on TS-only files)',
+    (rel) => {
+      const src = [
+        "import { useMutation } from '@apollo/client';",
+        "import type { Vars } from './vars';",
+        'export const run = () => useMutation({',
+        '  variables: <Vars>{',
+        '    id: 1,',
+        '  },',
+        '});'
+      ].join('\n');
+      const p = parse(src, rel);
+      expect(p.parseError).toBeNull();
+      expect(p.imports.map((i) => i.specifier)).toEqual(['@apollo/client', './vars']);
+      expect(p.usages.map((u) => `${u.local}:${u.kind}`)).toContain('useMutation:call');
+    }
+  );
+
+  // Stage 3c F2: Babel scope throws on a TS type import merged with a same-named value
+  // (`import { Monaco }` + `const Monaco`), and traverse had no hub to build that error with.
+  it('keeps imports and exports of a file whose scope analysis fails (type import + same-named const)', () => {
+    const src = [
+      "import Editor, { loader, Monaco } from '@monaco-editor/react';",
+      "import { useTheme } from 'next-themes';",
+      "import { Flex } from '.';",
+      "export { Flex } from '.';",
+      "export { useTheme };",
+      'const Monaco = () => {',
+      '  const { theme } = useTheme();',
+      '  loader.config({});',
+      '  return <Editor theme={theme} />;',
+      '};',
+      'export default Monaco;'
+    ].join('\n');
+    const p = parse(src, 'components/Monaco.tsx');
+    expect(p.parseError).toMatch(/^scope analysis failed/);
+    expect(p.imports.map((i) => [i.specifier, i.kind])).toEqual([
+      ['@monaco-editor/react', 'static'],
+      ['next-themes', 'static'],
+      ['.', 'static'],
+      ['.', 'export-from']
+    ]);
+    expect(p.imports[0]!.bindings.map((b) => b.local)).toEqual(['Editor', 'loader', 'Monaco']);
+    // `export default Monaco` exports every meaning of the merged name (TS): the local const
+    // AND the imported package type. `export { useTheme }` re-exports the import.
+    expect(p.exports).toContain('default');
+    expect(p.reexports).toEqual([
+      { importIndex: 3, exported: 'Flex', imported: 'Flex' },
+      { importIndex: 1, exported: 'useTheme', imported: 'useTheme' },
+      { importIndex: 0, exported: 'default', imported: 'Monaco' }
+    ]);
+    expect(p.hasExports).toBe(true);
+    expect(p.usages).toEqual([]);
+  });
+
+  // Stage 3c F4 (OQ-3b-B3): TypeScript counts `declare module 'x'` inside a module as an import of x.
+  it('records module augmentations in module files as module-augmentation edges', () => {
+    const src = [
+      "import type { Theme } from '@mui/material/styles';",
+      "declare module '@mui/material/styles' {",
+      '  interface Palette { brand: string }',
+      '}',
+      "declare module '*.svg' {",
+      '  const url: string;',
+      '  export default url;',
+      '}',
+      'export {};'
+    ].join('\n');
+    const p = parse(src, 'src/theme-override.d.ts');
+    expect(p.parseError).toBeNull();
+    expect(p.imports.map((i) => [i.specifier, i.kind, i.line])).toEqual([
+      ['@mui/material/styles', 'type-only', 1],
+      ['@mui/material/styles', 'module-augmentation', 2]
+    ]);
+    expect(p.imports[1]!.snippet).toBe("declare module '@mui/material/styles' {");
+  });
+
+  it('an ambient `declare module` in a script file (no import/export) is a declaration, not an edge', () => {
+    const p = parse("declare module 'untyped-lib' {\n  export const x: number;\n}\n", 'src/global.d.ts');
+    expect(p.imports).toEqual([]);
+  });
+
+  it.each(['src/App.tsx', 'src/App.jsx', 'src/App.js'])('keeps JSX parsing for %s', (rel) => {
+    const p = parse("import Button from 'ui-kit';\nexport const App = () => <Button label=\"x\" />;\n", rel);
+    expect(p.parseError).toBeNull();
+    expect(p.usages.map((u) => `${u.local}:${u.kind}`)).toEqual(['Button:jsx']);
+  });
+
   it('parses the cjs-esm-mix fixture', async () => {
     const server = await parseFixture('cjs-esm-mix', 'src/server.js');
     expect(server.imports.map((i) => [i.specifier, i.kind])).toEqual([

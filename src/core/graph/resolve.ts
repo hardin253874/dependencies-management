@@ -25,7 +25,7 @@ import { jsConfigInfo } from './configFiles';
 import { isRecord, parseJsonc } from './jsonc';
 import { isInterpolatedStyleSpecifier } from './style';
 import { isEnvFileName, STYLE_EXTS, type WalkEntry } from './walk';
-import type { Confidence, EdgeKind, Resolution, UnresolvedReason } from './types';
+import { diagnosticOf, sortDiagnostics, type Confidence, type EdgeKind, type GraphDiagnostic, type Resolution, type UnresolvedReason } from './types';
 
 // oxc-resolver is a napi addon published as CommonJS; createRequire keeps the
 // load identical under Turbopack (serverExternalPackages), Vitest and vite-node.
@@ -72,6 +72,8 @@ export interface ResolverContext {
   readonly unreadableAliases: string[];
   /** package.json main/module/bin/exports targets that resolve to project files. */
   readonly entryPaths: string[];
+  /** Config files that exist but could not be read (3a QA m5); a missing file is not a diagnostic. */
+  readonly diagnostics: GraphDiagnostic[];
   resolve(req: ResolveRequest): ResolveOutcome;
 }
 
@@ -148,6 +150,7 @@ interface TsconfigInfo {
 export async function createResolverContext(opts: CreateResolverOptions): Promise<ResolverContext> {
   const root = path.resolve(opts.projectRoot);
   const read = new Map<string, string>(); // config key (POSIX rel or abs) → content
+  const diagnostics = new Map<string, GraphDiagnostic>();
 
   const readConfig = async (abs: string): Promise<string | null> => {
     if (isEnvFileName(path.basename(abs))) return null; // never, even for an odd extends value
@@ -158,7 +161,10 @@ export async function createResolverContext(opts: CreateResolverOptions): Promis
       const text = await fs.readFile(abs, 'utf8');
       read.set(key, text);
       return text;
-    } catch {
+    } catch (err) {
+      // Probing optional configs is normal; anything but "not there" means we resolved without it.
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') diagnostics.set(key, diagnosticOf('config', key, err));
       return null;
     }
   };
@@ -199,15 +205,21 @@ export async function createResolverContext(opts: CreateResolverOptions): Promis
   // Dependencies named by ANY package.json in the walk (nested apps that are not workspaces
   // included). Only used to keep a package name behind an unreadable alias.
   const knownPackages = new Set<string>(declared);
+  // Per directory with a package.json: what that manifest declares (nearest wins, like the TS truth).
+  const declaredByDir = new Map<string, ReadonlySet<string>>();
   for (const f of opts.files) {
     if (path.posix.basename(f.path) !== 'package.json' || f.skipReason !== null) continue;
     const text = await readConfig(f.absPath);
     const json = text === null ? null : parseJsonc(text);
-    if (!isRecord(json)) continue;
-    for (const k of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
-      const v = json[k];
-      if (isRecord(v)) for (const name of Object.keys(v)) knownPackages.add(name);
+    const names = new Set<string>();
+    if (isRecord(json)) {
+      for (const k of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+        const v = json[k];
+        if (isRecord(v)) for (const name of Object.keys(v)) names.add(name);
+      }
     }
+    for (const name of names) knownPackages.add(name);
+    declaredByDir.set(path.posix.dirname(f.path) === '.' ? '' : path.posix.dirname(f.path), names);
   }
 
   // ---- tsconfig / jsconfig per directory
@@ -218,7 +230,7 @@ export async function createResolverContext(opts: CreateResolverOptions): Promis
   tsFiles.sort((a, b) => path.posix.basename(a.path).localeCompare(path.posix.basename(b.path)) || a.path.localeCompare(b.path));
   for (const f of tsFiles) {
     const patterns: Array<[string, string]> = [];
-    await readTsconfigChain(f.absPath, root, readConfig, patterns, 0);
+    await readTsconfigChain(f.absPath, readConfig, patterns, 0);
     tsconfigByDir.set(path.posix.dirname(f.path) === '.' ? '' : path.posix.dirname(f.path), { configFile: f.absPath, pathPatterns: patterns });
   }
 
@@ -368,6 +380,17 @@ export async function createResolverContext(opts: CreateResolverOptions): Promis
     return outcome({ resolution: 'unresolved', unresolvedReason: outside ? 'outside-root' : 'not-found', confidence: 'low', alias });
   };
 
+  /**
+   * Stage 3c F3: a bare builtin name (`buffer`, `punycode`, `events`) that the
+   * nearest package.json declares is the npm package — browser bundlers
+   * resolve it to that polyfill. `node:` specifiers are always builtins.
+   */
+  const declaresPolyfill = (fromFile: string, spec: string): boolean => {
+    if (spec.startsWith('node:')) return false;
+    const pkg = packageNameFromSpecifier(spec);
+    return pkg !== null && nearest(declaredByDir, fromFile)?.has(pkg) === true;
+  };
+
   const resolve = (req: ResolveRequest): ResolveOutcome => {
     // Bundler query suffixes (`./icon.svg?react`, `./x.css?inline`) are not part of the path.
     const spec = req.specifier === null ? null : stripQuery(req.specifier);
@@ -375,7 +398,7 @@ export async function createResolverContext(opts: CreateResolverOptions): Promis
       return outcome({ resolution: 'unresolved', unresolvedReason: 'dynamic-expression', confidence: 'low' });
     }
     if (req.kind === 'style-import') return resolveStyle(req.fromFile, spec);
-    if (isBuiltin(spec)) return outcome({ resolution: 'builtin', confidence: 'high' });
+    if (isBuiltin(spec) && !declaresPolyfill(req.fromFile, spec)) return outcome({ resolution: 'builtin', confidence: 'high' });
     if (URL_LIKE_RE.test(spec) && !path.isAbsolute(spec)) {
       return outcome({ resolution: 'unresolved', unresolvedReason: 'not-found', confidence: 'low' });
     }
@@ -455,6 +478,7 @@ export async function createResolverContext(opts: CreateResolverOptions): Promis
     workspaces,
     unreadableAliases,
     entryPaths: sortedUnique(entryPaths),
+    diagnostics: sortDiagnostics([...diagnostics.values()]),
     resolve
   };
 }
@@ -496,10 +520,14 @@ function expandWorkspacePatterns(patterns: readonly string[], files: readonly Wa
   return [...out].sort();
 }
 
-/** Follows `extends` (relative and package) within the project to hash what oxc reads and collect `paths`. */
+/**
+ * Follows `extends` (relative and package) to hash what oxc reads and collect
+ * `paths`. Targets outside the project root are followed too (read-only, like
+ * oxc itself): a sub-project tsconfig extending `../../tsconfig.base.json` must
+ * re-resolve when that base changes (Stage 3c, 3a QA m3b).
+ */
 async function readTsconfigChain(
   abs: string,
-  root: string,
   readConfig: (abs: string) => Promise<string | null>,
   patterns: Array<[string, string]>,
   depth: number
@@ -519,27 +547,28 @@ async function readTsconfigChain(
   const ext = json.extends;
   const list = typeof ext === 'string' ? [ext] : Array.isArray(ext) ? ext.filter((x): x is string => typeof x === 'string') : [];
   for (const e of list) {
-    const target = locateExtends(e, path.dirname(abs), root);
-    if (target !== null) await readTsconfigChain(target, root, readConfig, patterns, depth + 1);
+    const target = locateExtends(e, path.dirname(abs));
+    if (target !== null) await readTsconfigChain(target, readConfig, patterns, depth + 1);
   }
 }
 
-function locateExtends(spec: string, fromDir: string, root: string): string | null {
+function locateExtends(spec: string, fromDir: string): string | null {
   const candidates: string[] = [];
   if (spec.startsWith('.') || path.isAbsolute(spec)) {
     const p = path.resolve(fromDir, spec);
     candidates.push(p, `${p}.json`);
   } else {
+    // Every ancestor's node_modules, as tsc and oxc look (hoisted monorepo bases sit above the root).
     let dir = fromDir;
     for (;;) {
       const base = path.join(dir, 'node_modules', spec);
       candidates.push(base, `${base}.json`, path.join(base, 'tsconfig.json'));
-      if (relInside(root, dir) === '' || path.dirname(dir) === dir) break;
+      if (path.dirname(dir) === dir) break;
       dir = path.dirname(dir);
     }
   }
   for (const c of candidates) {
-    if (relInside(root, c) === null) continue;
+    if (isEnvFileName(path.basename(c))) continue;
     try {
       if (statSync(c).isFile()) return c;
     } catch {
