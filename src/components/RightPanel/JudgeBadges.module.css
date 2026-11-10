@@ -1,0 +1,27 @@
+.routing {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.supportLow,
+.supportUnclear,
+.jevLabel {
+  display: inline-flex;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  margin-left: var(--space-2);
+  background: var(--color-surface-active);
+  color: var(--color-text-secondary);
+}
+
+.supportLow {
+  color: var(--color-text-primary);
+  border: var(--border-width-thin) solid var(--color-border);
+  font-weight: 600;
+}
+
+.jevLabel {
+  font-style: italic;
+}

@@ -68,8 +68,16 @@ export function apiDiffSeedLines(diff: ApiDiffResult | null): string[] {
     `removed exports: ${names(diff.removed)}`,
     `signature-changed exports: ${names(diff.signatureChanged)}`,
     `added exports: ${diff.added.length}`,
+    // v2 Stage 5b J4: only Jev candidates are listed (absent when J4 is off → seed unchanged).
+    ...jevRenameLines(diff),
     'call api_diff for the usage sites of each removed / changed export'
   ];
+}
+
+function jevRenameLines(diff: Extract<ApiDiffResult, { status: 'ok' }>): string[] {
+  const jev = diff.renamedCandidate.filter((c): c is Extract<typeof c, { source: 'jev' }> => 'source' in c && c.source === 'jev');
+  if (jev.length === 0) return [];
+  return [`likely renames (Jev, check before relying on them): ${jev.slice(0, API_DIFF_NAMES_IN_SEED).map((c) => `${c.from} → ${c.to} (${c.confidence.toFixed(2)})`).join(', ')}`];
 }
 
 /**

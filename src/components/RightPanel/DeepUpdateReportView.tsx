@@ -1,5 +1,6 @@
 'use client';
 
+import { RoutingLine } from './JudgeBadges';
 import type { JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, getApiClient } from '@/lib/client/api-client';
@@ -332,6 +333,8 @@ export function DeepUpdateReportView({
           </ol>
         </section>
       )}
+
+      <RoutingLine routing={detail.routing ?? null} />
 
       <ExplorationTrace run={detail.agentRun} />
 

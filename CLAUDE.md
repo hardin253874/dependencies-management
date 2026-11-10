@@ -14,7 +14,7 @@ Project-specific instructions for the Dependencies Management Agent. Read this i
 
 A locally-run AI-augmented agent that scans, analyses, and reviews dependencies of legacy JS/TS projects. Next.js 16.4 App Router + React 19.3 (Route Handlers, not Server Actions; Turbopack for dev and build since v2 Stage 2). Server binds 127.0.0.1 only. Six right-panel views per dep ([A]–[E] + [D-Deep]). Cache-first design: every view reads its persisted envelope first; LLM calls happen only on explicit user action. The agent is **read-only against target projects** — all writes go to `library/`.
 
-Test baseline (2026-11-10, after v2 Stage 5a): 1214 passed / 5 skipped across 163 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
+Test baseline (2026-11-10, after v2 Stage 5b): 1351 passed / 5 skipped across 172 files (~10 s wall; the 4 extra skips are the `GRAPH_PERF=1`-gated perf budgets). Typecheck + lint must be clean before any commit.
 
 ## Commands
 
@@ -74,6 +74,21 @@ Design contract: `Plans/V2_STAGE4_SPEC.md` §2–§3 + `Plans/V2_AI_OVER_GRAPH.m
 - **Impacted files = graph base set + agent overlay (5a)**: the [D] detail's `impactedFiles` start from `core/agent/impactBase.ts` `impactBaseSet` (the v2-graph rule; also on the `deterministic-partial` envelope); the agent ranks/adds via `filesToModify` and excludes via the required `excludeFiles` terminal field, valid only for base files it `read_file`d in the run (`readPaths` on the run result/record). The agent terminal schema is `AGENT_UPDATE_REPORT_TOOL_SCHEMA` (v1 schema spread + `excludeFiles`); never edit v1 `UPDATE_REPORT_TOOL_SCHEMA` for agent needs. Scripted `submit_update_report` inputs must include `excludeFiles` (may be `[]`). Eval `v2-agent` scores the full set, `v2-agent:subset` the agent's pick. Details: `src/core/agent/README.md`.
 - **Confirm before every run**: `AgentRunConfirmModal` (GET `…/reports|deep-reports/…/cost-estimate`: expected + `maxUsd`) gates every [D] / [D-Deep] Generate/Regenerate.
 
+## Jev judge + model router (v2 Stage 5b) — `src/core/judge`, `src/core/llm/router.ts`, `src/lib/judge`
+
+Design contract: `Plans/V2_STAGE5_SPEC.md` §4 (5b) + the J1–J8 table and D28 in `Plans/V2_UPGRADE_PLAN.md`; module map in `src/core/judge/README.md`; user docs in `README.md` ("Jev (TypeSafe) — optional"). The rules that bite:
+
+- **One path to TypeSafe:** `Judge.ask` / `tryAsk` (`core/judge/judge.ts`) = privacy guard → cache → client. The J helpers (`core/judge/uses.ts`) and the router go through it; nothing else constructs `TypeSafeClient`. `tryAsk` never throws: a refusal / outage returns `{ ok: false }` and the caller keeps today's behaviour (a Jev failure never blocks a view, never an error toast). Per-item loops (J1–J4, J7 across advisories) share the context's `JudgeBreaker`: first outage → no more requests for that use in the job; all requests of one use together stay within `JEV_USE_DEADLINE_MS` (10 s). Never add a J loop that bypasses `askOnce`.
+- **Payloads are built by class** (`core/judge/payload.ts`): `metadataPayload` accepts only numbers, booleans, fixed enums, npm names, semver, ISO dates (anything else throws `JudgePrivacyError`); `publicTextPayload` / `sourcePayload` cap sizes (snippet 40 lines / 2 KB, request ≤ 48k bound). `USE_CLASS` is the plan's "data sent" column; J2 on the [D] report reads evidence only for `filesToModify` paths in the graph file set / usage set (`reportEvidenceAllowedFiles`) that pass `pathGuard` (v1 paths are raw LLM output). `assertAllowed` refuses a wider class, a switch that is off, `judge: 'off'` projects, private eval cases, and **every use for a private or not-set (`privacy` missing = private, D30) project** except J1–J3 with the explicit `judgeSourceOptIn` (stricter than spec 5b.9; see the 5b dev notes).
+- **Client options are all explicit** (D31): key, base URL, `defaultModel: 'jev-1.14.0'`, `logLevel: 'error'` + a body-free logger, `retry.maxRetries: 0`, `timeout`, `compression: false`. The SDK only reads `TYPESAFE_*` env vars for omitted options (checked in the installed `dist`). Router calls time out at 3 s.
+- **Jev ledger, HARD $0.50** (`core/judge/ledger.ts`, `JEV_CAP_USD` code constant): reserve (UTF-8 bytes of the request × price × 1.1) before every real request, settle from `usage.input_tokens`; app `library/_spend/jev-round1.json` (opened per operation), eval `%LOCALAPPDATA%\dep-agent-eval\_spend\jev-round1.json` (held for the session). `src/core/spend/**` is frozen for Stage 5: never edit it for Jev.
+- **Cache** `library/_judge/<sha256>.json` (key = use + model + state + questions + `JUDGE_PROMPT_VERSION`; bump it when a question text or builder output changes). Errors are never cached; same-key calls share one request (in-flight map on the cache instance).
+- **Switches:** `_config.json` `judge: { enabled, router, flags: { J1…J8 } }`, all default false (`migrateConfig` fills them silently). `judgeContextFor(slug, config, use)` returns `null` when a switch is off: the call site then runs today's code path exactly (tests assert byte-identical output). Only user-triggered jobs take a judge context; a GET never does (`judgeContextCount` spy test).
+- **Router** (`core/llm/router.ts`, D28 proposed): `routeRules` (pure) → Jev for unclear → configured model on anything else. `resolveModel` (`llm/factory.ts`) with `judge.router: false` returns the configured model and the job adds no `routing` field (requests unchanged). Cost-estimate GETs route with rules only (`estimateRouting`, `allowJudge: false`). Budgets derive from the routed model.
+- **Project settings** live on `project.json` (`privacy`, `judge`, `judgeSourceOptIn`), written by `PATCH /api/projects/:slug` through the canonical writer (it holds project.json in memory); rescan / relocate carry them over (`judgeSettingsOf`).
+- **Tests:** `MockJudgeClient` (`core/judge/mock.ts`, fixtures `test-fixtures/judge/<use>.json`, `MOCK_LLM=true` uses it too); pin one with `setJudgeClientOverride` and reset it to `null` in `afterEach`. No test may reach TypeSafe.
+- **Eval:** `real.ts` stays the only eval file with a real client (`loadTypesafeKey` takes only `TYPESAFE_API_KEY`, `createRealJudgeClient`); other eval files may import `core/judge/client` as `import type` only (guard in `predict-v1.test.ts`). `eval router-arms` is offline (never calls Claude); `eval judge` is mock by default and refuses private cases. `eval judge --use router --opus/--sonnet/--haiku …` is the producer of the router Jev answers: it asks only the rule-unclear phases (≤ 5) through `routeModel` + `JudgeCache`, real answers under `<evalCache>/_judge`, mock under `<evalCache>/_judge-mock`; pass that dir to `router-arms --jev-cache`.
+
 ## MCP server (v2 Stage 4b) — `src/mcp`
 
 Design contract: `Plans/V2_STAGE4_SPEC.md` §4 + `Plans/V2_AI_OVER_GRAPH.md` §5; user setup in `README.md` ("MCP server"). The rules that bite:
@@ -126,7 +141,7 @@ function getMyThing(): MyThing {
 
 If you `grep "^const [A-Z_]*\s*=\s*new (Map|Set)\(" src/lib/` and find a non-readonly hit in `src/lib/`, that's a flag. Same for `^let \w+` at module top level (read-only `let env = …` after first call is OK; mutable singletons are not).
 
-Currently-pinned singletons: `JobQueue`, CSRF token, logger state, project locks, orphan cache, graph readers (`__DEP_AGENT_GRAPH_READERS__`, `lib/graph/readerCache.ts`), LLM client cache + its config signature (`__DEP_AGENT_LLM_SIGNATURE__`, `llm/factory.ts`), LLM concurrency limiters (`__DEP_AGENT_LLM_LIMITS__`), canonical-writer STATES, and the test-only agent overrides (`__DEP_AGENT_AGENT_MODEL_OVERRIDE__` in `lib/agent/factory.ts`, `__DEP_AGENT_AGENT_INTEL_OVERRIDE__` in `lib/agent/intel.ts`).
+Currently-pinned singletons: `JobQueue`, CSRF token, logger state, project locks, orphan cache, graph readers (`__DEP_AGENT_GRAPH_READERS__`, `lib/graph/readerCache.ts`), LLM client cache + its config signature (`__DEP_AGENT_LLM_SIGNATURE__`, `llm/factory.ts`), LLM concurrency limiters (`__DEP_AGENT_LLM_LIMITS__`), canonical-writer STATES, the test-only agent overrides (`__DEP_AGENT_AGENT_MODEL_OVERRIDE__` in `lib/agent/factory.ts`, `__DEP_AGENT_AGENT_INTEL_OVERRIDE__` in `lib/agent/intel.ts`), and the Jev wiring in `lib/judge/factory.ts` (`__DEP_AGENT_JUDGE_CACHES__` and `__DEP_AGENT_JEV_GATES__` keyed by path, the test-only `__DEP_AGENT_JUDGE_CLIENT_OVERRIDE__`, and the `__DEP_AGENT_JUDGE_ASKS__` spy counter).
 
 Guards: `tests/backend/invariant.singletons.test.ts` (in `npm test`) fails on any top-level `let`/`var` or `const X = new Map|Set|…` in `src/lib/**` (minus `src/lib/client/`) and `src/core/**` (no allowlist entries allowed there) that is not in its allowlist with a reason. `tests/e2e/invariant.cross-route-singleton.spec.ts` checks at runtime that the CSRF token from `/api/csrf` is accepted by `PATCH /api/config`. Measured on Next 16.4: only webpack dev splits modules per route; Turbopack dev and production builds share one instance. So the rule still holds (`--webpack` is one flag away), but the e2e spec can only catch a regression under `next dev --webpack`. The static guard catches it with any bundler.
 
@@ -280,7 +295,7 @@ These are the bugs that have actually shipped in this repo. Each one is here bec
 ```bash
 npm run typecheck   # tsc --noEmit — must be clean
 npm run lint        # ESLint — must be clean
-npm test            # Full Vitest suite — must match current baseline (1214 pass / 5 skipped)
+npm test            # Full Vitest suite — must match current baseline (1351 pass / 5 skipped)
 ```
 
 ### When you change a route

@@ -6,17 +6,19 @@ import { readJson, pathExists } from '../storage/atomic';
 import { projectJsonPath } from '../paths';
 import type { ProjectSummary } from '../api-types';
 import type { ProjectRegistryEntry } from '../storage/projects';
-import type { ProjectJson } from './add';
+import { judgeSettingsOf, type ProjectJson } from './add';
 
 export async function buildSummary(entry: ProjectRegistryEntry): Promise<ProjectSummary> {
   let depCount = 0;
   let lastScanAt: string | null = null;
+  let judge: Pick<ProjectSummary, 'privacy' | 'judge' | 'judgeSourceOptIn'> = {};
   const fp = projectJsonPath(entry.slug);
   if (await pathExists(fp)) {
     try {
       const pj = await readJson<ProjectJson>(fp);
       depCount = pj.dependencies.length;
       lastScanAt = pj.lastFullScanAt ?? null;
+      judge = judgeSettingsOf(pj);
     } catch {
       // corrupt project.json — treat as no scan data yet
     }
@@ -30,7 +32,8 @@ export async function buildSummary(entry: ProjectRegistryEntry): Promise<Project
     depCount,
     lastScanAt,
     pathExists: exists,
-    orphan: !exists
+    orphan: !exists,
+    ...judge
   };
 }
 

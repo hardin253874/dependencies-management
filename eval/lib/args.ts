@@ -75,7 +75,31 @@ export type ParsedCommand =
       refreshTruth: boolean;
     } & CorpusPaths)
   | ({ command: 'score-findings'; resultsPath: string } & CorpusPaths)
-  | { command: 'compare'; a: string; b: string };
+  | { command: 'compare'; a: string; b: string }
+  | ({
+      command: 'router-arms';
+      label: string;
+      opus: string;
+      sonnet: string;
+      haiku: string;
+      jevCache?: string;
+      configuredModel?: string;
+    } & CorpusPaths)
+  | ({
+      command: 'judge';
+      label: string;
+      use: string;
+      cases?: string[];
+      /** `--use router` only: the three per-model v2-agent result files (as for router-arms). */
+      opus?: string;
+      sonnet?: string;
+      haiku?: string;
+      configuredModel?: string;
+      cacheDir?: string;
+      offline: boolean;
+      real: boolean;
+      stopAtUsd?: number;
+    } & CorpusPaths);
 
 export const HELP_TEXT = `Usage: npm run eval -- <command> [options]
 
@@ -101,6 +125,18 @@ Commands:
                   Merge the hand-filled findings sheet into the results file.
   compare         <a.json> <b.json>
                   Print a Markdown delta table.
+  router-arms     --opus <result> --sonnet <result> --haiku <result> --label <label>
+                  [--jev-cache <dir>] [--configured-model <id>]
+                  Offline D28 router arms (always-Opus, always-Sonnet, rules-only, rules+Jev)
+                  from per-model v2-agent results; never calls Claude.
+  judge           --use J1|J2|J3|J4|J5|J6|J7|J8 --label <label> [--cases id,id]
+                  [--cache-dir <dir>] [--offline] [--real [--stop-at-usd <n>]]
+                  Jev judgment measurement (mock by default; --real = TypeSafe through the
+                  Jev ledger, HARD $0.50 cap in code; public cases only).
+                  --use router --opus <result> --sonnet <result> --haiku <result>
+                  [--configured-model <id>]: asks Jev only for the phases the router rules
+                  leave unclear (max 5 requests) and caches the answers under
+                  <evalCache>/_judge (mock: _judge-mock) for router-arms --jev-cache.
 
 Exit codes: 0 ok · 1 usage/validation error · 2 results written with case errors.
 `;
@@ -112,7 +148,9 @@ const VALUE_FLAGS: Record<string, readonly string[]> = {
   run: ['label', 'cases', 'cache-dir', 'predictor', 'corpus', 'local', 'model', 'effort', 'budget', 'playbooks', 'mock-script', 'stop-at-usd'],
   graph: ['label', 'cases', 'cache-dir', 'packages', 'corpus', 'local'],
   'score-findings': ['corpus', 'local'],
-  compare: []
+  compare: [],
+  'router-arms': ['label', 'opus', 'sonnet', 'haiku', 'jev-cache', 'configured-model', 'corpus'],
+  judge: ['label', 'use', 'cases', 'cache-dir', 'corpus', 'stop-at-usd', 'opus', 'sonnet', 'haiku', 'configured-model']
 };
 const BOOL_FLAGS: Record<string, readonly string[]> = {
   validate: [],
@@ -120,7 +158,9 @@ const BOOL_FLAGS: Record<string, readonly string[]> = {
   run: ['offline', 'mock-llm', 'real'],
   graph: ['offline', 'refresh-truth'],
   'score-findings': [],
-  compare: []
+  compare: [],
+  'router-arms': [],
+  judge: ['offline', 'real']
 };
 
 interface RawArgs {
@@ -334,6 +374,65 @@ export function parseArgs(argv: string[]): ParsedCommand {
     case 'compare': {
       if (raw.positionals.length !== 2) throw new UsageError('"compare" needs exactly two files: <a.json> <b.json>');
       return { command, a: raw.positionals[0] as string, b: raw.positionals[1] as string };
+    }
+    case 'router-arms': {
+      noPositionals(raw, command);
+      const out: ParsedCommand = {
+        command,
+        label: labelOf(raw, command),
+        opus: required(raw, 'opus', command),
+        sonnet: required(raw, 'sonnet', command),
+        haiku: required(raw, 'haiku', command),
+        ...corpusPaths(raw)
+      };
+      const jevCache = str(raw, 'jev-cache');
+      if (jevCache !== undefined) out.jevCache = jevCache;
+      const configured = str(raw, 'configured-model');
+      if (configured !== undefined) {
+        if (!/^[a-z0-9][a-z0-9.-]{1,63}$/.test(configured)) throw new UsageError(`invalid --configured-model "${configured}"`);
+        out.configuredModel = configured;
+      }
+      return out;
+    }
+    case 'judge': {
+      noPositionals(raw, command);
+      const use = required(raw, 'use', command);
+      if (!/^J[1-8]$/.test(use) && use !== 'router') throw new UsageError(`unknown --use "${use}" (known: J1-J8, router)`);
+      const out: ParsedCommand = {
+        command,
+        label: labelOf(raw, command),
+        use,
+        offline: raw.flags.get('offline') === true,
+        real: raw.flags.get('real') === true,
+        ...corpusPaths(raw)
+      };
+      const cases = caseIds(raw);
+      if (cases !== undefined) out.cases = cases;
+      const cacheDir = str(raw, 'cache-dir');
+      if (cacheDir !== undefined) out.cacheDir = cacheDir;
+      const stopAt = str(raw, 'stop-at-usd');
+      if (stopAt !== undefined) {
+        if (!out.real) throw new UsageError('--stop-at-usd only applies with --real');
+        const n = Number(stopAt);
+        if (!/^\d+(\.\d+)?$/.test(stopAt) || !Number.isFinite(n) || n <= 0) throw new UsageError(`invalid --stop-at-usd "${stopAt}" (a positive dollar amount)`);
+        out.stopAtUsd = n;
+      }
+      const files = { opus: str(raw, 'opus'), sonnet: str(raw, 'sonnet'), haiku: str(raw, 'haiku') };
+      const configured = str(raw, 'configured-model');
+      if (use === 'router') {
+        out.opus = required(raw, 'opus', command);
+        out.sonnet = required(raw, 'sonnet', command);
+        out.haiku = required(raw, 'haiku', command);
+        if (configured !== undefined) {
+          if (!/^[a-z0-9][a-z0-9.-]{1,63}$/.test(configured)) throw new UsageError(`invalid --configured-model "${configured}"`);
+          out.configuredModel = configured;
+        }
+      } else if (Object.values(files).some((f) => f !== undefined) || configured !== undefined) {
+        throw new UsageError('--opus/--sonnet/--haiku/--configured-model only apply with --use router');
+      }
+      // Privacy: the private corpus never feeds Jev, mock or real.
+      if (raw.flags.has('local')) throw new UsageError('judge cannot be combined with --local (private cases never run Jev judgments)');
+      return out;
     }
     default:
       throw new UsageError(`unknown command "${command}"`);

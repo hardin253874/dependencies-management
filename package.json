@@ -26,6 +26,7 @@
     "@babel/types": "7.24.7",
     "@modelcontextprotocol/server": "2.4.0",
     "@npmcli/arborist": "10.0.4",
+    "@typesafe-ai/sdk": "0.7.0",
     "@yarnpkg/lockfile": "1.1.0",
     "@yarnpkg/parsers": "3.0.0",
     "ignore": "5.3.1",

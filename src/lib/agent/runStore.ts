@@ -15,7 +15,7 @@ import { runFilePath } from '../paths';
 import { readEnvelope, writeEnvelope, type Envelope } from '../storage/envelope';
 import type { AgentBudgets, AgentRunStatus, AgentTrace, AgentUsage, BudgetName, StopDetail } from '../../core/agent/loop';
 import type { LlmEffort } from '../llm/effort';
-import type { ImpactSummary } from '../api-types';
+import type { ImpactSummary, RouterDecisionDto } from '../api-types';
 
 export const RUN_TRIGGERS = ['user'] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
@@ -49,6 +49,8 @@ export interface AgentRunRecord {
   readPaths?: string[];
   /** v2 Stage 5a.5: base impacted set + agent overlay counts ([D] only). Optional: older records lack it. */
   impactSummary?: ImpactSummary;
+  /** v2 Stage 5b.8: model routing of the run (absent when the router is off / older records). */
+  routing?: RouterDecisionDto;
 }
 
 const RUN_ID_RE = /^[a-z0-9][a-z0-9-]{5,63}$/;

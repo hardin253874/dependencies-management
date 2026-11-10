@@ -16,6 +16,7 @@
  * or view [D]'s typography / spacing.
  */
 import type { JSX } from 'react';
+import { JevLabel } from './JudgeBadges';
 import type {
   RelatedDepUpgradeRecommendation,
   RelatedUpgradeDetail
@@ -117,6 +118,7 @@ function RelatedUpgradeRow({
       </td>
       <td>
         <span className={`${classNames.actionPill} ${actionClass}`}>{rec.action}</span>
+        {rec.suggestedBy === 'jev' && <JevLabel text="suggested (Jev)" />}
         <span className={classNames.confidence}>({rec.confidence})</span>
       </td>
       <td>{rec.suggestedVersion === null ? '—' : <code>{rec.suggestedVersion}</code>}</td>

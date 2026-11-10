@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "label": "synthetic-haiku",
+  "generatedAt": "2026-11-10T00:00:00.000Z",
+  "predictor": "v2-agent",
+  "tool": {
+    "commit": "synthetic",
+    "dirty": false
+  },
+  "visibility": "public",
+  "cases": [
+    {
+      "id": "synthetic-major",
+      "tags": [
+        "complex"
+      ],
+      "status": "ok",
+      "filesScanned": 1000,
+      "durationMs": 1,
+      "costUsd": 0.02,
+      "phases": [
+        {
+          "id": "p1",
+          "packages": [
+            "pkg"
+          ],
+          "tags": [
+            "complex"
+          ],
+          "truthCount": 100,
+          "predictedCount": 120,
+          "tp": 80,
+          "precision": 0.6666666666666666,
+          "recall": 0.8,
+          "recallByKind": {
+            "source": null,
+            "config": null,
+            "style": null
+          },
+          "falseNegatives": [],
+          "falsePositivesCount": 40,
+          "falsePositivesSample": [],
+          "addedCount": 0,
+          "droppedCounts": {},
+          "outOfScope": [],
+          "agent": {
+            "status": "submitted",
+            "runs": 1,
+            "toolCalls": 5,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "cacheReadTokens": 0,
+            "costUsd": 0.02,
+            "hallucinatedPaths": 0,
+            "durationMs": 1,
+            "subset": {
+              "predictedCount": 30,
+              "tp": 10,
+              "precision": 0.3333333333333333,
+              "recall": 0.1
+            },
+            "impact": {
+              "base": 300,
+              "confirmed": 10,
+              "added": 0,
+              "excluded": 0,
+              "rejectedExclusions": 0,
+              "excludedTruePositives": 0
+            }
+          }
+        }
+      ],
+      "findings": null
+    },
+    {
+      "id": "synthetic-patch",
+      "tags": [
+        "control"
+      ],
+      "status": "ok",
+      "filesScanned": 1000,
+      "durationMs": 1,
+      "costUsd": 0.005,
+      "phases": [
+        {
+          "id": "p1",
+          "packages": [
+            "pkg"
+          ],
+          "tags": [
+            "control"
+          ],
+          "truthCount": 10,
+          "predictedCount": 10,
+          "tp": 9,
+          "precision": 0.9,
+          "recall": 0.9,
+          "recallByKind": {
+            "source": null,
+            "config": null,
+            "style": null
+          },
+          "falseNegatives": [],
+          "falsePositivesCount": 1,
+          "falsePositivesSample": [],
+          "addedCount": 0,
+          "droppedCounts": {},
+          "outOfScope": [],
+          "agent": {
+            "status": "submitted",
+            "runs": 1,
+            "toolCalls": 5,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "cacheReadTokens": 0,
+            "costUsd": 0.005,
+            "hallucinatedPaths": 0,
+            "durationMs": 1,
+            "subset": {
+              "predictedCount": 6,
+              "tp": 4,
+              "precision": 0.6666666666666666,
+              "recall": 0.4
+            },
+            "impact": {
+              "base": 10,
+              "confirmed": 4,
+              "added": 0,
+              "excluded": 0,
+              "rejectedExclusions": 0,
+              "excludedTruePositives": 0
+            }
+          }
+        }
+      ],
+      "findings": null
+    },
+    {
+      "id": "synthetic-minor",
+      "tags": [
+        "complex"
+      ],
+      "status": "ok",
+      "filesScanned": 1000,
+      "durationMs": 1,
+      "costUsd": 0.015,
+      "phases": [
+        {
+          "id": "p1",
+          "packages": [
+            "pkg"
+          ],
+          "tags": [
+            "complex"
+          ],
+          "truthCount": 50,
+          "predictedCount": 60,
+          "tp": 40,
+          "precision": 0.6666666666666666,
+          "recall": 0.8,
+          "recallByKind": {
+            "source": null,
+            "config": null,
+            "style": null
+          },
+          "falseNegatives": [],
+          "falsePositivesCount": 20,
+          "falsePositivesSample": [],
+          "addedCount": 0,
+          "droppedCounts": {},
+          "outOfScope": [],
+          "agent": {
+            "status": "submitted",
+            "runs": 1,
+            "toolCalls": 5,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "cacheReadTokens": 0,
+            "costUsd": 0.015,
+            "hallucinatedPaths": 0,
+            "durationMs": 1,
+            "subset": {
+              "predictedCount": 25,
+              "tp": 10,
+              "precision": 0.4,
+              "recall": 0.2
+            },
+            "impact": {
+              "base": 50,
+              "confirmed": 10,
+              "added": 0,
+              "excluded": 0,
+              "rejectedExclusions": 0,
+              "excludedTruePositives": 0
+            }
+          }
+        }
+      ],
+      "findings": null
+    }
+  ],
+  "aggregate": {
+    "micro": {
+      "precision": null,
+      "recall": null
+    },
+    "macro": {
+      "precision": null,
+      "recall": null
+    },
+    "byTag": {},
+    "errors": 0
+  }
+}

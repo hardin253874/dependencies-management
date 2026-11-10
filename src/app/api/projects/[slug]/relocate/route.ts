@@ -13,10 +13,10 @@ import { findBySlug, updateProject } from '@/lib/storage/projects';
 import { validateProjectPath } from '@/lib/projects/validate';
 import { readPackageJson } from '@/lib/scanners/packageJson';
 import { detectLockfile, parseLockfile } from '@/lib/scanners/lockfile';
-import { atomicWriteJson } from '@/lib/storage/atomic';
+import { atomicWriteJson, readJson } from '@/lib/storage/atomic';
 import { projectJsonPath } from '@/lib/paths';
 import { buildSummary } from '@/lib/projects/summary';
-import type { ProjectJson, ProjectDependency } from '@/lib/projects/add';
+import { judgeSettingsOf, type ProjectJson, type ProjectDependency } from '@/lib/projects/add';
 import type { RelocateRequest } from '@/lib/api-types';
 import path from 'path';
 
@@ -88,7 +88,10 @@ export const PATCH = withCsrf<RouteCtx<{ slug: string }>>(async (req, ctx) => {
       a.section === b.section ? a.name.localeCompare(b.name) : a.section.localeCompare(b.section)
     );
 
+    // v2 Stage 5b: the user's Jev / privacy settings survive the rewrite (losing them would silently re-mark a public project private).
+    const previous = await readJson<ProjectJson>(projectJsonPath(slug)).catch(() => null);
     const projectJson: ProjectJson = {
+      ...judgeSettingsOf(previous),
       schemaVersion: 1,
       name: updated.name,
       path: updated.absolutePath,

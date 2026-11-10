@@ -1,6 +1,7 @@
 'use client';
 
 import type { JSX } from 'react';
+import { JevLabel, SupportBadge } from './JudgeBadges';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getApiClient } from '@/lib/client/api-client';
 import type {
@@ -504,6 +505,7 @@ function DependencyDetailBody({
                   {cve.severity}
                 </span>
                 <span className={styles.cveId}>{cve.id}</span>
+                {cve.severity === 'unknown' && cve.severityEstimated !== undefined && <JevLabel text={`estimated ${cve.severityEstimated} (Jev)`} />}
                 <p className={styles.cveSummary}>{cve.summary}</p>
               </li>
             ))}
@@ -984,6 +986,8 @@ function CveImpactRowView({ row }: { row: CveImpactRow }): JSX.Element {
           {verdictLabel}
         </span>
         <span className={styles.confidence}>({row.confidence})</span>
+        {row.estimatedBy === 'jev' && <JevLabel text="estimated (Jev)" />}
+        <SupportBadge support={row.support ?? null} />
       </div>
       {row.reasoning !== '' && (
         <p className={styles.cveImpactReasoning}>{row.reasoning}</p>

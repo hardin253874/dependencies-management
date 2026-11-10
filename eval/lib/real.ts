@@ -18,6 +18,9 @@
  * never its value.
  *
  * Every real client goes through the spend gate and has `maxRetries: 0`.
+ * v2 Stage 5b: the same file holds the TypeSafe (Jev) key loader and the
+ * real judge client (bottom of the file); it stays the only eval file allowed
+ * a real client.
  */
 import { promises as fs } from 'fs';
 import { parseEnv } from 'util';
@@ -30,6 +33,8 @@ import type { AgentModel, AgentTurnRequest } from '../../src/core/agent/model';
 import type { SpendGate } from '../../src/core/agent/loop';
 import { SpendGuard } from '../../src/core/spend/gate';
 import { SpendLedger } from '../../src/core/spend/ledger';
+import { TypeSafeJudgeClient } from '../../src/core/judge/client';
+import type { JevSpendGate } from '../../src/core/judge/ledger';
 import { isLocalPath } from './corpus';
 import type { LoadedCase, SpendInfo } from './types';
 
@@ -223,4 +228,49 @@ export async function startRealSession(opts: {
       await ledger.close();
     }
   };
+}
+
+// ---------------------------------------------------------------------------
+// v2 Stage 5b.2: TypeSafe (Jev) key + real judge client. Same rules as the
+// Anthropic key: parsed in code from `.env` with `util.parseEnv`, taking ONLY
+// `TYPESAFE_API_KEY`; an environment value wins; never logged or persisted.
+// Every real Jev request passes the Jev ledger (`src/core/judge/ledger.ts`,
+// HARD $0.50) via `TypeSafeJudgeClient`. Not executed in 5b (mock only).
+// ---------------------------------------------------------------------------
+
+export const TYPESAFE_KEY_VAR = 'TYPESAFE_API_KEY';
+
+export class MissingTypesafeKeyError extends Error {
+  constructor(where: string) {
+    super(`${TYPESAFE_KEY_VAR} is not set (looked in the environment and ${where}); real Jev runs need it`);
+    this.name = 'MissingTypesafeKeyError';
+  }
+}
+
+export async function loadTypesafeKey(envFile: string, env: Readonly<Record<string, string | undefined>> = process.env): Promise<string> {
+  const fromEnv = env[TYPESAFE_KEY_VAR];
+  if (typeof fromEnv === 'string' && fromEnv.trim() !== '') return fromEnv.trim();
+  let text: string;
+  try {
+    text = await fs.readFile(envFile, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') throw new MissingTypesafeKeyError('the .env file (not found)');
+    throw new MissingTypesafeKeyError('the .env file (unreadable)');
+  }
+  const value = parseEnv(text)[TYPESAFE_KEY_VAR];
+  if (typeof value !== 'string' || value.trim() === '') throw new MissingTypesafeKeyError('the .env file');
+  return value.trim();
+}
+
+/** Real Jev client for ONE public case; refuses private cases before anything is built. */
+export function createRealJudgeClient(opts: {
+  evalCase: PrivacyView;
+  privateIds: ReadonlySet<string>;
+  apiKey: string;
+  gate: JevSpendGate;
+  /** Test seam: a fake fetch (no network). */
+  fetch?: (input: string, init?: RequestInit) => Promise<Response>;
+}): TypeSafeJudgeClient {
+  assertPublicCase(opts.evalCase, opts.privateIds);
+  return new TypeSafeJudgeClient({ apiKey: opts.apiKey, gate: opts.gate, ...(opts.fetch !== undefined ? { fetch: opts.fetch } : {}) });
 }

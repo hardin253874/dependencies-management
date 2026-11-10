@@ -14,10 +14,16 @@ import { loadPlaybookDir } from '@/core/agent/playbooks';
 import { resolveBudgets } from '@/core/agent/budgets';
 import type { AgentEvent } from '@/core/agent/loop';
 import { refreshProjectGraph } from '../graph/graphService';
+import { getGraphReader } from '../graph/readerCache';
 import { agentRepoRoot, getLibraryRoot, graphDbPath } from '../paths';
 import { costEstimateUsd } from '../llm/cost';
-import { withLlmLimit } from '../llm/factory';
-import { runAgentUpdateReport, UPDATE_REPORT_TERMINAL, type RunAgentUpdateReportInput, type AgentUpdateReportRun } from '../llm/agentReportService';
+import { resolveModel, withLlmLimit } from '../llm/factory';
+import { buildRouterFacts, graphFileCountOf } from '../judge/routerFacts';
+import { judgeContextFor } from '../judge/factory';
+import { applyJevRenames } from '../judge/apply';
+import type { ApiDiffResult } from '@/core/intel/apiDiff';
+import type { RouterDecision } from '@/core/llm/router';
+import { runAgentUpdateReport, seedApiDiff, UPDATE_REPORT_TERMINAL, type RunAgentUpdateReportInput, type AgentUpdateReportRun } from '../llm/agentReportService';
 import { runAgentDeepReport, DEEP_REPORT_TERMINAL, type RunAgentDeepReportInput, type AgentDeepReportRun } from '../llm/agentDeepReportService';
 import { estimateAgentRun } from '../llm/agentEstimate';
 import { AGENT_SYSTEM_PROMPT } from '../llm/prompts/agent-update-report';
@@ -64,16 +70,43 @@ async function withRunGraph<T>(ctx: AgentJobContext, fn: (graph: ReturnType<type
   }
 }
 
+/**
+ * v2 Stage 5b.8: routes the model once per job (graph open, before the run);
+ * budgets derive from the routed model. Router off → the configured model and
+ * no `routing` field (envelopes and requests as before).
+ */
+async function routeJob(ctx: AgentJobContext, graph: ReturnType<typeof openGraphReader>, view: 'agent' | 'deep-report', dep: { name: string; fromVersion: string; toVersion: string }): Promise<RouterDecision | null> {
+  if (!ctx.config.judge.router) return null;
+  const facts = await buildRouterFacts({ view, slug: ctx.slug, name: dep.name, from: dep.fromVersion, to: dep.toVersion, graphFileCount: graphFileCountOf(graph, [dep.name]), configuredModel: ctx.config.llm.model });
+  return resolveModel({ facts, slug: ctx.slug, config: ctx.config, allowJudge: true, signal: ctx.signal });
+}
+
+/** J4 (5b.13): with the flag on, the seed's api_diff gets Jev rename candidates; off → undefined (the service computes it as before). */
+async function jevSeedApiDiff(ctx: AgentJobContext, dep: { name: string; fromVersion: string; toVersion: string }): Promise<ApiDiffResult | null | undefined> {
+  const j4 = await judgeContextFor(ctx.slug, ctx.config, 'J4', ctx.signal);
+  if (j4 === null) return undefined;
+  const diff = await seedApiDiff(runIntel(ctx.projectRoot), dep.name, dep.fromVersion, dep.toVersion, ctx.signal);
+  return applyJevRenames(j4, diff);
+}
+
+function withRouting<T extends { detail: object; record: object }>(run: T, routing: RouterDecision | null): T {
+  if (routing === null) return run;
+  return { ...run, detail: { ...run.detail, routing }, record: { ...run.record, routing } };
+}
+
 export async function runAgentUpdateReportJob(
   ctx: AgentJobContext,
   input: Omit<RunAgentUpdateReportInput, AgentServiceFields>
 ): Promise<AgentUpdateReportRun> {
-  const modelId = ctx.config.llm.model;
-  const budgets = resolveBudgets(ctx.config.agentBudgets.updateReport, modelId, costEstimateUsd);
-  return withRunGraph(ctx, async (graph) =>
-    withLlmLimit(ctx.config.llm.provider, async () =>
+  return withRunGraph(ctx, async (graph) => {
+    const routing = await routeJob(ctx, graph, 'agent', input.promptInput.dep);
+    const modelId = routing?.model ?? ctx.config.llm.model;
+    const budgets = resolveBudgets(ctx.config.agentBudgets.updateReport, modelId, costEstimateUsd);
+    const apiDiff = await jevSeedApiDiff(ctx, input.promptInput.dep);
+    const run = await withLlmLimit(ctx.config.llm.provider, async () =>
       runAgentUpdateReport({
         ...input,
+        ...(apiDiff !== undefined ? { apiDiff } : {}),
         agent: await getAgentModel('update-report'),
         modelId,
         budgets,
@@ -86,20 +119,24 @@ export async function runAgentUpdateReportJob(
         onEvent: progressFor(ctx, budgets.maxToolCalls),
         logContext: { slug: ctx.slug }
       })
-    )
-  );
+    );
+    return withRouting(run, routing);
+  });
 }
 
 export async function runAgentDeepReportJob(
   ctx: AgentJobContext,
   input: Omit<RunAgentDeepReportInput, AgentServiceFields>
 ): Promise<AgentDeepReportRun> {
-  const modelId = ctx.config.llm.model;
-  const budgets = resolveBudgets(ctx.config.agentBudgets.deepReport, modelId, costEstimateUsd);
-  return withRunGraph(ctx, async (graph) =>
-    withLlmLimit(ctx.config.llm.provider, async () =>
+  return withRunGraph(ctx, async (graph) => {
+    const routing = await routeJob(ctx, graph, 'deep-report', input.promptInput.dep);
+    const modelId = routing?.model ?? ctx.config.llm.model;
+    const budgets = resolveBudgets(ctx.config.agentBudgets.deepReport, modelId, costEstimateUsd);
+    const apiDiff = await jevSeedApiDiff(ctx, input.promptInput.dep);
+    const run = await withLlmLimit(ctx.config.llm.provider, async () =>
       runAgentDeepReport({
         ...input,
+        ...(apiDiff !== undefined ? { apiDiff } : {}),
         agent: await getAgentModel('deep-report'),
         modelId,
         budgets,
@@ -112,8 +149,9 @@ export async function runAgentDeepReportJob(
         onEvent: progressFor(ctx, budgets.maxToolCalls),
         logContext: { slug: ctx.slug }
       })
-    )
-  );
+    );
+    return withRouting(run, routing);
+  });
 }
 
 /** Writes the run record with `resultRef` = the report envelope path relative to the library root (POSIX). */
@@ -134,8 +172,10 @@ export function agentRunEstimateResponse(opts: {
   config: AppConfig;
   seedPromptBytes: number;
   totalPackages: number;
+  /** v2 Stage 5b.8: rules-only routing from the GET (absent when the router is off). */
+  routing?: RouterDecision | null;
 }): DeepReportEstimateResponse {
-  const modelId = opts.config.llm.model;
+  const modelId = opts.routing?.model ?? opts.config.llm.model;
   const settings = opts.view === 'update-report' ? opts.config.agentBudgets.updateReport : opts.config.agentBudgets.deepReport;
   const budgets = resolveBudgets(settings, modelId, costEstimateUsd);
   const terminal = opts.view === 'update-report' ? UPDATE_REPORT_TERMINAL : DEEP_REPORT_TERMINAL;
@@ -155,6 +195,35 @@ export function agentRunEstimateResponse(opts: {
     totalPackages: opts.totalPackages,
     engine: 'agent',
     maxUsd: est.maxUsd,
-    budgets
+    budgets,
+    ...(opts.routing !== undefined && opts.routing !== null ? { routing: opts.routing } : {})
   };
+}
+
+/**
+ * Routing for a view without its own graph handle (5b.8): cost-estimate GETs
+ * (`allowJudge` false: rules only, never Jev) and the v1 [D] / [E] jobs
+ * (`allowJudge` true). Never builds the graph: a built graph's cached reader
+ * is used synchronously; none → 0 files. Router off → null (as before).
+ */
+export async function estimateRouting(opts: {
+  view: 'agent' | 'deep-report' | 'file-review' | 'update-report';
+  slug: string;
+  name: string;
+  from: string;
+  to: string;
+  config: AppConfig;
+  /** Only a user-triggered job passes true; a GET never does. */
+  allowJudge?: boolean;
+  signal?: AbortSignal;
+}): Promise<RouterDecision | null> {
+  if (!opts.config.judge.router) return null;
+  let graphFileCount = 0;
+  try {
+    graphFileCount = graphFileCountOf(getGraphReader(opts.slug), [opts.name]);
+  } catch {
+    graphFileCount = 0;
+  }
+  const facts = await buildRouterFacts({ view: opts.view, slug: opts.slug, name: opts.name, from: opts.from, to: opts.to, graphFileCount, configuredModel: opts.config.llm.model });
+  return resolveModel({ facts, slug: opts.slug, config: opts.config, allowJudge: opts.allowJudge === true, ...(opts.signal !== undefined ? { signal: opts.signal } : {}) });
 }

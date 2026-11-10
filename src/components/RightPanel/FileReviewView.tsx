@@ -1,5 +1,6 @@
 'use client';
 
+import { RoutingLine } from './JudgeBadges';
 import type { JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { getApiClient } from '@/lib/client/api-client';
@@ -158,6 +159,8 @@ export function FileReviewView({ slug, depName, pathHash, filePath }: Props): JS
           Last reviewed: {formatRelativeTime(detail.lastReviewedAt)}
         </span>
       </header>
+
+      <RoutingLine routing={detail.routing ?? null} />
 
       <section className={styles.section} aria-label="Summary">
         <h3 className={styles.sectionTitle}>Summary</h3>

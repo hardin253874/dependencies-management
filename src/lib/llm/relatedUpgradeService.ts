@@ -17,6 +17,7 @@
  * Mirrors `reportService.ts`'s shape so future maintenance moves between
  * these two services with no surprises.
  */
+import { relatedUnknownJ6, type JudgeContext } from '../../core/judge/uses';
 import semver from 'semver';
 import {
   RELATED_UPGRADE_TOOL_SCHEMA,
@@ -165,6 +166,27 @@ export interface RunRelatedUpgradeInput extends DeterministicAnalysisInput {
   maxInputTokens?: number;
   onPhase?: Parameters<LLMClient['call']>[0]['onPhase'];
   signal?: AbortSignal;
+  /** v2 Stage 5b J6: Jev suggestions for `unknown`-verdict deps (null/absent = today's `investigate` default). */
+  jev?: JudgeContext | null;
+}
+
+/**
+ * J6 (5b.14): for deps whose relation ranges did not parse (`unknown`), Jev's
+ * keep / upgrade / investigate + bump replaces the skeleton default, labelled
+ * `suggestedBy: 'jev'`. Low confidence keeps `investigate`. `compatible` /
+ * `breaks` (semver facts) are never touched. The LLM's answer still wins when
+ * it returns the dep.
+ */
+export async function applyJevUnknownSuggestions(ctx: JudgeContext, input: { viewedDep: string; fromVersion: string; toVersion: string }, skeleton: RelatedDepUpgradeRecommendation[]): Promise<RelatedDepUpgradeRecommendation[]> {
+  const unknown = skeleton.filter((s) => s.deterministicVerdict === 'unknown');
+  if (unknown.length === 0) return skeleton;
+  const out = await relatedUnknownJ6(ctx, { viewedDep: input.viewedDep, from: input.fromVersion, to: input.toVersion, deps: unknown.map((u) => ({ name: u.name, version: u.installedVersion })) });
+  if (out === null) return skeleton;
+  return skeleton.map((s) => {
+    const j = s.deterministicVerdict === 'unknown' ? out.get(s.name) : undefined;
+    if (j === undefined) return s;
+    return { ...s, action: j.action, severity: j.bump ?? s.severity, migrationNotes: s.migrationNotes === '' ? 'suggested (Jev)' : s.migrationNotes, suggestedBy: 'jev' as const };
+  });
 }
 
 export interface RelatedUpgradeRun {
@@ -178,7 +200,9 @@ export async function runRelatedUpgrade(
   client: LLMClient,
   input: RunRelatedUpgradeInput
 ): Promise<RelatedUpgradeRun> {
-  const { skeleton, promptDeps } = buildSkeleton(input);
+  const built = buildSkeleton(input);
+  const promptDeps = built.promptDeps;
+  const skeleton = input.jev ? await applyJevUnknownSuggestions(input.jev, input, built.skeleton) : built.skeleton;
   const promptInput = {
     viewedDep: {
       name: input.viewedDep,

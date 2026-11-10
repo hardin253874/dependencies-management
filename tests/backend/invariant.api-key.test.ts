@@ -78,3 +78,22 @@ describe('v2: OpenAI provider is rejected by the API-key routes', () => {
     expect(JSON.stringify(await res.json())).toContain('INVALID_BODY');
   });
 });
+
+describe('v2 Stage 5b: the TypeSafe key never appears in GET responses', () => {
+  it('GET /api/config reports hasTypesafeKey only', async () => {
+    sandbox = await createSandbox('typesafe-key-leak');
+    const secret = 'tsk-supersecret-DO-NOT-LEAK-0123456789abcdef';
+    process.env.TYPESAFE_API_KEY = secret;
+    resetEnvCache();
+    try {
+      const response = await GET(new Request('http://127.0.0.1:3000/api/config'), undefined);
+      const body = await response.text();
+      expect(body).not.toContain(secret);
+      expect(body).not.toContain('supersecret');
+      expect((JSON.parse(body) as { apiKeys: { hasTypesafeKey: boolean } }).apiKeys.hasTypesafeKey).toBe(true);
+    } finally {
+      delete process.env.TYPESAFE_API_KEY;
+      resetEnvCache();
+    }
+  });
+});

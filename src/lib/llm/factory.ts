@@ -14,7 +14,9 @@
 import pLimit from 'p-limit';
 import type { LlmProvider } from '../api-types';
 import { loadEnv } from '../config';
-import { readConfig } from '../storage/config';
+import { readConfig, type AppConfig } from '../storage/config';
+import { defaultDecision, routeModel, type RouterDecision, type RouterFacts } from '../../core/llm/router';
+import { getJudgeContext } from '../judge/factory';
 import { LLMError, type LLMClient } from './client';
 import { AnthropicAdapter } from './anthropic';
 import { MockLLMClient } from './mock';
@@ -120,4 +122,24 @@ export function setLlmClient(client: LLMClient | null): void {
 export function getMockLlmClient(): MockLLMClient | null {
   const c = globalThis.__DEP_AGENT_LLM_CLIENT__;
   return c instanceof MockLLMClient ? c : null;
+}
+
+/**
+ * v2 Stage 5b.8 (D28, proposed): the model a routed view runs on, and why.
+ * Router off (`judge.router: false`) → the configured model, `via: 'default'`,
+ * `reason: 'router off'`: requests are byte-identical to before the router.
+ * `allowJudge: false` (cost-estimate GETs) → rules only; a GET never asks Jev.
+ * Never throws (the router falls back to the configured model).
+ */
+export async function resolveModel(opts: {
+  facts: RouterFacts;
+  slug: string;
+  config: AppConfig;
+  allowJudge: boolean;
+  signal?: AbortSignal;
+}): Promise<RouterDecision> {
+  if (!opts.config.judge.router) return defaultDecision(opts.facts, 'router off');
+  if (!opts.allowJudge) return routeModel(opts.facts, { judge: null, subject: { privacy: undefined }, allowJudge: false });
+  const ctx = await getJudgeContext(opts.slug, opts.signal);
+  return routeModel(opts.facts, { judge: ctx.judge, subject: ctx.subject, ...(opts.signal !== undefined ? { signal: opts.signal } : {}) });
 }

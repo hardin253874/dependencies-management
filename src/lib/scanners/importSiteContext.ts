@@ -75,6 +75,14 @@ export interface ExtractOptions {
   maxTotalChars?: number;
   /** Test seam — swap fs.readFile. */
   readFile?: (absPath: string) => Promise<string>;
+  /**
+   * v2 Stage 5b J1: reorder files by likely impact BEFORE the char cap is
+   * applied (so the cap drops the least likely files). Gets each matching
+   * file's first window; returns the new order (unknown paths ignored,
+   * missing ones keep input order at the end) or `null` = keep input order.
+   * Absent = today's code path, byte-identical output.
+   */
+  rankFiles?: (files: ReadonlyArray<{ path: string; snippet: string }>) => Promise<string[] | null>;
 }
 
 const DEFAULT_RADIUS = 20;
@@ -91,6 +99,8 @@ export async function extractImportSiteContext(
   const radius = opts.contextRadius ?? DEFAULT_RADIUS;
   const maxChars = opts.maxTotalChars ?? DEFAULT_MAX_CHARS;
   const reader = opts.readFile ?? ((p) => fs.readFile(p, 'utf8'));
+
+  if (opts.rankFiles !== undefined) return extractRanked(opts, opts.rankFiles, radius, maxChars, reader);
 
   const files: FileContextResult[] = [];
   let runningChars = 0;
@@ -136,6 +146,59 @@ export async function extractImportSiteContext(
     truncated,
     approxTokens: Math.ceil(runningChars / 4)
   };
+}
+
+/** J1 path: read + window every file first, rank, then apply the same cap rules in the ranked order. */
+async function extractRanked(
+  opts: ExtractOptions,
+  rankFiles: NonNullable<ExtractOptions['rankFiles']>,
+  radius: number,
+  maxChars: number,
+  reader: (absPath: string) => Promise<string>
+): Promise<ExtractContextResult> {
+  const candidates: FileContextResult[] = [];
+  for (const relPath of opts.importingFiles) {
+    let source: string;
+    try {
+      source = await reader(path.resolve(opts.projectRoot, relPath));
+    } catch {
+      continue;
+    }
+    const windows = buildWindowsForFile(source.split('\n'), opts.depName, radius);
+    if (windows.length === 0) continue;
+    candidates.push({ relativePath: relPath, windows, charCount: windows.reduce((sum, w) => sum + w.code.length, 0) });
+  }
+  let ordered = candidates;
+  const order = await rankFiles(candidates.map((c) => ({ path: c.relativePath, snippet: c.windows[0]!.code })));
+  if (order !== null) {
+    const byPath = new Map(candidates.map((c) => [c.relativePath, c]));
+    const seen = new Set<string>();
+    ordered = [];
+    for (const p of order) {
+      const c = byPath.get(p);
+      if (c !== undefined && !seen.has(p)) {
+        ordered.push(c);
+        seen.add(p);
+      }
+    }
+    for (const c of candidates) if (!seen.has(c.relativePath)) ordered.push(c);
+  }
+  const files: FileContextResult[] = [];
+  let runningChars = 0;
+  let truncated = false;
+  for (const c of ordered) {
+    if (runningChars >= maxChars) {
+      truncated = true;
+      break;
+    }
+    if (runningChars + c.charCount > maxChars) {
+      truncated = true;
+      continue;
+    }
+    files.push(c);
+    runningChars += c.charCount;
+  }
+  return { files, truncated, approxTokens: Math.ceil(runningChars / 4) };
 }
 
 /**

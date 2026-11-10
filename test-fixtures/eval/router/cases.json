@@ -1,0 +1,77 @@
+[
+  {
+    "id": "synthetic-major",
+    "repo": "https://example.invalid/a.git",
+    "baseCommit": "0000000000000000000000000000000000000000",
+    "projectDirs": [
+      "."
+    ],
+    "tags": [
+      "complex"
+    ],
+    "visibility": "public",
+    "phases": [
+      {
+        "id": "p1",
+        "toCommit": "1111111111111111111111111111111111111111",
+        "packages": [
+          {
+            "name": "react",
+            "from": "17.0.2",
+            "to": "18.2.0"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "synthetic-patch",
+    "repo": "https://example.invalid/b.git",
+    "baseCommit": "0000000000000000000000000000000000000000",
+    "projectDirs": [
+      "."
+    ],
+    "tags": [
+      "control"
+    ],
+    "visibility": "public",
+    "phases": [
+      {
+        "id": "p1",
+        "toCommit": "1111111111111111111111111111111111111111",
+        "packages": [
+          {
+            "name": "lodash",
+            "from": "4.17.20",
+            "to": "4.17.21"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "synthetic-minor",
+    "repo": "https://example.invalid/c.git",
+    "baseCommit": "0000000000000000000000000000000000000000",
+    "projectDirs": [
+      "."
+    ],
+    "tags": [
+      "complex"
+    ],
+    "visibility": "public",
+    "phases": [
+      {
+        "id": "p1",
+        "toCommit": "1111111111111111111111111111111111111111",
+        "packages": [
+          {
+            "name": "antd",
+            "from": "4.1.0",
+            "to": "4.2.0"
+          }
+        ]
+      }
+    ]
+  }
+]

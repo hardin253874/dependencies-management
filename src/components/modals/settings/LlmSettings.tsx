@@ -7,6 +7,7 @@ import { Button } from '../Button';
 import { useAppContext } from '../../AppContext';
 import { MODEL_OPTIONS, defaultModel } from '@/lib/llm/models';
 import styles from './LlmSettings.module.css';
+import { JudgeSettings } from './JudgeSettings';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 type TestState = { status: 'idle' | 'testing' | 'ok' | 'error'; message?: string };
@@ -147,6 +148,10 @@ export function LlmSettings(): JSX.Element {
         {saveState === 'saved' && <p className={styles.testOk}>Key saved.</p>}
         {saveState === 'error' && <p className={styles.testErr}>Failed to save key.</p>}
       </div>
+
+      <hr className={styles.divider} />
+
+      <JudgeSettings />
 
       <hr className={styles.divider} />
 

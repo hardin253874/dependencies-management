@@ -30,7 +30,7 @@ import { withRequestLog, type RouteCtx } from '@/lib/http/guards';
 import { isValidParam, isValidVersionParam } from '@/lib/http/validate';
 import { decodeAndValidatePackageName } from '@/lib/http/packageName';
 import { readConfig, reportEngineOf } from '@/lib/storage/config';
-import { agentRunEstimateResponse } from '@/lib/agent/reportJobs';
+import { agentRunEstimateResponse, estimateRouting } from '@/lib/agent/reportJobs';
 import { loadEnv } from '@/lib/config';
 import { computeDeepReportEstimate, ESTIMATE_BASE_TOKENS, ESTIMATE_INPUT_CAP, ESTIMATE_TOKENS_PER_PACKAGE } from '@/lib/llm/estimate';
 import type { ProjectJson } from '@/lib/projects/add';
@@ -64,8 +64,9 @@ export const GET = withRequestLog<RouteCtx<{ slug: string; name: string; from: s
     if (reportEngineOf(config.llm.reportEngine) === 'agent') {
       // The agent seed embeds the same pre-computed deep facts as the v1 prompt.
       const seedTokens = Math.min(ESTIMATE_BASE_TOKENS + totalPackages * ESTIMATE_TOKENS_PER_PACKAGE, ESTIMATE_INPUT_CAP);
+      const routing = await estimateRouting({ view: 'deep-report', slug, name, from, to, config });
       return NextResponse.json<DeepReportEstimateResponse>(
-        agentRunEstimateResponse({ view: 'deep-report', config, seedPromptBytes: seedTokens * 4, totalPackages })
+        agentRunEstimateResponse({ view: 'deep-report', config, seedPromptBytes: seedTokens * 4, totalPackages, routing })
       );
     }
 

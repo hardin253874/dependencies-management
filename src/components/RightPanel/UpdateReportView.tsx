@@ -24,6 +24,7 @@ import { DeepAnalyzeConfirmModal } from '../modals/DeepAnalyzeConfirmModal';
 import { AgentRunConfirmModal } from '../modals/AgentRunConfirmModal';
 import { ExplorationTrace } from './ExplorationTrace';
 import { ImpactedFilesList } from './ImpactedFilesList';
+import { RoutingLine, SupportBadge } from './JudgeBadges';
 import {
   RelatedUpgradeTable,
   type RelatedUpgradeTableClassNames
@@ -338,6 +339,9 @@ export function UpdateReportView({ slug, depName, fromVersion, toVersion }: Prop
 
       {fetch.regenerating && cascadeStep !== 'idle' && <CascadeProgress step={cascadeStep} />}
 
+      {/* v2 Stage 5b.8: routed model + reason; older envelopes / router off → nothing. */}
+      <RoutingLine routing={detail.routing ?? null} />
+
       <section className={styles.section} aria-label="Summary">
         <h3 className={styles.sectionTitle}>Summary</h3>
         {aiUnavailable && !detail.summary ? (
@@ -396,6 +400,7 @@ export function UpdateReportView({ slug, depName, fromVersion, toVersion }: Prop
                   {bc.affectsFilesInProject && (
                     <span className={styles.affectsPill}>Affects this project</span>
                   )}
+                  <SupportBadge support={bc.support ?? null} />
                 </div>
                 <p className={styles.breakingBody}>{bc.description}</p>
               </li>
@@ -630,6 +635,7 @@ function FileToModifyRow({ file }: { file: FileToModify }): JSX.Element {
         {file.estimatedChangeSize}
       </span>
       <span className={styles.fileBrief}>{file.brief}</span>
+      <SupportBadge support={file.support ?? null} />
     </li>
   );
 }

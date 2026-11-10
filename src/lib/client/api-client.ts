@@ -39,6 +39,7 @@ import type {
   CveImpactEstimateResponse,
   ProjectDetail,
   ProjectSummary,
+  ProjectSettingsPatch,
   RefreshResponse,
   RelatedUpgradeDetail,
   RelatedUpgradeEnqueueResponse,
@@ -168,6 +169,11 @@ export class ApiClient {
 
   addProject(body: AddProjectRequest): Promise<AddProjectResponse> {
     return this.request('POST', '/api/projects', body);
+  }
+
+  /** v2 Stage 5b.9: per-project Jev settings (privacy, switch, J1-J3 opt-in). */
+  patchProjectSettings(slug: string, patch: ProjectSettingsPatch): Promise<ProjectSummary> {
+    return this.request('PATCH', `/api/projects/${encodeURIComponent(slug)}`, patch);
   }
 
   async deleteProject(slug: string, alsoDeleteData = false): Promise<void> {

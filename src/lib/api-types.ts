@@ -75,7 +75,11 @@ export interface ConfigResponse {
   /** Presence booleans only — values never leave the server (§5.5). */
   apiKeys: {
     hasAnthropicKey: boolean;
+    /** v2 Stage 5b (optional: older servers / FE fixtures omit it). */
+    hasTypesafeKey?: boolean;
   };
+  /** v2 Stage 5b: Jev switches (optional: older servers / FE fixtures omit it). */
+  judge?: JudgeSwitchesDto;
   /**
    * One-time notices from migrating `_config.json` (e.g. OpenAI → Anthropic).
    * Present only on the GET that performed the migration.
@@ -91,6 +95,7 @@ export interface ConfigNotice {
 }
 
 export type ConfigPatch = {
+  judge?: { enabled?: boolean; router?: boolean; flags?: Partial<Record<JudgeFlag, boolean>> };
   llm?: Partial<ConfigResponse['llm']>;
   ui?: Partial<ConfigResponse['ui']>;
   features?: Partial<ConfigResponse['features']>;
@@ -175,7 +180,46 @@ export interface ProjectSummary {
   lastScanAt: string | null;
   pathExists: boolean;
   orphan?: boolean;
+  /** v2 Stage 5b (D30): absent = unknown, treated as private by every Jev use. */
+  privacy?: ProjectPrivacy;
+  /** v2 Stage 5b: per-project Jev switch; absent = `'on'` (follow the global switch). */
+  judge?: 'on' | 'off';
+  /** v2 Stage 5b: explicit opt-in for J1-J3 source snippets on a private project. */
+  judgeSourceOptIn?: boolean;
 }
+
+export type ProjectPrivacy = 'public' | 'private';
+
+/** PATCH /api/projects/:slug body (v2 Stage 5b). Each field optional; `null` clears `privacy`. */
+export interface ProjectSettingsPatch {
+  privacy?: ProjectPrivacy | null;
+  judge?: 'on' | 'off';
+  judgeSourceOptIn?: boolean;
+}
+
+// ============================================================================
+// v2 Stage 5b - Jev judge + model router (D28)
+// ============================================================================
+
+export type JudgeFlag = 'J1' | 'J2' | 'J3' | 'J4' | 'J5' | 'J6' | 'J7' | 'J8';
+
+export interface JudgeSwitchesDto {
+  enabled: boolean;
+  router: boolean;
+  flags: Record<JudgeFlag, boolean>;
+}
+
+/** Which model a routed view used and why (D28). */
+export interface RouterDecisionDto {
+  model: string;
+  effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  via: 'rule' | 'jev' | 'default';
+  reason: string;
+  jev?: { choice: string; confidence: number; probability: number; model: string; cached: boolean; latencyMs: number };
+}
+
+/** J2 flag on a claim (never removes it). */
+export type ClaimSupport = 'low' | 'unclear';
 
 export interface ProjectsListResponse {
   projects: ProjectSummary[];
@@ -354,6 +398,8 @@ export interface CveRecord {
   id: string;
   severity: CveSeverity;
   summary: string;
+  /** v2 Stage 5b J7: Jev's band from the public advisory text when `severity` is `unknown` (label "estimated"). `severity` stays `unknown`. */
+  severityEstimated?: 'low' | 'medium' | 'high' | 'critical';
 }
 
 // ============================================================================
@@ -555,9 +601,11 @@ export interface BreakingChange {
   description: string;
   /** True when the change affects at least one file in the user's project. */
   affectsFilesInProject: boolean;
+  /** v2 Stage 5b J2: Jev found low / unclear support for `affectsFilesInProject: true`. Absent = not checked or supported. */
+  support?: ClaimSupport;
 }
 
-export type CoUpgradeReason = 'peer-dep' | 'common-pairing' | 'co-version' | 'ecosystem';
+export type CoUpgradeReason = 'peer-dep' | 'common-pairing' | 'co-version' | 'ecosystem' | 'suggested-jev';
 
 export interface CoUpgradeDep {
   name: string;
@@ -572,6 +620,8 @@ export interface FileToModify {
   path: string;
   brief: string;
   estimatedChangeSize: ChangeSize;
+  /** v2 Stage 5b J2: Jev found low / unclear support in the file's code. Absent = not checked or supported. */
+  support?: ClaimSupport;
 }
 
 export interface UpdateReportDetail {
@@ -597,6 +647,8 @@ export interface UpdateReportDetail {
   impactedFiles?: ImpactedFile[];
   /** v2 Stage 5a.5: counts behind `impactedFiles`. */
   impactSummary?: ImpactSummary;
+  /** v2 Stage 5b.8: model routing (absent on older envelopes and when the router is off). */
+  routing?: RouterDecisionDto;
 }
 
 /** v2 Stage 5a.5: one file of the [D] impacted-file list. */
@@ -702,6 +754,8 @@ export interface RelatedDepUpgradeRecommendation {
   migrationNotes: string;
   /** LLM's self-reported confidence. */
   confidence: 'high' | 'medium' | 'low';
+  /** v2 Stage 5b J6: the action / bump of an `unknown` dep was suggested by Jev (label "suggested (Jev)"). */
+  suggestedBy?: 'jev';
 }
 
 export interface RelatedUpgradeDetail {
@@ -751,6 +805,10 @@ export interface CveImpactRow {
    * positive citations.
    */
   citedFiles: string[];
+  /** v2 Stage 5b J3: the verdict was estimated by Jev because the LLM call failed (label "estimated (Jev)"). */
+  estimatedBy?: 'jev';
+  /** v2 Stage 5b J2: Jev found low / unclear support for the verdict in the cited code. */
+  support?: ClaimSupport;
 }
 
 export interface CveImpactDetail {
@@ -868,6 +926,8 @@ export interface FileReviewDetail {
   findings: ReviewFinding[];
   /** Cost tracking (§11.11). */
   cost?: AiCostFields;
+  /** v2 Stage 5b.8: model routing (absent on older envelopes). */
+  routing?: RouterDecisionDto;
 }
 
 // ============================================================================
@@ -1064,6 +1124,8 @@ export interface DeepUpdateReportDetail {
   cost?: AiCostFields;
   /** v2 Stage 4a: agent run behind this report (optional; renderers default it). */
   agentRun?: AgentRunSummary;
+  /** v2 Stage 5b.8: model routing (absent on older envelopes and when the router is off). */
+  routing?: RouterDecisionDto;
 }
 
 // ============================================================================
@@ -1120,6 +1182,8 @@ export interface DeepReportEstimateResponse {
   maxUsd?: number;
   /** v2 Stage 4a.12 (agent engine): the resolved budgets of the run. */
   budgets?: AgentRunBudgetsDto;
+  /** v2 Stage 5b.8: the routed model this estimate is for (rules only: a GET never asks Jev). */
+  routing?: RouterDecisionDto;
 }
 
 /** v2 Stage 4a: resolved per-run agent budgets (USD always resolved). */

@@ -20,6 +20,8 @@ export interface TokenBudget {
 
 export interface AppEnv {
   anthropicApiKey: string | null;
+  /** v2 Stage 5b: optional TypeSafe (Jev) key for the model router and J1–J8. `null` = judge off. */
+  typesafeApiKey: string | null;
   logLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
   mockLlm: boolean;
   budgets: {
@@ -65,6 +67,7 @@ export function loadEnv(): AppEnv {
   if (cached !== null) return cached;
   cached = {
     anthropicApiKey: readNonEmpty('ANTHROPIC_API_KEY'),
+    typesafeApiKey: readNonEmpty('TYPESAFE_API_KEY'),
     logLevel: readLogLevel(),
     mockLlm: (process.env.MOCK_LLM ?? 'false').toLowerCase() === 'true',
     budgets: {
@@ -122,6 +125,11 @@ export function hasKey(provider: LlmProvider): boolean {
       throw new Error(`Unknown provider: ${unknown as string}`);
     }
   }
+}
+
+/** Presence only (the value never leaves the server). */
+export function hasTypesafeKey(): boolean {
+  return loadEnv().typesafeApiKey !== null;
 }
 
 /**

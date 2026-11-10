@@ -1,0 +1,8 @@
+{
+  "fallback": {
+    "choice": {
+      "choice": "moderate",
+      "confidence": 0.8
+    }
+  }
+}

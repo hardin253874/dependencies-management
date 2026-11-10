@@ -20,6 +20,7 @@
  *   6. Persist envelope to
  *      `library/<slug>/related-upgrade/<name>/<from>__<to>.json`.
  */
+import { judgeContextFor } from '@/lib/judge/factory';
 import { NextResponse } from 'next/server';
 import { withCsrf, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
@@ -141,6 +142,7 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; version: str
       const config = await readConfig();
       const client = await getLlmClient();
       const env = loadEnv();
+      const jev = await judgeContextFor(slug, config, 'J6', signal);
       const run = await withLlmLimit(client.provider, () =>
         runRelatedUpgrade(client, {
           model: config.llm.model,
@@ -151,6 +153,7 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; version: str
           toVersion,
           relatedDeps,
           relatedDetails,
+          jev,
           onPhase: (phaseEvent) => {
             report({
               current: 1,

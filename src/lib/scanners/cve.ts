@@ -49,6 +49,13 @@ export interface CveQueryOptions {
   batchSize?: number;
   /** External cancel (job-queue signal). */
   signal?: AbortSignal;
+  /**
+   * v2 Stage 5b J7: called ONLY for advisories `deriveSeverity` leaves
+   * `unknown`, with the public advisory text; the band lands in
+   * `severityEstimated` ("estimated"), `severity` stays `unknown`. Absent =
+   * today's output.
+   */
+  estimateSeverity?: (v: { id: string; summary: string; details?: string }) => Promise<CveRecord['severityEstimated'] | null>;
 }
 
 /**
@@ -165,11 +172,13 @@ export async function queryCves(pairs: CveQueryPair[], opts: CveQueryOptions = {
     for (const id of ids) {
       const vuln = detailMap.get(id);
       if (vuln === undefined || vuln === null) continue;
-      cves.push({
-        id: vuln.id,
-        severity: deriveSeverity(vuln),
-        summary: vuln.summary ?? vuln.details ?? id
-      });
+      const severity = deriveSeverity(vuln);
+      const record: CveRecord = { id: vuln.id, severity, summary: vuln.summary ?? vuln.details ?? id };
+      if (severity === 'unknown' && opts.estimateSeverity !== undefined) {
+        const est = await opts.estimateSeverity({ id: vuln.id, summary: vuln.summary ?? '', ...(vuln.details !== undefined ? { details: vuln.details } : {}) });
+        if (est !== null && est !== undefined) record.severityEstimated = est;
+      }
+      cves.push(record);
     }
     result.set(pairKey, cves);
   }

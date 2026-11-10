@@ -20,6 +20,8 @@
  *
  * Returns `JobEnqueueResponse` with a 202 (or 200 when dedupe hits).
  */
+import { addJevCoUpgrades, applyReportEvidenceCheck, markJevCoUpgrades, reportEvidenceAllowedFiles } from '@/lib/judge/apply';
+import { judgeContextFor } from '@/lib/judge/factory';
 import { NextResponse } from 'next/server';
 import { withCsrf, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
@@ -37,7 +39,7 @@ import { computeCoUpgradeCandidates } from '@/lib/llm/coUpgrade';
 import { runUpdateReport } from '@/lib/llm/reportService';
 import { getLlmClient, withLlmLimit } from '@/lib/llm/factory';
 import { readConfig, reportEngineOf } from '@/lib/storage/config';
-import { persistRunRecord, runAgentUpdateReportJob } from '@/lib/agent/reportJobs';
+import { estimateRouting, persistRunRecord, runAgentUpdateReportJob } from '@/lib/agent/reportJobs';
 import type { AgentRunRecord } from '@/lib/agent/runStore';
 import { loadEnv } from '@/lib/config';
 import { findProjectDep } from '@/lib/projects/lookup';
@@ -91,7 +93,7 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; from: string
       // ---------------------------------------------------------------------
       // Co-upgrade candidates (deterministic).
       // ---------------------------------------------------------------------
-      const coUpgrade = computeCoUpgradeCandidates({
+      const coUpgradeBase = computeCoUpgradeCandidates({
         targetName: name,
         toVersion: to,
         directDeps: project.dependencies.map((d) => ({
@@ -105,6 +107,15 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; from: string
       // Resolver block (spec §10.7 + §11): kill-switch / yarn / actual run.
       // ---------------------------------------------------------------------
       const config = await readConfig();
+      // v2 Stage 5b J5: Jev "usually upgraded together" suggestions on top (flag off → unchanged).
+      const j5 = await addJevCoUpgrades(await judgeContextFor(slug, config, 'J5', signal), {
+        target: name,
+        from,
+        to,
+        directDeps: project.dependencies.map((d) => ({ name: d.name, installedVersion: d.installedVersion })),
+        coUpgrade: coUpgradeBase
+      });
+      const coUpgrade = j5.coUpgrade;
       const resolverBlock = await buildResolverBlock({
         project,
         depName: name,
@@ -166,9 +177,10 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; from: string
       } else {
         const client = await getLlmClient();
         const env = loadEnv();
+        const routing = await estimateRouting({ view: 'update-report', slug, name, from, to, config, allowJudge: true, signal });
         run = await withLlmLimit(client.provider, () =>
           runUpdateReport(client, {
-            model: config.llm.model,
+            model: routing?.model ?? config.llm.model,
             maxOutputTokens: env.budgets.updateReport.output,
             maxInputTokens: env.budgets.updateReport.input,
             resolverBlock: resolverBlock.block,
@@ -189,7 +201,14 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; from: string
             signal
           })
         );
+        if (routing !== null) run = { ...run, detail: { ...run.detail, routing } };
       }
+
+      // v2 Stage 5b J2 (evidence badges, never removes) + J5 labels. Flags off → detail unchanged.
+      const j2 = await judgeContextFor(slug, config, 'J2', signal);
+      // Only graph / usage files are read for J2 evidence; v1 `filesToModify` paths are raw LLM output (review 5b M1).
+      const j2Allowed = j2 === null ? new Set<string>() : reportEvidenceAllowedFiles(slug, affectedFiles.map((f) => f.path));
+      run = { ...run, detail: markJevCoUpgrades(await applyReportEvidenceCheck(j2, run.detail, { projectRoot: project.path, depName: name, allowedFiles: j2Allowed }), j5.suggested) };
 
       // ---------------------------------------------------------------------
       // Persist.

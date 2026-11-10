@@ -94,7 +94,11 @@ describe('no-LLM guard', () => {
   // v2 Stage 4c: `eval/lib/real.ts` is the ONLY eval file that may import a
   // real client (SDK, `llm/anthropic`, `llm/agentAnthropic`), and it must
   // build them behind the spend gate. The LLM factory stays forbidden.
-  const AI_PREDICTOR_FILES = new Set(['cli.ts', 'predict-agent.ts', 'predict-v1-ai.ts', 'real.ts']);
+  // v2 Stage 5b: `router-arms.ts` imports the core router (rules + Jev-answer
+  // mapping, no client) and `judge.ts` the co-upgrade pairing table (J5
+  // baseline); neither builds a model or client (the REAL_CLIENT_RE check
+  // below still applies to them).
+  const AI_PREDICTOR_FILES = new Set(['cli.ts', 'predict-agent.ts', 'predict-v1-ai.ts', 'real.ts', 'router-arms.ts', 'judge.ts']);
   const REAL_CLIENT_FILE = path.join(EVAL_DIR, 'lib', 'real.ts');
   const REAL_CLIENT_RE = /@anthropic-ai|openai|llm\/anthropic|llm\/agentAnthropic|llm\/factory|src\/app\/|^next(\/|$)/;
 
@@ -113,6 +117,24 @@ describe('no-LLM guard', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it('v2 Stage 5b: only real.ts imports the TypeSafe SDK or the real Jev client (others: type-only)', async () => {
+    const files = await listTs(EVAL_DIR);
+    const offenders: string[] = [];
+    for (const file of files) {
+      if (file === REAL_CLIENT_FILE) continue;
+      const src = await fs.readFile(file, 'utf8');
+      // One import statement per `;`-chunk; `import type` (erased at build) is allowed.
+      for (const chunk of src.split(';')) {
+        const m = /(?:^|\n)import\s+(type\s)?[\s\S]*?from\s+['"]([^'"]+)['"]\s*$/.exec(chunk);
+        if (m === null || m[1] !== undefined) continue;
+        if (/@typesafe-ai|core\/judge\/client/.test(m[2] ?? '')) offenders.push(`${file}: ${m[2] ?? ''}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+    const real = await fs.readFile(REAL_CLIENT_FILE, 'utf8');
+    expect(real).toMatch(/TypeSafeJudgeClient\(\{ apiKey: opts\.apiKey, gate: opts\.gate/);
   });
 
   it('the real-client file builds its clients behind the spend gate', async () => {

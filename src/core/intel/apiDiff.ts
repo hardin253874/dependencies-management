@@ -46,7 +46,12 @@ export type ApiDiffResult =
       removed: ApiExport[];
       signatureChanged: Array<{ name: string; kind: string; from: string; to: string }>;
       added: ApiExport[];
-      renamedCandidate: Array<{ from: string; to: string; confidence: 'low' }>;
+      /**
+       * Exact-signature heuristic (`confidence: 'low'`); v2 Stage 5b J4 adds
+       * Jev's choice (`source: 'jev'`, numeric confidence) for removed exports
+       * the heuristic did not match. Never persisted in the api_diff cache.
+       */
+      renamedCandidate: Array<{ from: string; to: string; confidence: 'low' } | { from: string; to: string; confidence: number; source: 'jev' }>;
     }
   | { status: 'unavailable'; pkg: string; from: string; to: string; reason: string };
 

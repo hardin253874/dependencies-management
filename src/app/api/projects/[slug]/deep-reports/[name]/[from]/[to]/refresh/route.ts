@@ -10,6 +10,8 @@
  *
  * Spec §7.6 + §11.6 + §11.9 + §11.11.
  */
+import { addJevCoUpgrades, markJevCoUpgrades } from '@/lib/judge/apply';
+import { judgeContextFor } from '@/lib/judge/factory';
 import { NextResponse } from 'next/server';
 import { withCsrf, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
@@ -119,7 +121,7 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; from: string
       //    prompt: co-upgrade candidates + resolver summary string + co-upgrade
       //    dep names. Resolver itself is NOT re-run here — it's a [D] concern.
       // ---------------------------------------------------------------------
-      const coUpgrade = computeCoUpgradeCandidates({
+      const coUpgradeBase = computeCoUpgradeCandidates({
         targetName: name,
         toVersion: to,
         directDeps: project.dependencies.map((d) => ({
@@ -128,6 +130,15 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; from: string
         })),
         targetPeerDependenciesAtTo: undefined
       });
+      // v2 Stage 5b J5: Jev "usually upgraded together" suggestions on top (flag off → unchanged).
+      const j5 = await addJevCoUpgrades(await judgeContextFor(slug, await readConfig(), 'J5', signal), {
+        target: name,
+        from,
+        to,
+        directDeps: project.dependencies.map((d) => ({ name: d.name, installedVersion: d.installedVersion })),
+        coUpgrade: coUpgradeBase
+      });
+      const coUpgrade = j5.coUpgrade;
       const coUpgradeDeps: CoUpgradeDep[] = coUpgrade.candidates.map((c) => ({
         name: c.name,
         currentVersion: c.currentVersion ?? 'unknown',
@@ -205,6 +216,8 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; from: string
           })
         );
       }
+
+      run = { ...run, detail: markJevCoUpgrades(run.detail, j5.suggested) };
 
       // ---------------------------------------------------------------------
       // 5. Persist envelope with lockfile-state hash suffix (+ agent run record).

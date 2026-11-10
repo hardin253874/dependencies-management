@@ -5,6 +5,9 @@
  * `library/<slug>/deps/<file-slug>.json`. Enqueued as a job for SSE progress
  * surfacing.
  */
+import { judgeContextFor } from '@/lib/judge/factory';
+import { estimateSeverityJ7 } from '@/core/judge/uses';
+import { readConfig } from '@/lib/storage/config';
 import { NextResponse } from 'next/server';
 import { withCsrf, type RouteCtx } from '@/lib/http/guards';
 import { badRequest, notFound, internalError } from '@/lib/http/errors';
@@ -54,7 +57,7 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string }>>(async (_r
     slug,
     kind: 'refresh:dep',
     resourceKey: `deps:${slug}:${name}`,
-    run: async (report) => {
+    run: async (report, signal) => {
       report({ current: 0, total: 1, label: name, phase: 'registry' });
       const registry = createRegistryFetcher({ cwd: project.path });
       const pack = await withRegistryLimit(() => registry.fetchPackument(name));
@@ -62,7 +65,12 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string }>>(async (_r
       report({ current: 1, total: 1, label: name, phase: 'cve' });
       let cves: CveRecord[] | null = [];
       if (dep.installedVersion !== null) {
-        const map = await queryCves([{ name, version: dep.installedVersion }]);
+        // v2 Stage 5b J7: Jev band for advisories still `unknown` (flag off → no hook).
+        const j7 = await judgeContextFor(slug, await readConfig(), 'J7', signal);
+        const map = await queryCves(
+          [{ name, version: dep.installedVersion }],
+          j7 !== null ? { estimateSeverity: async (v) => (await estimateSeverityJ7(j7, v))?.band ?? null } : {}
+        );
         const lookup = map.get(keyFor(name, dep.installedVersion));
         cves = lookup === undefined ? [] : lookup;
       }

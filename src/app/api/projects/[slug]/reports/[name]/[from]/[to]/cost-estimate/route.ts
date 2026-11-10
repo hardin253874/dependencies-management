@@ -18,7 +18,7 @@ import { decodeAndValidatePackageName } from '@/lib/http/packageName';
 import { readConfig, reportEngineOf } from '@/lib/storage/config';
 import { loadEnv } from '@/lib/config';
 import { costEstimateUsd } from '@/lib/llm/cost';
-import { agentRunEstimateResponse, UPDATE_SEED_BYTES_ESTIMATE } from '@/lib/agent/reportJobs';
+import { agentRunEstimateResponse, estimateRouting, UPDATE_SEED_BYTES_ESTIMATE } from '@/lib/agent/reportJobs';
 import type { ProjectJson } from '@/lib/projects/add';
 import type { DeepReportEstimateResponse } from '@/lib/api-types';
 
@@ -39,19 +39,23 @@ export const GET = withRequestLog<RouteCtx<{ slug: string; name: string; from: s
     const config = await readConfig();
     const totalPackages = project.dependencies.length;
     if (reportEngineOf(config.llm.reportEngine) === 'agent') {
+      const routing = await estimateRouting({ view: 'agent', slug, name, from, to, config });
       return NextResponse.json<DeepReportEstimateResponse>(
-        agentRunEstimateResponse({ view: 'update-report', config, seedPromptBytes: UPDATE_SEED_BYTES_ESTIMATE, totalPackages })
+        agentRunEstimateResponse({ view: 'update-report', config, seedPromptBytes: UPDATE_SEED_BYTES_ESTIMATE, totalPackages, routing })
       );
     }
     const budget = loadEnv().budgets.updateReport;
+    const routing = await estimateRouting({ view: 'update-report', slug, name, from, to, config });
+    const model = routing?.model ?? config.llm.model;
     return NextResponse.json<DeepReportEstimateResponse>({
       estimatedInputTokens: budget.input,
       estimatedOutputTokens: budget.output,
-      estimatedCostUsd: costEstimateUsd(config.llm.model, { inputTokens: budget.input, outputTokens: budget.output }),
+      estimatedCostUsd: costEstimateUsd(model, { inputTokens: budget.input, outputTokens: budget.output }),
       provider: config.llm.provider,
-      model: config.llm.model,
+      model,
       totalPackages,
-      engine: 'v1'
+      engine: 'v1',
+      ...(routing !== null ? { routing } : {})
     });
   } catch (err) {
     return internalError('ESTIMATE_FAILED', (err as Error).message);

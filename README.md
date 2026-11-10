@@ -157,6 +157,7 @@ Use the direct `node …` command, not `npm run mcp`: npm prints its script bann
 | Variable | Default | Notes |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Required (Anthropic is the only provider since v2) |
+| `TYPESAFE_API_KEY` | — | Optional: TypeSafe Jev key for the model router and J1–J8 (see "Jev (TypeSafe) — optional"); empty = Jev off |
 | `LOG_LEVEL` | `info` | `trace` / `debug` / `info` / `warn` / `error` / `fatal` |
 | `MOCK_LLM` | `false` | When `true`, LLM calls are replied to from `test-fixtures/llm/` |
 | `TOKEN_BUDGET_FILE_REVIEW_IN` | 30000 | |
@@ -186,6 +187,35 @@ Use the direct `node …` command, not `npm run mcp`: npm prints its script bann
 ```
 
 This file is re-read on every request that needs it — Settings → Behavior toggles take effect immediately, no restart required.
+
+## Jev (TypeSafe) — optional
+
+[TypeSafe](https://docs.typesafe.ai) Jev returns small typed judgments (a choice, a score, a yes-probability) for a fraction of a cent. The agent can use it in two places. **Both are optional, and all of it is off by default.** With no `TYPESAFE_API_KEY`, or with the switches off, the agent behaves exactly as it does without Jev. A Jev error or timeout never blocks a view: the agent falls back to its normal behaviour.
+
+**Model router** (Settings → LLM → "Model router"). Clear cases are routed by rules in code. A patch upgrade with few files and no CVEs goes to Haiku 5.5. A large major upgrade goes to Opus 5.5. The Deep Report always uses Opus 5.5. For the unclear cases, Jev decides (easy → Haiku, moderate → Sonnet, hard → Opus), and low confidence moves one step up. Only metadata is sent: the jump kind, package count, file count, CVE count and removed-export count. Each routed report shows a line like "Model: Sonnet 5.5 — reason (rule / Jev / default)". The cost estimate in the confirm dialog uses rules only and never calls Jev.
+
+**Judgments** (one switch each, all off by default):
+
+| Flag | What it does | Data sent |
+|---|---|---|
+| J1 | Orders files by likely impact before the context cap (CVE analysis) | source snippets |
+| J2 | Flags report claims with low or unclear support in the cited code (never removes them) | source snippets |
+| J3 | Estimates per-CVE verdicts when the CVE-analysis LLM call fails | source snippets |
+| J4 | Suggests likely renames for removed exports (`api_diff`) | public `.d.ts` signatures |
+| J5 | Suggests deps that are usually upgraded together with the target | metadata only |
+| J6 | Suggests keep / upgrade / investigate for related deps whose ranges do not parse | metadata only |
+| J7 | Estimates the severity of advisories that are still `unknown` | public advisory text |
+| J8 | Suggests found / partial / missed in the eval findings sheet (the human mark stays required) | public report text |
+
+Jev output is always labelled "estimated (Jev)", "suggested (Jev)", or "low / unclear support (Jev)". Semver checks and parsed CVSS scores stay the hard facts.
+
+**Switches.** There is a global "Use Jev" switch, a router switch and one switch per J (`_config.json` → `judge`). Each project also has its own settings in Settings → LLM:
+- **Privacy** (`public` / `private` / not set). A project whose privacy is not set is treated as private.
+- **"Jev for this project"**: off overrides the global switch.
+
+**Privacy.** Nothing about a private or not-set project is sent to TypeSafe. The router uses rules only for these projects. The one exception is an explicit per-project opt-in that lets J1–J3 send source snippets. Every payload is built by code that checks its class: metadata-only uses reject any free text. A private eval case is always refused. TypeSafe states that Jev is not trained on customer requests or responses. It does not state retention or region. Zero data retention is enterprise-only.
+
+**Spend.** TypeSafe charges $0.042 per million input tokens; output is free. A hard **$0.50 cap per ledger** is set in code (`JEV_CAP_USD`). No setting raises it. Every request reserves its worst case first; if that would pass the cap, the request is refused. The app ledger lives at `library/_spend/jev-round1.json` and the eval ledger at `%LOCALAPPDATA%\dep-agent-eval\_spend\jev-round1.json`. Answers are cached by payload hash in `library/_judge/`, so the same question is never paid for twice. The client pins the model (`jev-1.14.0`) and passes every option explicitly, so `TYPESAFE_*` environment variables cannot redirect the key, log request bodies or change the model.
 
 ## Cost discipline
 

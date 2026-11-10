@@ -43,6 +43,22 @@ export interface ProjectJson {
   volta: { node: string | null; npm: string | null; yarn: string | null } | null;
   workspacesDetected: boolean;
   dependencies: ProjectDependency[];
+  /** v2 Stage 5b (D30, proposed): missing = unknown = private for every Jev use. Set only by the user (PATCH /api/projects/:slug). */
+  privacy?: 'public' | 'private';
+  /** v2 Stage 5b: per-project Jev switch; missing = 'on' (follow the global switch). */
+  judge?: 'on' | 'off';
+  /** v2 Stage 5b: explicit opt-in for J1-J3 source snippets on a private project. */
+  judgeSourceOptIn?: boolean;
+}
+
+/** The user's per-project Jev settings, carried over when a rescan / relocate rewrites `project.json`. */
+export function judgeSettingsOf(p: Partial<ProjectJson> | null | undefined): Pick<ProjectJson, 'privacy' | 'judge' | 'judgeSourceOptIn'> {
+  if (p === null || p === undefined) return {};
+  return {
+    ...(p.privacy === 'public' || p.privacy === 'private' ? { privacy: p.privacy } : {}),
+    ...(p.judge === 'on' || p.judge === 'off' ? { judge: p.judge } : {}),
+    ...(p.judgeSourceOptIn === true ? { judgeSourceOptIn: true } : {})
+  };
 }
 
 export interface ProjectDependency {

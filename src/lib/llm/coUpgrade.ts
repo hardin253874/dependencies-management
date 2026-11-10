@@ -75,7 +75,7 @@ export interface CoUpgradeOutput {
   sources: Record<string, CoUpgradeSource[]>;
 }
 
-export type CoUpgradeSource = 'peer-dep' | 'common-pairing' | 'peer-range-conflict';
+export type CoUpgradeSource = 'peer-dep' | 'common-pairing' | 'peer-range-conflict' | 'suggested-jev';
 
 export function computeCoUpgradeCandidates(input: CoUpgradeInput): CoUpgradeOutput {
   // Map<name, { sources, peerRange }>.

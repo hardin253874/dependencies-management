@@ -7,6 +7,7 @@ import { configFilePath } from '../paths';
 import { MODEL_OPTIONS, defaultModel } from '../llm/models';
 import type { ConfigNotice, LegacyLlmProvider, LlmProvider, ReportEngine } from '../api-types';
 import { DEFAULT_AGENT_BUDGETS, normalizeBudgetSettings, type AgentBudgetSettings, type AgentBudgetView } from '../../core/agent/budgets';
+import { DEFAULT_JUDGE_SWITCHES, J_FLAGS, normalizeJudgeSwitches, type JudgeSwitches } from '../../core/judge/types';
 
 export type { LlmProvider };
 export type ThemeChoice = 'light' | 'dark' | 'system';
@@ -37,6 +38,13 @@ export interface AppConfig {
   };
   /** v2 Stage 4a: per-view agent run budgets (read-only in the Settings UI for now). */
   agentBudgets: Record<AgentBudgetView, AgentBudgetSettings>;
+  /**
+   * v2 Stage 5b: Jev (TypeSafe) switches. `enabled: false` = no Jev call
+   * anywhere; `router` = the D28 model router (rules, then Jev for unclear
+   * cases); `flags.J1…J8` = each judgment. All default off; filled silently
+   * by `migrateConfig` for older configs.
+   */
+  judge: JudgeSwitches;
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -44,7 +52,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   llm: { provider: 'anthropic', model: 'claude-opus-5-5', reportEngine: 'agent' },
   ui: { sidebarCollapsed: false, theme: 'light', showDeepAnalyzeWarning: true },
   features: { resolverCheckEnabled: true },
-  agentBudgets: { updateReport: { ...DEFAULT_AGENT_BUDGETS.updateReport }, deepReport: { ...DEFAULT_AGENT_BUDGETS.deepReport } }
+  agentBudgets: { updateReport: { ...DEFAULT_AGENT_BUDGETS.updateReport }, deepReport: { ...DEFAULT_AGENT_BUDGETS.deepReport } },
+  judge: { enabled: DEFAULT_JUDGE_SWITCHES.enabled, router: DEFAULT_JUDGE_SWITCHES.router, flags: { ...DEFAULT_JUDGE_SWITCHES.flags } }
 };
 
 export function reportEngineOf(raw: unknown): ReportEngine {
@@ -85,9 +94,10 @@ export function migrateConfig(raw: unknown): MigratedConfig {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new Error('_config.json must be a JSON object.');
   }
-  const stored = raw as Omit<AppConfig, 'llm' | 'agentBudgets'> & {
+  const stored = raw as Omit<AppConfig, 'llm' | 'agentBudgets' | 'judge'> & {
     llm?: { provider: StoredLlmProvider; model: string; reportEngine?: unknown };
     agentBudgets?: unknown;
+    judge?: unknown;
   };
   if (stored.schemaVersion !== 1) {
     throw new Error(`Unsupported _config.json schemaVersion: ${String(stored.schemaVersion)}`);
@@ -119,8 +129,8 @@ export function migrateConfig(raw: unknown): MigratedConfig {
   } else {
     llm = { provider: storedLlm.provider, model: storedLlm.model, ...engineField(storedLlm.reportEngine) };
   }
-  // Stage 4a: the agent fields are filled silently (no notice); nothing the user chose changes.
-  return { config: { ...stored, llm, agentBudgets: agentBudgetsOf(stored.agentBudgets) }, notices };
+  // Stage 4a / 5b: the agent and judge fields are filled silently (no notice); nothing the user chose changes.
+  return { config: { ...stored, llm, agentBudgets: agentBudgetsOf(stored.agentBudgets), judge: normalizeJudgeSwitches(stored.judge) }, notices };
 }
 
 /**
@@ -182,13 +192,35 @@ export async function patchConfig(patch: PatchInput): Promise<MigratedConfig> {
       resolverCheckEnabled: patch.features?.resolverCheckEnabled ?? cur.features.resolverCheckEnabled
     },
     // Read-only in 4a: PATCH cannot change budgets (editing them is backlog).
-    agentBudgets: cur.agentBudgets
+    agentBudgets: cur.agentBudgets,
+    judge: mergeJudge(cur.judge, patch.judge)
   };
   await writeConfig(next);
   return { config: next, notices };
 }
 
+function mergeJudge(cur: JudgeSwitches, patch: JudgePatch | undefined): JudgeSwitches {
+  if (patch === undefined) return cur;
+  const flags = { ...cur.flags };
+  for (const j of J_FLAGS) {
+    const v = patch.flags?.[j];
+    if (typeof v === 'boolean') flags[j] = v;
+  }
+  return {
+    enabled: typeof patch.enabled === 'boolean' ? patch.enabled : cur.enabled,
+    router: typeof patch.router === 'boolean' ? patch.router : cur.router,
+    flags
+  };
+}
+
+export interface JudgePatch {
+  enabled?: boolean;
+  router?: boolean;
+  flags?: Partial<JudgeSwitches['flags']>;
+}
+
 export interface PatchInput {
+  judge?: JudgePatch;
   llm?: Partial<AppConfig['llm']>;
   ui?: Partial<AppConfig['ui']>;
   features?: Partial<AppConfig['features']>;

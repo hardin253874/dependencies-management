@@ -10,6 +10,7 @@
  *
  * Returns `JobEnqueueResponse` (202 new / 200 dedupe).
  */
+import { estimateRouting } from '@/lib/agent/reportJobs';
 import path from 'path';
 import { NextResponse } from 'next/server';
 import { withCsrf, type RouteCtx } from '@/lib/http/guards';
@@ -116,6 +117,17 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; pathHash: st
 
       const config = await readConfig();
       const client = await getLlmClient();
+      const installed = dep.installedVersion ?? '0.0.0';
+      const routing = await estimateRouting({
+        view: 'file-review',
+        slug,
+        name,
+        from: installed,
+        to: extractLatestVersion(depDetail) ?? installed,
+        config,
+        allowJudge: true,
+        signal
+      });
 
       const run = await withLlmLimit(client.provider, () =>
         runFileReview(client, {
@@ -128,7 +140,7 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; pathHash: st
           currentCves: depDetail?.currentVersionCves ?? [],
           importStatements: usageFile.importStatements,
           knownSymbols: [name],
-          model: config.llm.model,
+          model: routing?.model ?? config.llm.model,
           onPhase: (phaseEvent) => {
             report({
               current: 1,
@@ -146,7 +158,7 @@ export const POST = withCsrf<RouteCtx<{ slug: string; name: string; pathHash: st
       await writeEnvelope<FileReviewDetail>(fileReviewFilePath(slug, name, pathHash), {
         source: run.source,
         ttlHours: null,
-        data: run.detail
+        data: routing !== null ? { ...run.detail, routing } : run.detail
       });
 
       report({ current: 2, total: 2, label: 'Done', phase: 'ai' });

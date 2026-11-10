@@ -28,7 +28,16 @@ import { predictV1Ai } from './lib/predict-v1-ai';
 import { loadPlaybookDir } from '../src/core/agent/playbooks';
 import { MockLLMClient } from '../src/lib/llm/mock';
 import type { AiRunOptions } from './lib/args';
-import { assertPublicCases, loadPrivateIds, MissingApiKeyError, PrivateCaseError, startRealSession, type RealSession } from './lib/real';
+import { assertPublicCases, createRealJudgeClient, loadPrivateIds, loadTypesafeKey, MissingApiKeyError, MissingTypesafeKeyError, PrivateCaseError, startRealSession, type RealSession } from './lib/real';
+import { askRouterJev, computeRouterArms, jevCacheLookup, RouterArmsError } from './lib/router-arms';
+import { judgeEvalCacheDir, JudgeEvalError, MEASURABLE_USES, mockJudgeClient, NOT_MEASURABLE, runJudgeEval, type MeasuredUse } from './lib/judge';
+import { JudgeCache } from '../src/core/judge/cache';
+import { Judge } from '../src/core/judge/judge';
+import { normalizeJudgeSwitches } from '../src/core/judge/types';
+import { JevLedger, jevLedgerPathEval, sessionGate } from '../src/core/judge/ledger';
+import type { JudgeClient } from '../src/core/judge/client';
+import { extractImportSiteContext } from '../src/lib/scanners/importSiteContext';
+import { localDate, resultFilePath } from './lib/results';
 import { defaultLedgerPath, LedgerLockError } from '../src/core/spend/ledger';
 import type { CasePrediction } from './lib/types';
 import { findingsSheetPath, LabelCollisionError, runEval } from './lib/results';
@@ -341,6 +350,124 @@ async function execute(cmd: ParsedCommand): Promise<number> {
       return 0;
     }
 
+    case 'router-arms': {
+      const corpus = await loadValidCorpus(cmd);
+      const result = await computeRouterArms({
+        label: cmd.label,
+        now: new Date(),
+        cases: corpus,
+        files: { opus: await readResultFile(path.resolve(cmd.opus)), sonnet: await readResultFile(path.resolve(cmd.sonnet)), haiku: await readResultFile(path.resolve(cmd.haiku)) },
+        inputNames: { opus: path.basename(cmd.opus), sonnet: path.basename(cmd.sonnet), haiku: path.basename(cmd.haiku), jevCache: cmd.jevCache ?? null },
+        ...(cmd.configuredModel !== undefined ? { configuredModel: cmd.configuredModel } : {}),
+        ...(cmd.jevCache !== undefined ? { jev: jevCacheLookup(path.resolve(cmd.jevCache)) } : {})
+      });
+      for (const a of result.arms) {
+        const f = (x: number | null) => (x === null ? 'n/a' : x.toFixed(3));
+        out(`${a.arm}: full R ${f(a.full.overall.recall)} (complex ${f(a.full.complex.recall)}) · subset R ${f(a.subset.overall.recall)} · cost $${a.costUsd.toFixed(4)} · models ${JSON.stringify(a.models)}`);
+      }
+      for (const s of result.shipCheck) out(`ship check ${s.arm} [${s.set}]: ${s.met ? 'met' : 'not met'} (recall -${s.recallDeltaPoints ?? 'n/a'}, saving ${s.costSaving ?? 'n/a'})`);
+      const file = resultFilePath(RESULTS_DIR, 'public', localDate(new Date()), cmd.label);
+      await atomicWriteJson(file, result);
+      out(`wrote ${path.relative(TOOL_ROOT, file)}`);
+      return 0;
+    }
+
+    case 'judge': {
+      const all = await loadValidCorpus(cmd);
+      const selected = selectCases(all, cmd.cases);
+      // Privacy first: before the key, the ledger or any network call (mock or real).
+      const privateIds = new Set([...(await loadPrivateIds(DEFAULT_LOCAL_FILE)), ...all.filter((c) => c.visibility === 'private').map((c) => c.id)]);
+      try {
+        assertPublicCases(selected, privateIds);
+      } catch (e) {
+        if (e instanceof PrivateCaseError) throw new UsageError(`${e.message} Pass --cases with public case ids.`);
+        throw e;
+      }
+      if (cmd.use !== 'router' && !(MEASURABLE_USES as readonly string[]).includes(cmd.use)) {
+        out(`${cmd.use}: ${NOT_MEASURABLE[cmd.use] ?? 'not measurable'}`);
+        return 0;
+      }
+      let client: JudgeClient = mockJudgeClient(path.join(TOOL_ROOT, 'test-fixtures', 'judge'));
+      let ledger: JevLedger | null = null;
+      if (cmd.real) {
+        const key = await loadTypesafeKey(path.join(TOOL_ROOT, '.env'));
+        const localAppData = process.env.LOCALAPPDATA;
+        if (localAppData === undefined || localAppData === '') throw new UsageError('--real needs %LOCALAPPDATA% for the Jev ledger');
+        ledger = await JevLedger.open(jevLedgerPathEval(localAppData));
+        const s = ledger.state();
+        out(`Jev ledger ${s.roundId} (start): spent $${s.spentUsd.toFixed(6)} · reserved $${s.reservedUsd.toFixed(6)} · remaining $${s.remainingUsd.toFixed(6)} of $${s.capUsd}`);
+        const gate = sessionGate(ledger, { step: `judge:${cmd.use}:${cmd.label}`, ...(cmd.stopAtUsd !== undefined ? { ceilingUsd: cmd.stopAtUsd } : {}) });
+        // Every selected case was checked public above; createRealJudgeClient re-checks one before building.
+        client = createRealJudgeClient({ evalCase: selected[0]!, privateIds, apiKey: key, gate });
+      }
+      try {
+        const cache = makeCache(all, cmd.cacheDir, cmd.offline);
+        // Same dir layout as the app cache key (`routerCacheKey`); mock answers never share the real dir.
+        const judgeCacheDir = judgeEvalCacheDir(cache.cacheDir, client.kind);
+        const judgeCache = new JudgeCache(judgeCacheDir);
+        if (cmd.use === 'router') {
+          if (cmd.opus === undefined || cmd.sonnet === undefined || cmd.haiku === undefined) throw new UsageError('--use router needs --opus, --sonnet and --haiku');
+          const routed = await askRouterJev({
+            label: cmd.label,
+            now: new Date(),
+            cases: selected,
+            files: { opus: await readResultFile(path.resolve(cmd.opus)), sonnet: await readResultFile(path.resolve(cmd.sonnet)), haiku: await readResultFile(path.resolve(cmd.haiku)) },
+            inputNames: { opus: path.basename(cmd.opus), sonnet: path.basename(cmd.sonnet), haiku: path.basename(cmd.haiku) },
+            ...(cmd.configuredModel !== undefined ? { configuredModel: cmd.configuredModel } : {}),
+            judge: new Judge({ client, cache: judgeCache, switches: normalizeJudgeSwitches({ enabled: true, router: true }) }),
+            client: client.kind,
+            jevCache: judgeCacheDir
+          });
+          for (const a of routed.asked) out(`${a.caseId}/${a.phaseId}: ${a.via} → ${a.model} (${a.reason})`);
+          for (const k of routed.skipped) out(`${k.caseId}/${k.phaseId}: skipped (${k.reason})`);
+          out(`rules decided ${routed.rulesDecided} phase(s); asked ${routed.asked.length}; cache ${judgeCacheDir} (pass it to router-arms --jev-cache)`);
+          const file = resultFilePath(RESULTS_DIR, 'public', localDate(new Date()), cmd.label);
+          await atomicWriteJson(file, routed);
+          out(`wrote ${path.relative(TOOL_ROOT, file)}`);
+          return 0;
+        }
+        const result = await runJudgeEval({
+          use: cmd.use as MeasuredUse,
+          label: cmd.label,
+          now: new Date(),
+          cases: selected,
+          deps: {
+            prepare: (c) => cache.prepare(c, { offline: cmd.offline }),
+            truth: async (c, dir) =>
+              (await cache.truthForPhases(c, dir)).map((p) => ({ phaseId: p.phaseId, kept: p.truth.kept.map((k) => k.path), dependencyDiff: p.dependencyDiff })),
+            predicted: async (c, dir) => (await predictV2Graph(c, dir, cache.cacheDir)).byPhase,
+            snippet: async (dir, rel, pkgs) => {
+              for (const pkg of pkgs) {
+                const ctx = await extractImportSiteContext({ projectRoot: dir, depName: pkg, importingFiles: [rel], contextRadius: 10 });
+                const w = ctx.files[0]?.windows[0];
+                if (w !== undefined) return w.code;
+              }
+              return null;
+            },
+            directDeps: async (c, dir) => {
+              const pkgPath = path.join(dir, c.projectDirs[0] ?? '.', 'package.json');
+              const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8')) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+              return Object.entries({ ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }).map(([name, version]) => ({ name, version }));
+            },
+            client,
+            cache: judgeCache,
+            log: out
+          }
+        });
+        if (result.status === 'not-measurable') out(`${cmd.use}: ${result.reason ?? ''}`);
+        const file = resultFilePath(RESULTS_DIR, 'public', localDate(new Date()), cmd.label);
+        await atomicWriteJson(file, result);
+        out(`wrote ${path.relative(TOOL_ROOT, file)}`);
+        return 0;
+      } finally {
+        if (ledger !== null) {
+          const s = ledger.state();
+          out(`Jev ledger ${s.roundId} (end): spent $${s.spentUsd.toFixed(6)} · reserved $${s.reservedUsd.toFixed(6)} · remaining $${s.remainingUsd.toFixed(6)}`);
+          await ledger.close();
+        }
+      }
+    }
+
     default: {
       const never: never = cmd;
       throw new UsageError(`unhandled command ${JSON.stringify(never)}`);
@@ -361,7 +488,10 @@ async function main(): Promise<void> {
       e instanceof FindingsSheetError ||
       e instanceof MissingApiKeyError ||
       e instanceof PrivateCaseError ||
-      e instanceof LedgerLockError
+      e instanceof LedgerLockError ||
+      e instanceof MissingTypesafeKeyError ||
+      e instanceof RouterArmsError ||
+      e instanceof JudgeEvalError
     ) {
       err(`eval: ${e.message}`);
       if (e instanceof UsageError) err('Run `npm run eval -- --help` for usage.');

@@ -13,6 +13,8 @@
  * The route handler is responsible for fanning out usage cache loading +
  * import-site context extraction; this file is pure orchestration.
  */
+import { capSnippet, type SourceSnippet } from '../../core/judge/payload';
+import { evidenceCheckJ2, triageCvesJ3, type JudgeContext } from '../../core/judge/uses';
 import {
   CVE_IMPACT_TOOL_SCHEMA,
   renderCveImpactPrompt,
@@ -54,6 +56,30 @@ export interface RunCveImpactInput {
   approxContextTokens: number;
   onPhase?: Parameters<LLMClient['call']>[0]['onPhase'];
   signal?: AbortSignal;
+  /**
+   * v2 Stage 5b: Jev contexts, each `null`/absent = today's behaviour.
+   * `j3` = per-CVE triage used ONLY when the LLM call fails (rows labelled
+   * "estimated (Jev)"); `j2` = evidence check of each verdict against its
+   * cited files (flags only).
+   */
+  jev?: { j2?: JudgeContext | null; j3?: JudgeContext | null };
+}
+
+/** Snippets for J2/J3 from the extracted windows, greedily under a byte budget (the source payload bound). */
+export function snippetsFromFiles(files: RunCveImpactInput['files'], only?: ReadonlySet<string>, budgetBytes = 30_000): SourceSnippet[] {
+  const out: SourceSnippet[] = [];
+  let used = 0;
+  for (const f of files) {
+    if (only !== undefined && !only.has(f.relativePath)) continue;
+    const w = f.windows[0];
+    if (w === undefined) continue;
+    const text = capSnippet(w.code);
+    const bytes = Buffer.byteLength(text, 'utf8') + f.relativePath.length + 32;
+    if (used + bytes > budgetBytes) break;
+    out.push({ path: f.relativePath, text });
+    used += bytes;
+  }
+  return out;
 }
 
 export interface CveImpactRun {
@@ -196,17 +222,38 @@ export async function runCveImpact(
           : []
       };
     });
+    const checked = input.jev?.j2 ? await flagRowSupport(input.jev.j2, rows, input.files) : rows;
     return {
       cacheKey,
       detail: {
         ...skeleton,
-        rows,
+        rows: checked,
         globalNotes:
           typeof llmResult.output.globalNotes === 'string' ? llmResult.output.globalNotes : '',
         cost: llmResult.tokens
       },
       source: llmResult.source
     };
+  }
+
+  // J3 (5b.12): a better fallback than "all inconclusive", only when the LLM failed.
+  if (input.jev?.j3) {
+    const triage = await triageCvesJ3(input.jev.j3, {
+      cves: input.cves.map((c) => ({ id: c.id, advisory: c.summary })),
+      snippets: snippetsFromFiles(input.files)
+    });
+    if (triage !== null) {
+      const rows = skeleton.rows.map((r) => {
+        const t = triage.get(r.cveId);
+        return t === undefined ? r : { ...r, verdict: t.verdict, confidence: 'low' as const, reasoning: `estimated (Jev), confidence ${t.confidence.toFixed(2)}`, estimatedBy: 'jev' as const };
+      });
+      return {
+        cacheKey,
+        detail: { ...skeleton, rows, globalNotes: 'AI analysis unavailable. Verdicts are estimated (Jev). Click Re-analyze to retry.' },
+        source: 'deterministic-partial',
+        llmError
+      };
+    }
   }
 
   // Deterministic-partial fallback.
@@ -220,6 +267,20 @@ export async function runCveImpact(
     source: 'deterministic-partial',
     llmError
   };
+}
+
+/** J2 (5b.11): one Noul per row with cited files; low / unclear support is flagged, nothing removed. */
+async function flagRowSupport(ctx: JudgeContext, rows: CveImpactRow[], files: RunCveImpactInput['files']): Promise<CveImpactRow[]> {
+  const claims = rows
+    .filter((r) => r.citedFiles.length > 0)
+    .map((r) => ({ id: r.cveId, claim: `${r.cveId}: ${r.verdict}. ${r.reasoning}`, evidence: snippetsFromFiles(files, new Set(r.citedFiles), 12_000) }));
+  if (claims.length === 0) return rows;
+  const support = await evidenceCheckJ2(ctx, claims);
+  if (support === null) return rows;
+  return rows.map((r) => {
+    const s = support.get(r.cveId)?.support ?? null;
+    return s === null ? r : { ...r, support: s };
+  });
 }
 
 function cleanVerdict(value: unknown): CveImpactRow['verdict'] | null {
