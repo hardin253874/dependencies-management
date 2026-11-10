@@ -1,0 +1,24 @@
+{
+  "id": "yakit-antd5",
+  "repo": "https://github.com/yaklang/yakit",
+  "baseCommit": "2be1cac110d206321a2420d4ff0ba9274c3ae27c",
+  "projectDirs": ["app/renderer/src/main", "app/renderer/engine-link-startup"],
+  "phases": [
+    {
+      "id": "main",
+      "toCommit": "273a2c9156e0c5d5e4da67e619b77dc6108fe144",
+      "packages": [
+        { "name": "antd", "from": "4.21.7", "to": "5.29.2" },
+        { "name": "@ant-design/icons", "from": "4.8.0", "to": "5.6.1" },
+        { "name": "@ant-design/compatible", "from": "1.1.2", "to": null },
+        { "name": "@ant-design/pro-card", "from": "1.20.22", "to": null },
+        { "name": "@ant-design/pro-layout", "from": "6.38.22", "to": null },
+        { "name": "@ant-design/pro-table", "from": "2.80.8", "to": null }
+      ],
+      "tags": ["antd-major"]
+    }
+  ],
+  "tags": ["antd-major", "ui-library", "complex", "style-truth", "multi-app"],
+  "source": { "pr": "https://github.com/yaklang/yakit/pull/4152" },
+  "notes": "Squash merge of PR #4152 (2026-09-01), single parent = baseCommit. 520 files changed (493 M, 26 A, 1 D): 336 .tsx, 9 .ts, 167 .scss, 4 .css, 2 package.json, 2 yarn.lock. Two separate yarn apps, each with its own package.json/yarn.lock: app/renderer/src/main (461 files) and app/renderer/engine-link-startup (57 files); both moved antd 4.21.7 -> 5.29.2 (resolved). The main app also dropped @ant-design/compatible and the pro-* packages and added dayjs ^1.11.11 (already transitively present at 1.11.6). @ant-design/icons was 'latest' (resolved 4.8.0) at base. Repo is ~200 MB on GitHub: use a blob-less clone."
+}

@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "eval": "vite-node eval/cli.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

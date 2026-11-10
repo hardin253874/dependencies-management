@@ -1,0 +1,36 @@
+{
+  "id": "xrpl-hooks-ide-next13",
+  "repo": "https://github.com/Xahau/xrpl-hooks-ide",
+  "baseCommit": "41de4c814dcf88c3fb4d892db8f4008b4ab35d4c",
+  "projectDirs": ["."],
+  "phases": [
+    {
+      "id": "main",
+      "toCommit": "d5b00d528426050b1996181bf891e682b44e9f65",
+      "packages": [
+        { "name": "next", "from": "12.1.0", "to": "13.5.11" },
+        { "name": "react", "from": "17.0.2", "to": "18.3.1" },
+        { "name": "react-dom", "from": "17.0.2", "to": "18.3.1" },
+        { "name": "@stitches/react", "from": "1.2.8", "to": null },
+        { "name": "@emotion/css", "from": null, "to": "11.13.5" },
+        { "name": "@emotion/server", "from": null, "to": "11.11.0" },
+        { "name": "@radix-ui/colors", "from": "0.1.8", "to": "3.0.0" },
+        { "name": "@radix-ui/react-alert-dialog", "from": "0.1.7", "to": "1.1.15" },
+        { "name": "@radix-ui/react-context-menu", "from": "0.1.6", "to": "2.2.16" },
+        { "name": "@radix-ui/react-dialog", "from": "0.1.7", "to": "1.1.15" },
+        { "name": "@radix-ui/react-dropdown-menu", "from": "0.1.6", "to": "2.1.16" },
+        { "name": "@radix-ui/react-id", "from": "0.1.5", "to": null },
+        { "name": "@radix-ui/react-label", "from": "0.1.5", "to": "2.1.8" },
+        { "name": "@radix-ui/react-popover", "from": "0.1.6", "to": "1.1.15" },
+        { "name": "@radix-ui/react-switch", "from": "0.1.5", "to": "1.2.6" },
+        { "name": "@radix-ui/react-tooltip", "from": "0.1.7", "to": "1.2.8" },
+        { "name": "valtio", "from": "1.3.1", "to": "1.13.2" },
+        { "name": "typescript", "from": "4.9.5", "to": "5.9.3" }
+      ],
+      "tags": ["next-major", "react-major"]
+    }
+  ],
+  "tags": ["next-major", "react-major", "multi-package", "backup"],
+  "source": { "pr": "https://github.com/Xahau/xrpl-hooks-ide/pull/363" },
+  "notes": "Backup Next case. Squash merge 'Upgrade Next.js to 13 (#363)', merged 2026-10-21, single parent = baseCommit. 27 files, 25 JS/TS; one is a new test (scripts/check-styled.test.mjs, dropped as added). Mixed upgrade: next 12 to 13.5 together with react 18, radix 0.1 to 1.x/2.x, and @stitches/react replaced by an emotion-based shim in stitches.config.ts. Truth cannot be attributed to next alone, so it is tagged multi-package. The PR body says 'Styling stays on stitches', but the merged package.json and yarn.lock no longer contain @stitches/react, and stitches.config.ts is now a stitches-compatible layer over @emotion/css. pages/_middleware.ts to middleware.ts is a rename, kept under the old path. Small repo: ~120 JS/TS files at base, 20 stars. From/to are yarn.lock-resolved. Not listed: eslint 7.32.0 to 8.57.1, eslint-config-next 11.1.2 to 13.5.11, @types/react 17.0.31 to 18.3.1."
+}

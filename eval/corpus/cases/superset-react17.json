@@ -1,0 +1,29 @@
+{
+  "id": "superset-react17",
+  "repo": "https://github.com/apache/superset",
+  "baseCommit": "aa74ba3da2546b7145bfaa5531e4fa478570e21f",
+  "projectDirs": ["superset-frontend"],
+  "phases": [
+    {
+      "id": "main",
+      "toCommit": "7e2b7941f38a0d15466b4e3fc9d1f1e32e821ff9",
+      "packages": [
+        { "name": "react", "from": "16.14.0", "to": "17.0.2" },
+        { "name": "react-dom", "from": "16.14.0", "to": "17.0.2" },
+        { "name": "@types/react", "from": "16.14.51", "to": "17.0.83" },
+        { "name": "@types/react-dom", "from": "16.9.8", "to": "17.0.26" },
+        { "name": "react-test-renderer", "from": "16.14.0", "to": "17.0.2" },
+        { "name": "@hot-loader/react-dom", "from": "16.14.0+4.13.0", "to": "17.0.2" },
+        { "name": "enzyme-adapter-react-16", "from": "1.15.7", "to": null },
+        { "name": "@types/enzyme-adapter-react-16", "from": "1.0.6", "to": null },
+        { "name": "@wojtekmaj/enzyme-adapter-react-17", "from": null, "to": "0.8.0" },
+        { "name": "@babel/core", "from": "7.24.7", "to": "7.26.0" },
+        { "name": "jsdom", "from": "25.0.1", "to": "26.0.0" }
+      ],
+      "tags": ["react-major"]
+    }
+  ],
+  "tags": ["react-major", "complex", "monorepo", "test-heavy"],
+  "source": { "pr": "https://github.com/apache/superset/pull/31961" },
+  "notes": "Squash merge 'refactor: Upgrade to React 17 (#31961)', merged 2025-01-28, single parent = baseCommit. 101 files, 73 JS/TS. Most source truth is test files (*.test.tsx/jsx/ts: enzyme adapter switch and act/waitFor changes); about 25 are non-test sources. Config truth: superset-frontend/babel.config.js and jest.config.js. Other deps moved in the same PR and are not all listed: the whole @babel/* toolchain (7.22-7.24 to 7.25-7.26, plus new preset-typescript, plugin-transform-modules-commonjs, runtime, runtime-corejs3), ts-jest added, cheerio pinned 1.0.0-rc.10, d3-color added, and about 20 plugin/package package.json peer ranges. From/to are lockfile-resolved (superset-frontend/package-lock.json), not the ^ ranges. Out of scope (outside projectDirs): .github/workflows/dependency-review.yml, UPDATING.md. About 2,727 JS/TS files under superset-frontend at base. The repo is large (~1.4 GB), so the blob-less clone matters."
+}

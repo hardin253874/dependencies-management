@@ -1,0 +1,20 @@
+{
+  "id": "openedx-lpe-dayjs",
+  "repo": "https://github.com/openedx/frontend-app-learner-portal-enterprise",
+  "baseCommit": "def111c4cdd29acc9dc2d20c7d397655356aa426",
+  "projectDirs": ["."],
+  "phases": [
+    {
+      "id": "main",
+      "toCommit": "49579e56108eec300697e8dcf2732ac2cabe6b6a",
+      "packages": [
+        { "name": "moment", "from": "2.29.1", "to": null },
+        { "name": "dayjs", "from": null, "to": "1.11.9" }
+      ],
+      "tags": ["package-swap"]
+    }
+  ],
+  "tags": ["package-swap", "moment-dayjs", "date-lib"],
+  "source": { "pr": "https://github.com/openedx/frontend-app-learner-portal-enterprise/pull/795" },
+  "notes": "Squash merge of PR #795 (2023-08-01), single parent = baseCommit. 34 files: 31 .js/.jsx under src/ (14 of them tests), package.json, package-lock.json, and one added ADR (docs/decisions/0009-moment-to-dayjs.rst, dropped as added/other). Versions from package-lock.json: moment 2.29.1 removed, dayjs 1.11.9 added. Clean single-app case; every source change is an import-site rewrite of moment calls."
+}

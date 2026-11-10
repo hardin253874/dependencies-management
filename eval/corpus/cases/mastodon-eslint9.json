@@ -1,0 +1,19 @@
+{
+  "id": "mastodon-eslint9",
+  "repo": "https://github.com/mastodon/mastodon",
+  "baseCommit": "9686ae7060c4adbc199c0f31b55307e94aed31f4",
+  "projectDirs": ["."],
+  "phases": [
+    {
+      "id": "main",
+      "toCommit": "e8270e2807727e1cf6a47a40442b3038c5bca858",
+      "packages": [
+        { "name": "eslint", "from": "8.57.1", "to": "9.23.0" }
+      ],
+      "tags": ["eslint-major"]
+    }
+  ],
+  "tags": ["toolchain", "eslint-major", "flat-config", "floor"],
+  "source": { "pr": "https://github.com/mastodon/mastodon/pull/34324" },
+  "notes": "Squash merge of PR #34324 (2025-04-01), single parent = baseCommit. 21 files: 8 app/javascript source files (lint-directive and comment fixes, not API changes), deleted .eslintrc.js / .eslintignore / streaming/.eslintrc.cjs, edited .prettierrc.js and streaming/tsconfig.json (config truth), added eslint.config.mjs / streaming/eslint.config.mjs / streaming/lint-staged.config.mjs (dropped as added), package.json x2, yarn.lock, CI and renovate files (dropped as other). eslint resolved 8.57.1 -> 9.23.0 (yarn.lock). Same PR also swapped @typescript-eslint/eslint-plugin + parser (^8) for typescript-eslint ^8.28.0, removed eslint-define-config, added @eslint/js and globals; not listed as packages to keep the case about eslint. Rails repo with a JS frontend (app/javascript) and a streaming/ workspace; v1 is expected near 0 recall because the changed files do not import eslint. Useful floor case."
+}

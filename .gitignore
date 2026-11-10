@@ -50,3 +50,9 @@ next-env.d.ts.bak
 
 # local agent tool state
 .omc/
+
+# eval harness — private cases and their results never reach the public repo.
+# The eval clone cache lives outside the repo (%LOCALAPPDATA%\dep-agent-eval);
+# eval/lib/cache.ts refuses a cache dir inside this repo.
+eval/corpus.local.json
+eval/results/private/

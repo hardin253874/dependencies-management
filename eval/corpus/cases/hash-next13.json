@@ -1,0 +1,21 @@
+{
+  "id": "hash-next13",
+  "repo": "https://github.com/hashintel/hash",
+  "baseCommit": "331bf0ee822d3fed54b094733a83c4daf1843894",
+  "projectDirs": ["packages/hash/frontend", "apps/hashdotdev"],
+  "phases": [
+    {
+      "id": "main",
+      "toCommit": "765bc8a97405a965be84e7a3188b810899578bee",
+      "packages": [
+        { "name": "next", "from": "12.3.1", "to": "13.0.6" },
+        { "name": "next-transpile-modules", "from": "9.0.0", "to": "10.0.0" },
+        { "name": "html-webpack-plugin", "from": "5.5.0", "to": null }
+      ],
+      "tags": ["next-major"]
+    }
+  ],
+  "tags": ["next-major", "complex", "monorepo", "codemod"],
+  "source": { "pr": "https://github.com/hashintel/hash/pull/1609" },
+  "notes": "Squash merge 'Upgrade to next 13 (#1609)', merged 2022-12-07, single parent = baseCommit. 15 files: 2 package.json, yarn.lock, packages/hash/frontend/next.config.js (config truth: removes the HtmlWebpackPlugin sandbox entry, the webpack resolve.fallback and sassOptions), and 11 .tsx sources from the next/link and next/image legacy codemod. Versions are exact pins. Two app dirs: packages/hash/frontend (~385 JS/TS files at base) and apps/hashdotdev (~60). The whole repo has ~1,167 JS/TS files; other workspaces are out of scope. The repo is ~1.1 GB, so the blob-less clone matters."
+}

@@ -1,0 +1,22 @@
+{
+  "id": "excalidraw-react18",
+  "repo": "https://github.com/excalidraw/excalidraw",
+  "baseCommit": "958ebeae61f8037dbc1d0494245be71e8606d347",
+  "projectDirs": ["."],
+  "phases": [
+    {
+      "id": "main",
+      "toCommit": "15d79f8fee4d371c740d021d2eaff8233a97216d",
+      "packages": [
+        { "name": "react", "from": "17.0.2", "to": "18.2.0" },
+        { "name": "react-dom", "from": "17.0.2", "to": "18.2.0" },
+        { "name": "@types/react", "from": "17.0.39", "to": "18.0.15" },
+        { "name": "@types/react-dom", "from": "17.0.11", "to": "18.0.6" }
+      ],
+      "tags": ["react-major"]
+    }
+  ],
+  "tags": ["react-major", "small"],
+  "source": { "pr": "https://github.com/excalidraw/excalidraw/pull/5450" },
+  "notes": "Squash merge 'chore: upgrade to React 18 (#5450)', merged 2022-07-22, single parent = baseCommit. 11 files: package.json, yarn.lock and 9 .tsx sources (src/index.tsx moves to createRoot, src/packages/excalidraw/example/App.tsx, and 7 src/components files that add explicit children typing for the React 18 types). Versions are exact pins in package.json. About 266 JS/TS files at base. Small, clean truth: a good high-recall reference case."
+}

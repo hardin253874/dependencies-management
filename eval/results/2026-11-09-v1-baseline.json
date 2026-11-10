@@ -1,0 +1,1050 @@
+{
+  "schemaVersion": 1,
+  "label": "v1-baseline",
+  "generatedAt": "2026-11-09T08:50:38.156Z",
+  "predictor": "v1-code-scan",
+  "tool": {
+    "commit": "f70d410785ca480d8f9a2a2131be9a569d37afa7",
+    "dirty": true
+  },
+  "visibility": "public",
+  "cases": [
+    {
+      "id": "excalidraw-react18",
+      "tags": [
+        "react-major",
+        "small"
+      ],
+      "status": "ok",
+      "filesScanned": 266,
+      "durationMs": 677,
+      "costUsd": 0,
+      "phases": [
+        {
+          "id": "main",
+          "packages": [
+            "react",
+            "react-dom",
+            "@types/react",
+            "@types/react-dom"
+          ],
+          "tags": [
+            "react-major",
+            "small"
+          ],
+          "truthCount": 9,
+          "predictedCount": 74,
+          "tp": 8,
+          "precision": 0.10810810810810811,
+          "recall": 0.8888888888888888,
+          "recallByKind": {
+            "source": 0.8888888888888888,
+            "config": null,
+            "style": null
+          },
+          "falseNegatives": [
+            "src/components/Card.tsx"
+          ],
+          "falsePositivesCount": 66,
+          "falsePositivesSample": [
+            "src/actions/actionZindex.tsx",
+            "src/actions/manager.tsx",
+            "src/actions/types.ts",
+            "src/components/Actions.tsx",
+            "src/components/App.tsx",
+            "src/components/Avatar.tsx",
+            "src/components/BackgroundPickerAndDarkModeToggle.tsx",
+            "src/components/ClearCanvas.tsx",
+            "src/components/ColorPicker.tsx",
+            "src/components/ContextMenu.tsx",
+            "src/components/Dialog.tsx",
+            "src/components/ErrorDialog.tsx",
+            "src/components/FixedSideContainer.tsx",
+            "src/components/HelpDialog.tsx",
+            "src/components/IconPicker.tsx",
+            "src/components/InitializeApp.tsx",
+            "src/components/Island.tsx",
+            "src/components/JSONExportDialog.tsx",
+            "src/components/LibraryButton.tsx",
+            "src/components/LibraryMenuItems.tsx"
+          ],
+          "addedCount": 0,
+          "droppedCounts": {
+            "package-json": 1,
+            "lockfile": 1
+          },
+          "outOfScope": []
+        }
+      ],
+      "findings": null
+    },
+    {
+      "id": "hash-next13",
+      "tags": [
+        "next-major",
+        "complex",
+        "monorepo",
+        "codemod"
+      ],
+      "status": "ok",
+      "filesScanned": 445,
+      "durationMs": 727,
+      "costUsd": 0,
+      "phases": [
+        {
+          "id": "main",
+          "packages": [
+            "next",
+            "next-transpile-modules",
+            "html-webpack-plugin"
+          ],
+          "tags": [
+            "codemod",
+            "complex",
+            "monorepo",
+            "next-major"
+          ],
+          "truthCount": 12,
+          "predictedCount": 57,
+          "tp": 12,
+          "precision": 0.21052631578947367,
+          "recall": 1,
+          "recallByKind": {
+            "source": 1,
+            "config": 1,
+            "style": null
+          },
+          "falseNegatives": [],
+          "falsePositivesCount": 45,
+          "falsePositivesSample": [
+            "apps/hashdotdev/src/components/Navbar.tsx",
+            "apps/hashdotdev/src/components/PreFooter.tsx",
+            "apps/hashdotdev/src/pages/_app.page.tsx",
+            "apps/hashdotdev/src/pages/_document.page.tsx",
+            "apps/hashdotdev/src/pages/api/subscribe.page.ts",
+            "apps/hashdotdev/src/pages/blog/[...blogSlug].page.tsx",
+            "apps/hashdotdev/src/util/mdxComponents.tsx",
+            "apps/hashdotdev/src/util/nextTypes.ts",
+            "packages/hash/frontend/jest.config.cjs",
+            "packages/hash/frontend/src/blocks/page/PageBlock.tsx",
+            "packages/hash/frontend/src/components/hooks/useAuthenticatedUser.ts",
+            "packages/hash/frontend/src/components/hooks/useCreatePage.ts",
+            "packages/hash/frontend/src/components/hooks/useCreateSubPage.ts",
+            "packages/hash/frontend/src/pages/404.page.tsx",
+            "packages/hash/frontend/src/pages/[account-slug]/[page-slug].page.tsx",
+            "packages/hash/frontend/src/pages/[account-slug]/entities/[entity-uuid].page.tsx",
+            "packages/hash/frontend/src/pages/[account-slug]/entities/[entity-uuid].page/entity-page-wrapper/entity-page-header.tsx",
+            "packages/hash/frontend/src/pages/[account-slug]/entities/[entity-uuid].page/new-entity-page.tsx",
+            "packages/hash/frontend/src/pages/[account-slug]/entities/[entity-uuid].page/shared/use-create-new-entity-and-redirect.ts",
+            "packages/hash/frontend/src/pages/[account-slug]/types/entity-type/[entity-type-id].page.tsx"
+          ],
+          "addedCount": 0,
+          "droppedCounts": {
+            "package-json": 2,
+            "lockfile": 1
+          },
+          "outOfScope": []
+        }
+      ],
+      "findings": null
+    },
+    {
+      "id": "inspirehep-dayjs",
+      "tags": [
+        "package-swap",
+        "moment-dayjs",
+        "date-lib",
+        "polyglot-monorepo"
+      ],
+      "status": "ok",
+      "filesScanned": 1131,
+      "durationMs": 1811,
+      "costUsd": 0,
+      "phases": [
+        {
+          "id": "main",
+          "packages": [
+            "moment",
+            "moment-timezone",
+            "dayjs"
+          ],
+          "tags": [
+            "date-lib",
+            "moment-dayjs",
+            "package-swap",
+            "polyglot-monorepo"
+          ],
+          "truthCount": 18,
+          "predictedCount": 19,
+          "tp": 15,
+          "precision": 0.7894736842105263,
+          "recall": 0.8333333333333334,
+          "recallByKind": {
+            "source": 0.8823529411764706,
+            "config": 0,
+            "style": null
+          },
+          "falseNegatives": [
+            "ui/src/common/__tests__/utils.test.js",
+            "ui/src/seminars/components/__tests__/SeminarTimezone.test.jsx",
+            "ui/vite.config.mts"
+          ],
+          "falsePositivesCount": 4,
+          "falsePositivesSample": [
+            "ui/src/common/components/DateRangeFilter.jsx",
+            "ui/src/submissions/common/components/DateField.jsx",
+            "ui/src/submissions/common/components/DateRangeField.jsx",
+            "ui/src/submissions/jobs/schemas/__tests__/job.test.js"
+          ],
+          "addedCount": 0,
+          "droppedCounts": {
+            "package-json": 1,
+            "snapshot": 1,
+            "lockfile": 1
+          },
+          "outOfScope": []
+        }
+      ],
+      "findings": null
+    },
+    {
+      "id": "mastodon-eslint9",
+      "tags": [
+        "toolchain",
+        "eslint-major",
+        "flat-config",
+        "floor"
+      ],
+      "status": "ok",
+      "filesScanned": 604,
+      "durationMs": 1241,
+      "costUsd": 0,
+      "phases": [
+        {
+          "id": "main",
+          "packages": [
+            "eslint"
+          ],
+          "tags": [
+            "eslint-major",
+            "flat-config",
+            "floor",
+            "toolchain"
+          ],
+          "truthCount": 12,
+          "predictedCount": 0,
+          "tp": 0,
+          "precision": null,
+          "recall": 0,
+          "recallByKind": {
+            "source": 0,
+            "config": 0,
+            "style": null
+          },
+          "falseNegatives": [
+            ".eslintrc.js",
+            ".prettierrc.js",
+            "app/javascript/entrypoints/public.tsx",
+            "app/javascript/mastodon/components/counters.tsx",
+            "app/javascript/mastodon/components/router.tsx",
+            "app/javascript/mastodon/features/emoji/emoji_compressed.js",
+            "app/javascript/mastodon/features/emoji/emoji_unicode_mapping_light.ts",
+            "app/javascript/mastodon/features/emoji/unicode_to_filename.js",
+            "app/javascript/mastodon/features/emoji/unicode_to_unified_name.js",
+            "app/javascript/mastodon/service_worker/web_push_locales.js",
+            "streaming/.eslintrc.cjs",
+            "streaming/tsconfig.json"
+          ],
+          "falsePositivesCount": 0,
+          "falsePositivesSample": [],
+          "addedCount": 3,
+          "droppedCounts": {
+            "other": 3,
+            "added": 3,
+            "package-json": 2,
+            "lockfile": 1
+          },
+          "outOfScope": []
+        }
+      ],
+      "findings": null
+    },
+    {
+      "id": "openedx-lpe-dayjs",
+      "tags": [
+        "package-swap",
+        "moment-dayjs",
+        "date-lib"
+      ],
+      "status": "ok",
+      "filesScanned": 546,
+      "durationMs": 1010,
+      "costUsd": 0,
+      "phases": [
+        {
+          "id": "main",
+          "packages": [
+            "moment",
+            "dayjs"
+          ],
+          "tags": [
+            "date-lib",
+            "moment-dayjs",
+            "package-swap"
+          ],
+          "truthCount": 31,
+          "predictedCount": 30,
+          "tp": 30,
+          "precision": 1,
+          "recall": 0.967741935483871,
+          "recallByKind": {
+            "source": 0.967741935483871,
+            "config": null,
+            "style": null
+          },
+          "falseNegatives": [
+            "src/components/course/course-header/data/hooks/tests/useCourseRunCardHeading.test.jsx"
+          ],
+          "falsePositivesCount": 0,
+          "falsePositivesSample": [],
+          "addedCount": 1,
+          "droppedCounts": {
+            "added": 1,
+            "lockfile": 1,
+            "package-json": 1
+          },
+          "outOfScope": []
+        }
+      ],
+      "findings": null
+    },
+    {
+      "id": "superset-react17",
+      "tags": [
+        "react-major",
+        "complex",
+        "monorepo",
+        "test-heavy"
+      ],
+      "status": "ok",
+      "filesScanned": 2727,
+      "durationMs": 5219,
+      "costUsd": 0,
+      "phases": [
+        {
+          "id": "main",
+          "packages": [
+            "react",
+            "react-dom",
+            "@types/react",
+            "@types/react-dom",
+            "react-test-renderer",
+            "@hot-loader/react-dom",
+            "enzyme-adapter-react-16",
+            "@types/enzyme-adapter-react-16",
+            "@wojtekmaj/enzyme-adapter-react-17",
+            "@babel/core",
+            "jsdom"
+          ],
+          "tags": [
+            "complex",
+            "monorepo",
+            "react-major",
+            "test-heavy"
+          ],
+          "truthCount": 74,
+          "predictedCount": 633,
+          "tp": 28,
+          "precision": 0.044233807266982623,
+          "recall": 0.3783783783783784,
+          "recallByKind": {
+            "source": 0.3888888888888889,
+            "config": 0,
+            "style": null
+          },
+          "falseNegatives": [
+            "superset-frontend/babel.config.js",
+            "superset-frontend/jest.config.js",
+            "superset-frontend/packages/superset-ui-chart-controls/src/components/Tooltip.tsx",
+            "superset-frontend/packages/superset-ui-chart-controls/src/index.ts",
+            "superset-frontend/packages/superset-ui-chart-controls/src/utils/displayTimeRelatedControls.ts",
+            "superset-frontend/packages/superset-ui-chart-controls/src/utils/index.ts",
+            "superset-frontend/packages/superset-ui-core/src/chart/components/FallbackComponent.tsx",
+            "superset-frontend/packages/superset-ui-core/test/chart-composition/legend/WithLegend.test.tsx",
+            "superset-frontend/packages/superset-ui-core/test/chart/components/FallbackComponent.test.tsx",
+            "superset-frontend/src/SqlLab/actions/sqlLab.test.js",
+            "superset-frontend/src/SqlLab/components/QueryHistory/QueryHistory.test.tsx",
+            "superset-frontend/src/components/Chart/chartActions.test.js",
+            "superset-frontend/src/components/Datasource/DatasourceEditor.test.jsx",
+            "superset-frontend/src/components/ErrorMessage/IssueCode.tsx",
+            "superset-frontend/src/components/FilterableTable/utils.test.tsx",
+            "superset-frontend/src/components/FilterableTable/utils.tsx",
+            "superset-frontend/src/components/Form/LabeledErrorBoundInput.test.jsx",
+            "superset-frontend/src/components/JsonModal/JsonModal.test.tsx",
+            "superset-frontend/src/components/Table/cell-renderers/NullCell/index.tsx",
+            "superset-frontend/src/components/Tooltip/index.tsx",
+            "superset-frontend/src/dashboard/actions/dashboardState.test.js",
+            "superset-frontend/src/dashboard/components/BuilderComponentPane/BuilderComponentPane.test.tsx",
+            "superset-frontend/src/dashboard/components/PropertiesModal/PropertiesModal.test.tsx",
+            "superset-frontend/src/dashboard/components/gridComponents/Tab.test.jsx",
+            "superset-frontend/src/dashboard/components/gridComponents/Tabs.test.tsx",
+            "superset-frontend/src/dashboard/components/gridComponents/new/DraggableNewComponent.test.jsx",
+            "superset-frontend/src/dashboard/components/nativeFilters/FilterBar/FilterBar.test.tsx",
+            "superset-frontend/src/dashboard/components/nativeFilters/FiltersConfigModal/FiltersConfigForm/ColumnSelect.test.tsx",
+            "superset-frontend/src/dashboard/components/nativeFilters/FiltersConfigModal/FiltersConfigModal.test.tsx",
+            "superset-frontend/src/dashboard/components/nativeFilters/utils.test.ts",
+            "superset-frontend/src/dashboard/util/crossFilters.test.ts",
+            "superset-frontend/src/dashboard/util/permissionUtils.test.ts",
+            "superset-frontend/src/explore/actions/datasourcesActions.test.ts",
+            "superset-frontend/src/explore/components/ExportToCSVDropdown/ExportToCSVDropdown.test.tsx",
+            "superset-frontend/src/explore/components/controls/FilterControl/AdhocFilterEditPopoverSimpleTabContent/AdhocFilterEditPopoverSimpleTabContent.test.tsx",
+            "superset-frontend/src/explore/components/controls/FilterControl/utils/useGetTimeRangeLabel.test.ts",
+            "superset-frontend/src/explore/components/useExploreAdditionalActionsMenu/DashboardsSubMenu.test.tsx",
+            "superset-frontend/src/explore/exploreUtils/shouldUseLegacyApi.test.ts",
+            "superset-frontend/src/features/dashboards/DashboardCard.test.tsx",
+            "superset-frontend/src/features/databases/UploadDataModel/UploadDataModal.test.tsx",
+            "superset-frontend/src/features/reports/ReportModal/HeaderReportDropdown/index.test.tsx",
+            "superset-frontend/src/features/reports/ReportModal/ReportModal.test.tsx",
+            "superset-frontend/src/hooks/apiResources/schemas.test.ts",
+            "superset-frontend/src/hooks/apiResources/tables.test.ts",
+            "superset-frontend/src/middleware/asyncEvent.test.ts",
+            "superset-frontend/src/pages/Home/Home.test.tsx"
+          ],
+          "falsePositivesCount": 605,
+          "falsePositivesSample": [
+            "superset-frontend/packages/superset-ui-chart-controls/src/components/ColumnOption.tsx",
+            "superset-frontend/packages/superset-ui-chart-controls/src/components/ColumnTypeLabel/ColumnTypeLabel.tsx",
+            "superset-frontend/packages/superset-ui-chart-controls/src/components/InfoTooltipWithTrigger.tsx",
+            "superset-frontend/packages/superset-ui-chart-controls/src/components/MetricOption.tsx",
+            "superset-frontend/packages/superset-ui-chart-controls/src/components/SQLPopover.tsx",
+            "superset-frontend/packages/superset-ui-chart-controls/src/components/Select.tsx",
+            "superset-frontend/packages/superset-ui-chart-controls/src/components/labelUtils.tsx",
+            "superset-frontend/packages/superset-ui-chart-controls/src/shared-controls/components/types.ts",
+            "superset-frontend/packages/superset-ui-chart-controls/src/types.ts",
+            "superset-frontend/packages/superset-ui-chart-controls/src/utils/expandControlConfig.tsx",
+            "superset-frontend/packages/superset-ui-chart-controls/test/components/ColumnTypeLabel.test.tsx",
+            "superset-frontend/packages/superset-ui-chart-controls/test/components/labelUtils.test.tsx",
+            "superset-frontend/packages/superset-ui-core/src/chart-composition/ChartFrame.tsx",
+            "superset-frontend/packages/superset-ui-core/src/chart-composition/tooltip/TooltipFrame.tsx",
+            "superset-frontend/packages/superset-ui-core/src/chart-composition/tooltip/TooltipTable.tsx",
+            "superset-frontend/packages/superset-ui-core/src/chart/components/ChartDataProvider.tsx",
+            "superset-frontend/packages/superset-ui-core/src/chart/components/NoResultsComponent.tsx",
+            "superset-frontend/packages/superset-ui-core/src/chart/components/SuperChartCore.tsx",
+            "superset-frontend/packages/superset-ui-core/src/chart/components/createLoadableRenderer.ts",
+            "superset-frontend/packages/superset-ui-core/src/chart/components/reactify.tsx"
+          ],
+          "addedCount": 0,
+          "droppedCounts": {
+            "other": 3,
+            "docs": 1,
+            "lockfile": 1,
+            "package-json": 22
+          },
+          "outOfScope": []
+        }
+      ],
+      "findings": null
+    },
+    {
+      "id": "xrpl-hooks-ide-next13",
+      "tags": [
+        "next-major",
+        "react-major",
+        "multi-package",
+        "backup"
+      ],
+      "status": "ok",
+      "filesScanned": 120,
+      "durationMs": 219,
+      "costUsd": 0,
+      "phases": [
+        {
+          "id": "main",
+          "packages": [
+            "next",
+            "react",
+            "react-dom",
+            "@stitches/react",
+            "@emotion/css",
+            "@emotion/server",
+            "@radix-ui/colors",
+            "@radix-ui/react-alert-dialog",
+            "@radix-ui/react-context-menu",
+            "@radix-ui/react-dialog",
+            "@radix-ui/react-dropdown-menu",
+            "@radix-ui/react-id",
+            "@radix-ui/react-label",
+            "@radix-ui/react-popover",
+            "@radix-ui/react-switch",
+            "@radix-ui/react-tooltip",
+            "valtio",
+            "typescript"
+          ],
+          "tags": [
+            "backup",
+            "multi-package",
+            "next-major",
+            "react-major"
+          ],
+          "truthCount": 24,
+          "predictedCount": 52,
+          "tp": 22,
+          "precision": 0.4230769230769231,
+          "recall": 0.9166666666666666,
+          "recallByKind": {
+            "source": 0.9565217391304348,
+            "config": 0,
+            "style": null
+          },
+          "falseNegatives": [
+            "next.config.js",
+            "utils/decodeBinary.ts"
+          ],
+          "falsePositivesCount": 30,
+          "falsePositivesSample": [
+            "components/Accounts.tsx",
+            "components/AlertDialog/index.tsx",
+            "components/DebugStream.tsx",
+            "components/EnrichLog.tsx",
+            "components/HooksEditor.tsx",
+            "components/Input.tsx",
+            "components/NetworkSelector.tsx",
+            "components/ResultLink.tsx",
+            "components/RunScript/index.tsx",
+            "components/Sequence.tsx",
+            "components/Switch.tsx",
+            "components/Tabs.tsx",
+            "components/ThemeChanger.tsx",
+            "components/Transaction/index.tsx",
+            "components/Transaction/json.tsx",
+            "components/Transaction/ui.tsx",
+            "hooks/useWindowSize.tsx",
+            "pages/api/faucet.ts",
+            "pages/api/hello.ts",
+            "pages/api/proxy.ts"
+          ],
+          "addedCount": 1,
+          "droppedCounts": {
+            "package-json": 1,
+            "added": 1,
+            "lockfile": 1
+          },
+          "outOfScope": []
+        }
+      ],
+      "findings": null
+    },
+    {
+      "id": "yakit-antd5",
+      "tags": [
+        "antd-major",
+        "ui-library",
+        "complex",
+        "style-truth",
+        "multi-app"
+      ],
+      "status": "ok",
+      "filesScanned": 1801,
+      "durationMs": 4060,
+      "costUsd": 0,
+      "phases": [
+        {
+          "id": "main",
+          "packages": [
+            "antd",
+            "@ant-design/icons",
+            "@ant-design/compatible",
+            "@ant-design/pro-card",
+            "@ant-design/pro-layout",
+            "@ant-design/pro-table"
+          ],
+          "tags": [
+            "antd-major",
+            "complex",
+            "multi-app",
+            "style-truth",
+            "ui-library"
+          ],
+          "truthCount": 488,
+          "predictedCount": 591,
+          "tp": 298,
+          "precision": 0.5042301184433164,
+          "recall": 0.610655737704918,
+          "recallByKind": {
+            "source": 0.884272997032641,
+            "config": null,
+            "style": 0
+          },
+          "falseNegatives": [
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitAutoComplete/YakitAutoComplete.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitButton/yakitButton.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitCheckbox/YakitCheckbox.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitDropdownMenu/YakitDropdownMenu.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitForm/YakitForm.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitInput/YakitInput.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitInputNumber/YakitInputNumber.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitMenu/yakitMenu.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitModal/yakitModal.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitPopconfirm/YakitPopconfirm.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitPopover/yakitPopover.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitSelect/YakitSelect.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitSpin/YakitSpin.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitSwitch/YakitSwitch.module.scss",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitTag/YakitTag.module.scss",
+            "app/renderer/engine-link-startup/src/index.scss",
+            "app/renderer/engine-link-startup/src/main.tsx",
+            "app/renderer/engine-link-startup/src/pages/StartupPage/components/RemoteEngine/RemoteEngine.module.scss",
+            "app/renderer/engine-link-startup/src/pages/StartupPage/components/UIEngineList/UIEngineList.module.scss",
+            "app/renderer/engine-link-startup/src/pages/StartupPage/components/YakitLoading/YakitLoading.module.scss",
+            "app/renderer/engine-link-startup/src/theme/ThemeClass.scss",
+            "app/renderer/engine-link-startup/src/theme/componentsTheme/form.scss",
+            "app/renderer/engine-link-startup/src/theme/componentsTheme/input.scss",
+            "app/renderer/engine-link-startup/src/theme/componentsTheme/modal.scss",
+            "app/renderer/engine-link-startup/src/theme/componentsTheme/notification.scss",
+            "app/renderer/engine-link-startup/src/theme/componentsTheme/progress.scss",
+            "app/renderer/src/main/src/auxWindow/styles/aux-base.scss",
+            "app/renderer/src/main/src/components/CeUserMenu/CeRechargeModal.tsx",
+            "app/renderer/src/main/src/components/HTTPFlowDetailParts.tsx",
+            "app/renderer/src/main/src/components/HTTPFlowTable/HTTPFlowTable.module.scss",
+            "app/renderer/src/main/src/components/HTTPFlowTable/MITMPipelineStatus.module.scss",
+            "app/renderer/src/main/src/components/HTTPFlowTable/MITMPipelineStatus.tsx",
+            "app/renderer/src/main/src/components/HTTPHistory.module.scss",
+            "app/renderer/src/main/src/components/JsonFormWrapper/editTable/EditTable.module.scss",
+            "app/renderer/src/main/src/components/MessageCenter/MessageCenter.module.scss",
+            "app/renderer/src/main/src/components/MilkdownEditor/Block/Block.module.scss",
+            "app/renderer/src/main/src/components/MilkdownEditor/Mention/CustomMention.module.scss",
+            "app/renderer/src/main/src/components/MilkdownEditor/Mention/CustomMention.tsx",
+            "app/renderer/src/main/src/components/MilkdownEditor/Tooltip/Tooltip.module.scss",
+            "app/renderer/src/main/src/components/TableVirtualResize/TableVirtualResize.module.scss",
+            "app/renderer/src/main/src/components/YakitCombinationSearch/YakitCombinationSearch.module.scss",
+            "app/renderer/src/main/src/components/businessUI/PluginTabs/PluginTabs.module.scss",
+            "app/renderer/src/main/src/components/configNetwork/ConfigNetworkPage.module.scss",
+            "app/renderer/src/main/src/components/functionTemplate/showByContext.tsx",
+            "app/renderer/src/main/src/components/hTTPFlowDetail.module.scss",
+            "app/renderer/src/main/src/components/historyAIReActChat/historyAIReActChat.module.scss",
+            "app/renderer/src/main/src/components/layout/HelpDoc/HelpDoc.module.scss",
+            "app/renderer/src/main/src/components/layout/HelpDoc/HelpDoc.tsx",
+            "app/renderer/src/main/src/components/layout/funcDomain.module.scss",
+            "app/renderer/src/main/src/components/layout/globalState.module.scss",
+            "app/renderer/src/main/src/components/layout/performanceDisplay.module.scss",
+            "app/renderer/src/main/src/components/layout/uiLayout.module.scss",
+            "app/renderer/src/main/src/components/layout/userMenu/UserMenuModals.tsx",
+            "app/renderer/src/main/src/components/managementTab/index.module.scss",
+            "app/renderer/src/main/src/components/managementTab/index.tsx",
+            "app/renderer/src/main/src/components/playground/knowlegeBase/KnowledgeBaseManager.tsx",
+            "app/renderer/src/main/src/components/yakChat/chatCS.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitAutoComplete/YakitAutoComplete.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitButton/yakitButton.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitCascader/YakitCascader.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitCheckbox/YakitCheckbox.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitCollapse/YakitCollapse.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitDatePicker/YakitDatePicker.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitDrawer/YakitDrawer.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitDropdownMenu/YakitDropdownMenu.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitForm/YakitForm.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitInput/YakitInput.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitInputNumber/YakitInputNumber.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitMenu/yakitMenu.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitModal/yakitModal.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitPopconfirm/YakitPopconfirm.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitPopover/yakitPopover.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitSelect/YakitSelect.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitSpin/YakitSpin.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitSwitch/YakitSwitch.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitTag/YakitTag.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitVirtualList/YakitVirtualList.module.scss",
+            "app/renderer/src/main/src/components/yakitUI/YakitWindow/YakitWindow.module.scss",
+            "app/renderer/src/main/src/pages/GlobalClass.scss",
+            "app/renderer/src/main/src/pages/KnowledgeBase/compoment/GenerateKnowledge.tsx",
+            "app/renderer/src/main/src/pages/KnowledgeBase/compoment/PluginExecuteDetailDrawer.tsx",
+            "app/renderer/src/main/src/pages/KnowledgeBase/knowledgeBase.module.scss",
+            "app/renderer/src/main/src/pages/Login.scss",
+            "app/renderer/src/main/src/pages/ai-agent/AIChatSetting/AIChatSetting.module.scss",
+            "app/renderer/src/main/src/pages/ai-agent/ChatSessionPane/SessionSearchCommand/SessionSearchCommand.tsx",
+            "app/renderer/src/main/src/pages/ai-agent/aiBottomDetails/AIBottomDetails.tsx",
+            "app/renderer/src/main/src/pages/ai-agent/aiChatContent/AIChatContent.module.scss",
+            "app/renderer/src/main/src/pages/ai-agent/aiChatContent/AIContextToken/ContextTable/ContextTable.module.scss",
+            "app/renderer/src/main/src/pages/ai-agent/aiChatWelcome/AIChatWelcome.tsx",
+            "app/renderer/src/main/src/pages/ai-agent/aiMCPHistory/MCPHistory.tsx",
+            "app/renderer/src/main/src/pages/ai-agent/aiPlanReviewTree/AIPlanReviewTree.tsx",
+            "app/renderer/src/main/src/pages/ai-agent/aiToolList/AIToolList.module.scss",
+            "app/renderer/src/main/src/pages/ai-agent/aiToolList/AIToolList.tsx",
+            "app/renderer/src/main/src/pages/ai-agent/aiTree/AITree.module.scss",
+            "app/renderer/src/main/src/pages/ai-agent/aiTriageChatTemplate/AITriageChatTemplate.module.scss",
+            "app/renderer/src/main/src/pages/ai-agent/chatTemplate/TimelineCard/TimelineCard.tsx",
+            "app/renderer/src/main/src/pages/ai-agent/chatTemplate/aiTaskExecutionDetails/AITaskExecutionDetails.module.scss",
+            "app/renderer/src/main/src/pages/ai-agent/chatTemplate/aiTaskExecutionDetails/AITaskExecutionDetails.tsx",
+            "app/renderer/src/main/src/pages/ai-agent/components/ExportAILogsModal/ExportAILogsModal.tsx",
+            "app/renderer/src/main/src/pages/ai-agent/forgeName/ForgeName.module.scss",
+            "app/renderer/src/main/src/pages/ai-re-act/aiReActChat/aiReActChatHeader/AIReActChatHeader.module.scss",
+            "app/renderer/src/main/src/pages/ai-re-act/aiReActChatContents/AIReActChatContents.tsx",
+            "app/renderer/src/main/src/pages/ai-re-act/aiReviewRuleSelect/AIReviewRuleSelect.tsx",
+            "app/renderer/src/main/src/pages/aiForge/forgeEditor/ForgeEditor.module.scss",
+            "app/renderer/src/main/src/pages/aiTool/AIToolEditor/AIToolEditor.module.scss",
+            "app/renderer/src/main/src/pages/assetViewer/DomainAssetPage.module.scss",
+            "app/renderer/src/main/src/pages/assetViewer/PortAssetPage.module.scss",
+            "app/renderer/src/main/src/pages/assetViewer/PortTable/PortTable.tsx",
+            "app/renderer/src/main/src/pages/assetViewer/reportRenders/jsonTableRender.module.scss",
+            "app/renderer/src/main/src/pages/codec/NewCodec.module.scss",
+            "app/renderer/src/main/src/pages/codec/NewCodecUIStore.module.scss",
+            "app/renderer/src/main/src/pages/customizeMenu/CustomizeMenu.module.scss",
+            "app/renderer/src/main/src/pages/dynamicControl/DynamicControl.module.scss",
+            "app/renderer/src/main/src/pages/dynamicControl/VirtualTable.module.scss",
+            "app/renderer/src/main/src/pages/fingerprintManage/FingerprintManage.module.scss",
+            "app/renderer/src/main/src/pages/fuzzer/HTTPFuzzerHistory.module.scss",
+            "app/renderer/src/main/src/pages/fuzzer/HTTPFuzzerHotPatch.module.scss",
+            "app/renderer/src/main/src/pages/fuzzer/HTTPFuzzerPage.module.scss",
+            "app/renderer/src/main/src/pages/fuzzer/HttpQueryAdvancedConfig/HttpQueryAdvancedConfig.module.scss",
+            "app/renderer/src/main/src/pages/fuzzer/MatcherAndExtractionCard/MatcherAndExtraction.module.scss",
+            "app/renderer/src/main/src/pages/fuzzer/StringFuzzer.module.scss",
+            "app/renderer/src/main/src/pages/fuzzer/WebFuzzerApiDoc/WebFuzzerApiDocHistory.tsx",
+            "app/renderer/src/main/src/pages/fuzzer/components/PluginDebugDrawer/PluginDebugDrawer.tsx",
+            "app/renderer/src/main/src/pages/hTTPHistoryAnalysis/HTTPHistory/HTTPHistoryFilter.module.scss",
+            "app/renderer/src/main/src/pages/hTTPHistoryAnalysis/HTTPHistoryAnalysis.module.scss",
+            "app/renderer/src/main/src/pages/irifyAiCodeAudit/BottomEditorDetails/BottomEditorDetails.tsx",
+            "app/renderer/src/main/src/pages/layout/HeardMenu/HeardMenu.module.scss",
+            "app/renderer/src/main/src/pages/layout/mainOperatorContent/MainOperatorContent.module.scss",
+            "app/renderer/src/main/src/pages/layout/publicMenu/ExtraMenu.module.scss",
+            "app/renderer/src/main/src/pages/layout/publicMenu/MenuCodec.module.scss",
+            "app/renderer/src/main/src/pages/layout/publicMenu/MenuCodec.tsx",
+            "app/renderer/src/main/src/pages/layout/publicMenu/MenuDNSLog.module.scss",
+            "app/renderer/src/main/src/pages/layout/publicMenu/MenuMode.module.scss",
+            "app/renderer/src/main/src/pages/layout/publicMenu/MenuPlugin.module.scss",
+            "app/renderer/src/main/src/pages/layout/publicMenu/PublicMenu.module.scss",
+            "app/renderer/src/main/src/pages/layout/publicMenu/PublicMenu.tsx",
+            "app/renderer/src/main/src/pages/memoryBase/MemoryBase.module.scss",
+            "app/renderer/src/main/src/pages/mitm/MITMPage.module.scss",
+            "app/renderer/src/main/src/pages/mitm/MITMRule/MITMRule.module.scss",
+            "app/renderer/src/main/src/pages/mitm/MITMRule/MITMRuleFromModal.module.scss",
+            "app/renderer/src/main/src/pages/mitm/MITMServerHijacking/MITMServerHijacking.module.scss",
+            "app/renderer/src/main/src/pages/mitm/MITMServerStartForm/MITMCertificateDownloadModal.tsx",
+            "app/renderer/src/main/src/pages/mitm/MITMServerStartForm/MITMServerStartForm.module.scss",
+            "app/renderer/src/main/src/pages/mitm/MITMYakScriptLoader.module.scss",
+            "app/renderer/src/main/src/pages/notepadManage/NotepadShareModal/NotepadShareModal.module.scss",
+            "app/renderer/src/main/src/pages/notepadManage/modifyNotepad/ModifyNotepad.module.scss",
+            "app/renderer/src/main/src/pages/notepadManage/modifyNotepad/modifyNotepadLocal/ModifyNotepadLocal.tsx",
+            "app/renderer/src/main/src/pages/notepadManage/notepadManage/notepadManageOnline/NotepadManageOnline.module.scss",
+            "app/renderer/src/main/src/pages/payloadManager/PayloadLocalTable.module.scss",
+            "app/renderer/src/main/src/pages/payloadManager/onlinePayload/NewPayloadOnlineList.tsx",
+            "app/renderer/src/main/src/pages/pluginEditor/editorInfo/EditorInfo.module.scss",
+            "app/renderer/src/main/src/pages/pluginEditor/pluginEditor/PluginEditor.tsx",
+            "app/renderer/src/main/src/pages/pluginHub/hubExtraOperate/HubExtraOperate.module.scss",
+            "app/renderer/src/main/src/pages/pluginHub/pluginHubList/HubListRecycle.tsx",
+            "app/renderer/src/main/src/pages/pluginHub/pluginHubList/PluginHubList.module.scss",
+            "app/renderer/src/main/src/pages/pluginHub/pluginLog/PluginLog.module.scss",
+            "app/renderer/src/main/src/pages/pluginHub/pluginLog/PluginLogList.tsx",
+            "app/renderer/src/main/src/pages/plugins/baseTemplate.module.scss",
+            "app/renderer/src/main/src/pages/plugins/funcTemplate.module.scss",
+            "app/renderer/src/main/src/pages/plugins/manage/pluginManage.module.scss",
+            "app/renderer/src/main/src/pages/plugins/onlineJudgment/OnlineJudgment.tsx",
+            "app/renderer/src/main/src/pages/plugins/operator/localPluginExecuteDetailHeard/LocalPluginExecuteDetailHeard.module.scss",
+            "app/renderer/src/main/src/pages/plugins/operator/pluginExecuteResult/PluginExecuteResult.tsx",
+            "app/renderer/src/main/src/pages/plugins/plugins.scss",
+            "app/renderer/src/main/src/pages/portscan/PortScanPage.css",
+            "app/renderer/src/main/src/pages/reverseServer/reverseServerPage.scss",
+            "app/renderer/src/main/src/pages/reverseShellReceiver/shellReceiver.module.scss",
+            "app/renderer/src/main/src/pages/ruleManagement/RuleManagement.module.scss",
+            "app/renderer/src/main/src/pages/screenRecorder/ScreenRecorder.module.scss",
+            "app/renderer/src/main/src/pages/securityTool/newPortScan/NewPortScanExtraParamsDrawer.module.scss",
+            "app/renderer/src/main/src/pages/webShell/FileManager.tsx",
+            "app/renderer/src/main/src/pages/yakRunner/BottomEditorDetails/BottomEditorDetails.tsx",
+            "app/renderer/src/main/src/pages/yakRunnerCodeScan/YakRunnerCodeScan.module.scss",
+            "app/renderer/src/main/src/pages/yakitStore/viewers/WebsiteTree.module.scss",
+            "app/renderer/src/main/src/styles/index.css",
+            "app/renderer/src/main/src/theme/componentsTheme/PageHeader.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/alert.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/card.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/dropdown.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/form.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/input.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/list.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/modal.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/notification.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/pagination.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/progress.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/result.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/slider.scss",
+            "app/renderer/src/main/src/theme/componentsTheme/tooltip.scss",
+            "app/renderer/src/main/src/theme/yakit.scss"
+          ],
+          "falsePositivesCount": 293,
+          "falsePositivesSample": [
+            "app/renderer/engine-link-startup/src/assets/colors.tsx",
+            "app/renderer/engine-link-startup/src/assets/newIcon.tsx",
+            "app/renderer/engine-link-startup/src/assets/outline.tsx",
+            "app/renderer/engine-link-startup/src/assets/solid.tsx",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitAutoComplete/YakitAutoCompleteType.d.ts",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitCheckbox/YakitCheckbox.tsx",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitCheckbox/YakitCheckboxType.d.ts",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitEmpty/YakitEmptyType.d.ts",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitForm/YakitForm.tsx",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitForm/YakitFormType.d.ts",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitInput/YakitInputType.d.ts",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitInputNumber/YakitInputNumberType.d.ts",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitModal/icon.tsx",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitPopconfirm/YakitPopconfirmTypr.d.ts",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitRadioButtons/YakitRadioButtons.tsx",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitRadioButtons/YakitRadioButtonsType.d.ts",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitSelect/YakitSelectType.d.ts",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitSpin/YakitSpinType.d.ts",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitSwitch/YakitSwitchType.d.ts",
+            "app/renderer/engine-link-startup/src/components/yakitUI/YakitTag/YakitCheckableTag.tsx"
+          ],
+          "addedCount": 26,
+          "droppedCounts": {
+            "package-json": 2,
+            "added": 26,
+            "lockfile": 2,
+            "docs": 2
+          },
+          "outOfScope": []
+        }
+      ],
+      "findings": null
+    }
+  ],
+  "aggregate": {
+    "micro": {
+      "precision": 0.28365384615384615,
+      "recall": 0.6182634730538922
+    },
+    "macro": {
+      "precision": 0.43994985098504713,
+      "recall": 0.699458117557007
+    },
+    "byTag": {
+      "antd-major": {
+        "micro": {
+          "precision": 0.5042301184433164,
+          "recall": 0.610655737704918
+        },
+        "macro": {
+          "precision": 0.5042301184433164,
+          "recall": 0.610655737704918
+        },
+        "phases": 1
+      },
+      "backup": {
+        "micro": {
+          "precision": 0.4230769230769231,
+          "recall": 0.9166666666666666
+        },
+        "macro": {
+          "precision": 0.4230769230769231,
+          "recall": 0.9166666666666666
+        },
+        "phases": 1
+      },
+      "codemod": {
+        "micro": {
+          "precision": 0.21052631578947367,
+          "recall": 1
+        },
+        "macro": {
+          "precision": 0.21052631578947367,
+          "recall": 1
+        },
+        "phases": 1
+      },
+      "complex": {
+        "micro": {
+          "precision": 0.26385636221701797,
+          "recall": 0.5888501742160279
+        },
+        "macro": {
+          "precision": 0.2529967471665909,
+          "recall": 0.6630113720277655
+        },
+        "phases": 3
+      },
+      "date-lib": {
+        "micro": {
+          "precision": 0.9183673469387755,
+          "recall": 0.9183673469387755
+        },
+        "macro": {
+          "precision": 0.8947368421052632,
+          "recall": 0.9005376344086022
+        },
+        "phases": 2
+      },
+      "eslint-major": {
+        "micro": {
+          "precision": null,
+          "recall": 0
+        },
+        "macro": {
+          "precision": null,
+          "recall": 0
+        },
+        "phases": 1
+      },
+      "flat-config": {
+        "micro": {
+          "precision": null,
+          "recall": 0
+        },
+        "macro": {
+          "precision": null,
+          "recall": 0
+        },
+        "phases": 1
+      },
+      "floor": {
+        "micro": {
+          "precision": null,
+          "recall": 0
+        },
+        "macro": {
+          "precision": null,
+          "recall": 0
+        },
+        "phases": 1
+      },
+      "moment-dayjs": {
+        "micro": {
+          "precision": 0.9183673469387755,
+          "recall": 0.9183673469387755
+        },
+        "macro": {
+          "precision": 0.8947368421052632,
+          "recall": 0.9005376344086022
+        },
+        "phases": 2
+      },
+      "monorepo": {
+        "micro": {
+          "precision": 0.057971014492753624,
+          "recall": 0.46511627906976744
+        },
+        "macro": {
+          "precision": 0.12738006152822814,
+          "recall": 0.6891891891891893
+        },
+        "phases": 2
+      },
+      "multi-app": {
+        "micro": {
+          "precision": 0.5042301184433164,
+          "recall": 0.610655737704918
+        },
+        "macro": {
+          "precision": 0.5042301184433164,
+          "recall": 0.610655737704918
+        },
+        "phases": 1
+      },
+      "multi-package": {
+        "micro": {
+          "precision": 0.4230769230769231,
+          "recall": 0.9166666666666666
+        },
+        "macro": {
+          "precision": 0.4230769230769231,
+          "recall": 0.9166666666666666
+        },
+        "phases": 1
+      },
+      "next-major": {
+        "micro": {
+          "precision": 0.3119266055045872,
+          "recall": 0.9444444444444444
+        },
+        "macro": {
+          "precision": 0.3168016194331984,
+          "recall": 0.9583333333333333
+        },
+        "phases": 2
+      },
+      "package-swap": {
+        "micro": {
+          "precision": 0.9183673469387755,
+          "recall": 0.9183673469387755
+        },
+        "macro": {
+          "precision": 0.8947368421052632,
+          "recall": 0.9005376344086022
+        },
+        "phases": 2
+      },
+      "polyglot-monorepo": {
+        "micro": {
+          "precision": 0.7894736842105263,
+          "recall": 0.8333333333333334
+        },
+        "macro": {
+          "precision": 0.7894736842105263,
+          "recall": 0.8333333333333334
+        },
+        "phases": 1
+      },
+      "react-major": {
+        "micro": {
+          "precision": 0.0764163372859025,
+          "recall": 0.5420560747663551
+        },
+        "macro": {
+          "precision": 0.1918062794840046,
+          "recall": 0.7279779779779779
+        },
+        "phases": 3
+      },
+      "small": {
+        "micro": {
+          "precision": 0.10810810810810811,
+          "recall": 0.8888888888888888
+        },
+        "macro": {
+          "precision": 0.10810810810810811,
+          "recall": 0.8888888888888888
+        },
+        "phases": 1
+      },
+      "style-truth": {
+        "micro": {
+          "precision": 0.5042301184433164,
+          "recall": 0.610655737704918
+        },
+        "macro": {
+          "precision": 0.5042301184433164,
+          "recall": 0.610655737704918
+        },
+        "phases": 1
+      },
+      "test-heavy": {
+        "micro": {
+          "precision": 0.044233807266982623,
+          "recall": 0.3783783783783784
+        },
+        "macro": {
+          "precision": 0.044233807266982623,
+          "recall": 0.3783783783783784
+        },
+        "phases": 1
+      },
+      "toolchain": {
+        "micro": {
+          "precision": null,
+          "recall": 0
+        },
+        "macro": {
+          "precision": null,
+          "recall": 0
+        },
+        "phases": 1
+      },
+      "ui-library": {
+        "micro": {
+          "precision": 0.5042301184433164,
+          "recall": 0.610655737704918
+        },
+        "macro": {
+          "precision": 0.5042301184433164,
+          "recall": 0.610655737704918
+        },
+        "phases": 1
+      }
+    },
+    "errors": 0
+  }
+}

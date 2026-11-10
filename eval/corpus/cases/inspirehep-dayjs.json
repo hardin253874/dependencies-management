@@ -1,0 +1,21 @@
+{
+  "id": "inspirehep-dayjs",
+  "repo": "https://github.com/inspirehep/inspirehep",
+  "baseCommit": "a3990f3f129c39544af123c07df1b7e130a9b8fd",
+  "projectDirs": ["ui"],
+  "phases": [
+    {
+      "id": "main",
+      "toCommit": "91b5dafb4c144bafe0f376d0b91b8ea7d3a4154e",
+      "packages": [
+        { "name": "moment", "from": "2.29.4", "to": null },
+        { "name": "moment-timezone", "from": "0.6.2", "to": null },
+        { "name": "dayjs", "from": "1.11.23", "to": "1.11.23" }
+      ],
+      "tags": ["package-swap"]
+    }
+  ],
+  "tags": ["package-swap", "moment-dayjs", "date-lib", "polyglot-monorepo"],
+  "source": { "pr": "https://github.com/inspirehep/inspirehep/pull/4502" },
+  "notes": "Squash merge of PR #4502 (2026-09-21), single parent = baseCommit. All 21 files are under ui/: 17 .js/.jsx/.ts/.tsx (2 tests), ui/package.json, ui/yarn.lock, ui/vite.config.mts (moment-timezone alias removed; counts as config truth) and one .snap (dropped). Versions from ui/yarn.lock at base. dayjs was already a direct dependency at base (1.11.23, used by antd 5) and is unchanged; it is listed so a predictor knows the target API. Removal-only swap: moment and moment-timezone leave the tree. The rest of the repo is Python (backend, workflows): projectDirs is ui only."
+}
