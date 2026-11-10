@@ -21,6 +21,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "1.6.0",
     "@babel/parser": "7.24.7",
+    "@babel/traverse": "7.24.7",
     "@babel/types": "7.24.7",
     "@npmcli/arborist": "10.0.4",
     "@yarnpkg/lockfile": "1.1.0",
@@ -28,6 +29,7 @@
     "ignore": "5.3.1",
     "next": "16.4.6",
     "npm-registry-fetch": "20.0.1",
+    "oxc-resolver": "11.24.2",
     "p-limit": "5.0.0",
     "p-queue": "8.0.1",
     "p-retry": "6.2.0",
@@ -42,6 +44,7 @@
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.5.2",
+    "@types/babel__traverse": "7.20.7",
     "@types/node": "24.19.2",
     "@types/npm-registry-fetch": "8.0.7",
     "@types/react": "19.3.0",

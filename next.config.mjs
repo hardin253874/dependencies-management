@@ -33,6 +33,13 @@ const nextConfig = {
   //  - @anthropic-ai/sdk (uses Node streams + Buffer)
   //  - @babel/parser, semver, ignore (work fine either way; externalize for
   //    consistency and to avoid re-bundling unnecessarily).
+  //  - @babel/traverse (src/core/graph/parse.ts, v2 Stage 3a.4): loaded with
+  //    createRequire like @babel/parser; verified under Turbopack build+start
+  //    with this entry (V2_STAGE3_SPEC §1).
+  //  - oxc-resolver (src/core/graph/resolve.ts, v2 Stage 3a.5): a napi addon;
+  //    without this entry Turbopack's `next build` fails with "node addon is
+  //    not placeable in ESM chunks" (V2_STAGE3_SPEC §1).
+  //  node:sqlite needs no entry: Turbopack externalizes builtins.
   // Top-level `serverExternalPackages` since Next 15 (was
   // `experimental.serverComponentsExternalPackages` in 14.2).
   serverExternalPackages: [
@@ -45,8 +52,10 @@ const nextConfig = {
     'npm-registry-fetch',
     '@anthropic-ai/sdk',
     '@babel/parser',
+    '@babel/traverse',
     'semver',
-    'ignore'
+    'ignore',
+    'oxc-resolver'
   ]
 };
 

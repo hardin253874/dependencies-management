@@ -1,0 +1,7 @@
+@use 'sass:math';
+@use './partials/mixins';
+@import '~bootstrap/scss/variables';
+@import 'theme/#{$theme}';
+@import url('https://fonts.googleapis.com/css?family=Roboto');
+.a { width: math.div(10px, 2); background: url('~bootstrap/img/x.png'); }
+// @import 'commented-out';

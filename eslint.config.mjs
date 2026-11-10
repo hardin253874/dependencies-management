@@ -18,8 +18,10 @@
 // @next/eslint-plugin-next@16 is flat-config native and ESLint 9 compatible, so
 // it is registered directly (the Stage 1 @eslint/compat shim is gone).
 //
-// Extend here for D1's `src/core` import ban in Stage 3 (no-restricted-imports
-// on files: ['src/core/**']).
+// D1/D23 (Stage 3a.0): `src/core/**` may not import Next.js, React or app/UI
+// code, and uses relative imports only: `npm run eval` runs under vite-node,
+// which does not read the `@/` alias from vitest.config.ts. Guarded by
+// tests/backend/core-boundary.test.ts.
 import nextPlugin from '@next/eslint-plugin-next';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
@@ -86,6 +88,33 @@ const config = [
   {
     files: ['**/*.{ts,tsx,mts,cts}'],
     languageOptions: { parser: tsParser }
+  },
+  {
+    files: ['src/core/**/*.{ts,tsx,js,mjs,cjs}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'next', message: 'src/core must not import Next.js (D1)' },
+            { name: 'react', message: 'src/core must not import React (D1)' },
+            { name: 'react-dom', message: 'src/core must not import React (D1)' }
+          ],
+          patterns: [
+            { group: ['next/*'], message: 'src/core must not import Next.js (D1)' },
+            { group: ['react/*', 'react-dom/*'], message: 'src/core must not import React (D1)' },
+            {
+              group: ['@/app/*', '@/components/*', '@/lib/client/*'],
+              message: 'src/core must not import app/UI code (D1)'
+            },
+            {
+              group: ['@/*'],
+              message: 'src/core uses relative imports — eval runs under vite-node without the @/ alias (D1/D23)'
+            }
+          ]
+        }
+      ]
+    }
   }
 ];
 

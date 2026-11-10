@@ -1,0 +1,5 @@
+{
+  // JSONC: comments and trailing commas are legal in tsconfig files
+  "extends": "./tsconfig.paths.json",
+  "include": ["src"],
+}

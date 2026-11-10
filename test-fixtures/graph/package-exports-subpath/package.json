@@ -1,0 +1,9 @@
+{
+  "name": "pes",
+  "version": "1.0.0",
+  "imports": {
+    "#internal/*": "./src/internal/*.js",
+    "#config": { "node": "./src/config.node.js", "default": "./src/config.js" }
+  },
+  "dependencies": { "cond-pkg": "1.0.0", "lodash": "4.17.21" }
+}

@@ -1,0 +1,1 @@
+exports.aliasFromEnv = (name) => `./${name}`;

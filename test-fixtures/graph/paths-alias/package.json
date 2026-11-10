@@ -1,0 +1,1 @@
+{ "name": "paths-alias", "version": "1.0.0", "dependencies": { "dayjs": "1.11.10" }, "devDependencies": { "@tsconfig/base": "1.0.0" } }

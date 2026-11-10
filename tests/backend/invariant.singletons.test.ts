@@ -4,7 +4,8 @@
  * Next.js dev evaluates a server module once per route bundle, so module-scoped
  * mutable state silently becomes N independent copies (the bug class behind
  * "job enqueued in route A, 404 from route B"). This static guard scans
- * `src/lib/**` (minus `src/lib/client/**`, which is browser code) for
+ * `src/lib/**` (minus `src/lib/client/**`, which is browser code) and
+ * `src/core/**` (v2 Stage 3a.0, empty allowlist) for
  * top-level `let` / `var` bindings and top-level `const X = new Map|Set|...`
  * and fails on anything not in the allowlist below. The runtime counterpart
  * is `tests/e2e/invariant.cross-route-singleton.spec.ts`.
@@ -40,10 +41,22 @@ const CONST_COLLECTION = /^(?:export\s+)?const\s+([A-Za-z_$][\w$]*)(?:\s*:[^=]+)
 
 const repoRoot = process.cwd();
 const libRoot = path.join(repoRoot, 'src', 'lib');
+// src/core has the same rule and no allowlist entries: core code keeps state in
+// function scope or in caller-owned handles (D1).
+const coreRoot = path.join(repoRoot, 'src', 'core');
+const SCANNED_ROOTS = [libRoot, coreRoot];
 
 async function listSourceFiles(dir: string): Promise<string[]> {
   const out: string[] = [];
-  for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch (err) {
+    // src/core may not exist on an older checkout; anything else is a real failure.
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return out;
+    throw err;
+  }
+  for (const entry of entries) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (full === path.join(libRoot, 'client')) continue;
@@ -63,7 +76,8 @@ interface Hit {
 
 async function findModuleScopedState(): Promise<Hit[]> {
   const hits: Hit[] = [];
-  for (const file of await listSourceFiles(libRoot)) {
+  const files = (await Promise.all(SCANNED_ROOTS.map((r) => listSourceFiles(r)))).flat();
+  for (const file of files) {
     const rel = path.relative(repoRoot, file).split(path.sep).join('/');
     const lines = (await fs.readFile(file, 'utf8')).split(/\r?\n/);
     lines.forEach((text, i) => {
@@ -78,7 +92,7 @@ function isAllowed(hit: Hit): boolean {
   return ALLOWLIST.some((a) => a.file === hit.file && a.name === hit.name);
 }
 
-describe('invariant: no module-scoped mutable singletons in src/lib (CLAUDE.md #4)', () => {
+describe('invariant: no module-scoped mutable singletons in src/lib + src/core (CLAUDE.md #4)', () => {
   it('every top-level let/var or Map/Set constant is allowlisted with a reason', async () => {
     const offenders = (await findModuleScopedState())
       .filter((h) => !isAllowed(h))
@@ -92,6 +106,10 @@ describe('invariant: no module-scoped mutable singletons in src/lib (CLAUDE.md #
       (a) => `${a.file} ${a.name}`
     );
     expect(stale).toEqual([]);
+  });
+
+  it('has no allowlist entries for src/core', () => {
+    expect(ALLOWLIST.filter((a) => a.file.startsWith('src/core/'))).toEqual([]);
   });
 
   it('the scanner detects a module-scoped let and a const Map (self-check)', () => {
